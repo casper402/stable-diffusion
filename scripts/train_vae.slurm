@@ -20,6 +20,6 @@ module load cuda/11.2.0
 
 source activate cuda_env
 
-python stable_diff_cross_attention.py
+python scripts/train_vae.py
 
 echo "========= Job finished at $(date) =========="

@@ -9,6 +9,8 @@
 #SBATCH --time=12:00:00
 #SBATCH --export=NONE
 
+cd $SLURM_SUBMIT_DIR
+
 echo "========= Job started at $(date) =========="
 
 echo "Job ID: $SLURM_JOB_ID"

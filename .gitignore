@@ -1,7 +1,5 @@
-training_data/
-validation_data/
 notes/
 checkpoints/
 
-**/__pycache__/
-**/*.py[cod]
+__pycache__/
+*.py[cod]

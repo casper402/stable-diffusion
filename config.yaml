@@ -1,8 +1,6 @@
 paths:
   train_CBCT: ../training_data/CBCT
   train_CT: ../training_data/CT
-  val_CBCT: ../validation_data/CBCT
-  val_CT: ../validation_data/CT
 
 model:
   latent_dim: 32
@@ -11,7 +9,7 @@ model:
 
 train:
   batch_size: 8
-  epochs: 50
+  epochs: 100
   learning_rate: 1e-4
   fine_tune_lr: 1e-5
   min_learning_rate: 1e-5

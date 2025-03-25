@@ -27,15 +27,5 @@ class ResizeAndPad:
 def build_train_transform(target_size):
     return transforms.Compose([
         ResizeAndPad(target_size),
-        # TODO: Data augmentation
         transforms.ToTensor(),
     ])
-
-def build_val_transform(target_size):
-    return transforms.Compose([
-        ResizeAndPad(target_size),
-        transforms.ToTensor(),
-    ])
-
-def build_transforms(target_size):
-    return build_train_transform(target_size), build_val_transform(target_size) 

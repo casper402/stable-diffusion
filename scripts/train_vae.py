@@ -5,7 +5,7 @@ from models.vae import VAE
 from utils.losses import SSIMLoss, kl_divergence
 from utils.train_helpers import run_training_loop
 from data.dataset import get_dataloaders
-from data.transforms import build_transforms
+from data.transforms import build_train_transform
 from utils.config import load_config, get_device
 from functools import partial
 
@@ -39,8 +39,8 @@ def main():
     device = get_device()
     config = load_config(device)
     
-    train_transform, val_transform = build_transforms(config["model"]["image_size"])
-    train_loader, val_loader = get_dataloaders(config, train_transform, val_transform)
+    transform = build_train_transform(config["model"]["image_size"])
+    train_loader, val_loader = get_dataloaders(config, transform)
 
     vae = VAE(latent_dim=config["model"]["latent_dim"]).to(device)
 

@@ -1,5 +1,6 @@
 import os
-from torch.utils.data import Dataset, DataLoader
+import torch
+from torch.utils.data import Dataset, DataLoader, random_split
 from PIL import Image
     
 class CBCTtoCTDataset(Dataset):
@@ -35,9 +36,24 @@ class CBCTtoCTDataset(Dataset):
 
         return CBCT_slice, CT_slice
     
-def get_dataloaders(config, train_transform, val_transform):
-    train_dataset = CBCTtoCTDataset(config["paths"]["train_CBCT"], config["paths"]["train_CT"], config["model"]["image_size"], train_transform)
-    val_dataset = CBCTtoCTDataset(config["paths"]["val_CBCT"], config["paths"]["val_CT"], config["model"]["image_size"], val_transform)
+def get_dataloaders(config, transform):
+    full_dataset = CBCTtoCTDataset(
+        CBCT_path=config["paths"]["train_CBCT"],
+        CT_path=config["paths"]["train_CT"],
+        image_size=config["model"]["image_size"],
+        transform=transform
+    )
+
+    subset_size = 1000
+    subset, _ = random_split(full_dataset, [subset_size, len(full_dataset) - subset_size])
+
+    val_size = int(len(subset) * 0.1)
+    train_size = len(subset) - val_size
+    print(f"Splitting {len(subset)} images into {train_size} train images and {val_size} validation images.")
+
+    generator = torch.Generator().manual_seed(42)
+
+    train_dataset, val_dataset = random_split(subset, [train_size, val_size], generator=generator) # TODO: Use full dataset
 
     train_dataloader = DataLoader(train_dataset, 
                             batch_size=config["train"]["batch_size"], 

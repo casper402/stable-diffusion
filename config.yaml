@@ -1,0 +1,32 @@
+device_paths:
+  cuda: /home/cdlars
+  cpu: /home/casper/Documents/Thesis/stable-diffusion
+
+data_paths:
+  train_CBCT: training_data/CBCT
+  train_CT: training_data/CT
+  val_CBCT: validation_data/CBCT
+  val_CT: validation_data/CT
+
+model:
+  latent_dim: 32
+  image_size: 256
+  num_heads: 8
+
+train:
+  batch_sizes:
+    cpu: 1
+    cuda: 8
+  epochs: 50
+  learning_rate: 1e-4
+  fine_tune_lr: 1e-5
+  min_learning_rate: 1e-5
+  min_fine_tune_lr: 1e-6
+  weight_decay: 1e-5
+  fine_tune_weight_decay: 1e-6
+  scheduler_patience: 5
+  early_stopping_patience: 10
+  num_workers: 8
+
+diffusion:
+  timesteps: 1000

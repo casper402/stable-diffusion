@@ -5,7 +5,7 @@
 #SBATCH --partition=qgpu
 #SBATCH --gres=gpu:v100:1
 #SBATCH --mem=32G
-#SBATCH --cpus-per-task=4
+#SBATCH --cpus-per-task=8
 #SBATCH --time=12:00:00
 #SBATCH --export=NONE
 
@@ -22,6 +22,6 @@ module load cuda/11.2.0
 
 source activate cuda_env
 
-python train_vae.py
+python scripts/train_vae.py
 
 echo "========= Job finished at $(date) =========="

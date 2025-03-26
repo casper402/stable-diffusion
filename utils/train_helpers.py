@@ -45,6 +45,6 @@ def run_training_loop(model, train_loader, val_loader, optimizer, loss_step_fn, 
             torch.save(model.state_dict(), save_path)
         else:
             counter += 1
-            if counter >= config["train"]["early_stopping"]:
+            if counter >= config["train"]["early_stopping_patience"]:
                 print("Early stopping")
                 break

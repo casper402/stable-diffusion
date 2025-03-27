@@ -60,6 +60,7 @@ def main():
         val_loader=val_loader,
         optimizer=optimizer,
         loss_step_fn=loss_step_fn,
+        epochs=config["train"]["epochs"],
         config=config,
         device=device,
         save_path="checkpoints/vae_ct_only.pth",

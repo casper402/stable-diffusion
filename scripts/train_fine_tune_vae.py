@@ -3,7 +3,7 @@ os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:128"
 import torch
 import torch.nn.functional as F
 from torch import optim
-from models.vae import VAE 
+from models.resnet50Vae import VAE 
 from utils.losses import PerceptualLoss, kl_divergence
 from utils.train_helpers import run_training_loop
 from data.dataset import get_ct_dataloaders
@@ -59,16 +59,14 @@ def main():
         min_lr=config["train"]["min_learning_rate"]
     )
 
-    config_phase1 = config.copy()
-    config_phase1["train"]["epochs"] = 20 
-
     run_training_loop(
         model=vae,
         train_loader=train_loader,
         val_loader=val_loader,
         optimizer=optimizer_phase1,
         loss_step_fn=loss_step_fn,
-        config=config_phase1,
+        epochs=config["train"]["initial_epochs"],
+        config=config,
         device=device,
         save_path="checkpoints/vae_frozen_encoder.pth",
         scheduler=scheduler_phase1
@@ -81,7 +79,7 @@ def main():
 
     optimizer_phase2 = optim.Adam(
         filter(lambda p: p.requires_grad, vae.parameters()), 
-        lr=config["train"]["learning_rate"], 
+        lr=config["train"]["fine_tune_lr"], 
         weight_decay=config["train"]["weight_decay"]
     )
     scheduler_phase2 = torch.optim.lr_scheduler.ReduceLROnPlateau(
@@ -98,6 +96,7 @@ def main():
         val_loader=val_loader,
         optimizer=optimizer_phase2,
         loss_step_fn=loss_step_fn,
+        epochs=config["train"]["epochs"],
         config=config,
         device=device,
         save_path="checkpoints/vae_finetuned.pth",

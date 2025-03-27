@@ -33,12 +33,12 @@ def validate_one_epoch(model, dataloader, loss_step_fn, device):
 
     return running_loss / len(dataloader)
 
-def run_training_loop(model, train_loader, val_loader, optimizer, loss_step_fn, config, device, save_path, scheduler=None):
+def run_training_loop(model, train_loader, val_loader, optimizer, loss_step_fn, epochs, config, device, save_path, scheduler=None):
     best_val_loss = float('inf')
     counter = 0
     scaler = GradScaler()
 
-    for epoch in range(config["train"]["epochs"]):
+    for epoch in range(epochs):
         train_loss = train_one_epoch(model, train_loader, loss_step_fn, optimizer, device, scaler)
         val_loss = validate_one_epoch(model, val_loader, loss_step_fn, device)
 

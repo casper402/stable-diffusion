@@ -10,7 +10,7 @@ from utils.config import load_config, get_device
 from functools import partial
 from piq import ssim
 
-def vae_loss_step(model, x, device, perceptual_loss, beta=0.1, lambda_ssim=0.1, lambda_perceptual=0.1):
+def vae_loss_step(model, x, device, perceptual, beta=0.1, lambda_ssim=0.2, lambda_perceptual=0.1):
     CT = x.to(device)
 
     _, mu, logvar, recon = model(CT)
@@ -18,6 +18,7 @@ def vae_loss_step(model, x, device, perceptual_loss, beta=0.1, lambda_ssim=0.1, 
     recon_loss = F.mse_loss(recon, CT)
     kl = kl_divergence(mu, logvar)
     ssim_loss = 1 - ssim(recon, CT)
+    perceptual_loss = perceptual(recon, CT)
 
     total_loss = (
         recon_loss +

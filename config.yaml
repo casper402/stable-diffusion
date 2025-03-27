@@ -8,17 +8,17 @@ model:
   num_heads: 8
 
 train:
-  batch_size: 16
+  batch_size: 32
   epochs: 5000
-  subset_size: 1000
+  subset_size: 5000
   learning_rate: 1e-4
   fine_tune_lr: 1e-5
   min_learning_rate: 1e-6
   min_fine_tune_lr: 1e-6
   weight_decay: 1e-5
   fine_tune_weight_decay: 1e-6
-  scheduler_patience: 5
-  early_stopping_patience: 20
+  scheduler_patience: 10
+  early_stopping_patience: 30
   num_workers: 8
 
 diffusion:

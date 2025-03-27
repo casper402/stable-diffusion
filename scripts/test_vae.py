@@ -1,6 +1,6 @@
 import torch
 from models.vae import VAE 
-from data.dataset import get_dataloaders
+from data.dataset import get_ct_dataloaders, get_dataloaders
 from data.transforms import build_train_transform
 from utils.config import load_config, get_device
 import matplotlib.pyplot as plt
@@ -11,10 +11,10 @@ def main():
     config = load_config(device)
     
     transform = build_train_transform(config["model"]["image_size"])
-    train_loader, val_loader = get_dataloaders(config, transform)
+    train_loader, val_loader = get_ct_dataloaders(config, transform)
 
     vae = VAE(latent_dim=config["model"]["latent_dim"]).to(device)
-    checkpoint_path = "/home/casper/Documents/Thesis/pretrained_models/best_vae_cbct1.pth"
+    checkpoint_path = "/home/casper/Documents/Thesis/stable-diffusion/checkpoints/vae_ct_only.pth"
 
     try:
         vae.load_state_dict(torch.load(checkpoint_path, map_location=device))
@@ -25,7 +25,7 @@ def main():
     vae.eval()
 
     with torch.no_grad():
-        for CBCT, CT in val_loader:
+        for CT in val_loader:
             CT = CT.to(device)
             z, mu, sd, recon = vae(CT)
 

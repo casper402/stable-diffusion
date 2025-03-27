@@ -3,36 +3,32 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torchvision import models
 from torchvision import transforms
+from torchvision.transforms import Normalize
 
 def kl_divergence(mu, logvar):
-    return -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp()) / mu.numel()
+    return -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
 
 class PerceptualLoss(nn.Module):
     def __init__(self):
         super().__init__()
-
-        vgg = models.vgg19(pretrained=True).features[:15].eval()
-
+        # vgg = models.vgg19(pretrained=True).features[:15].eval()
+        vgg = models.vgg16(pretrained=True).features[:8].eval()
         for param in vgg.parameters():
             param.requires_grad = False
+        self.normalize = Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]) # VGG normalization
 
-        for i, layer in enumerate(vgg):
-            if isinstance(layer, nn.ReLU):
-                vgg[i] = nn.ReLU(inplace=False)
-
-        self.vgg = vgg
-
-    def forward(self, x, y):
-        y = y.repeat(1, 3, 1, 1)
+    def forward(self, recon_x, x):
+        # Expand grayscale to 3 channels for VGG
+        recon_x = recon_x.repeat(1, 3, 1, 1)
         x = x.repeat(1, 3, 1, 1)
 
-        loss = 0.0
-        for layer in self.vgg:
-            x = layer(x)
-            y = layer(y)
-            loss += F.mse_loss(x, y)
-   
-        return loss
+        recon_x = self.normalize(recon_x)
+        x = self.normalize(x)
+
+        feat_recon = self.vgg(recon_x)
+        feat_real = self.vgg(x)
+
+        return F.mse_loss(feat_recon, feat_real)
     
 class SSIMLoss(nn.Module):
     def __init__(self, window_size=11, sigma=1.5):
@@ -42,10 +38,6 @@ class SSIMLoss(nn.Module):
         self.c2 = 0.03 ** 2
 
     def forward(self, x, y):
-        # Inputs are [-1, 1] and need to be [0, 1]
-        x = (x + 1) / 2
-        y = (y + 1) / 2
-        
         # Compute local means
         mu_x = self.gaussian_blur(x)
         mu_y = self.gaussian_blur(y)

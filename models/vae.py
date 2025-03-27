@@ -1,45 +1,68 @@
 import torch
 import torch.nn as nn
-from torchvision import models
+import torch.nn.functional as F
+
+class Encoder(nn.Module):
+    def __init__(self, latent_dim=4):
+        super().__init__()
+        self.conv1 = nn.Conv2d(1, 64, 4, 2, 1)  # -> 128x128
+        self.conv2 = nn.Conv2d(64, 128, 4, 2, 1) # -> 64x64
+        self.conv3 = nn.Conv2d(128, 256, 4, 2, 1) # -> 32x32
+
+        self.flatten = nn.Flatten()
+        self.fc_mu = nn.Linear(256 * 32 * 32, latent_dim * 32 * 32)
+        self.fc_logvar = nn.Linear(256 * 32 * 32, latent_dim * 32 * 32)
+
+    def forward(self, x):
+        x = F.relu(self.conv1(x))
+        x = F.relu(self.conv2(x))
+        x = F.relu(self.conv3(x))
+        x = self.flatten(x)
+        mu = self.fc_mu(x)
+        logvar = self.fc_logvar(x)
+        return mu, logvar
+
+
+class ResidualBlock(nn.Module):
+    def __init__(self, in_channels):
+        super().__init__()
+        self.block = nn.Sequential(
+            nn.Conv2d(in_channels, in_channels, 3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(in_channels, in_channels, 3, padding=1),
+        )
+
+    def forward(self, x):
+        return x + self.block(x)
+
+class Decoder(nn.Module):
+    def __init__(self, latent_dim=16):
+        super().__init__()
+        self.fc = nn.Linear(latent_dim * 32 * 32, 256 * 32 * 32)
+        self.unflatten = nn.Unflatten(1, (256, 32, 32))
+        self.deconv1 = nn.ConvTranspose2d(256, 128, 4, 2, 1) # -> 64x64
+        self.deconv2 = nn.ConvTranspose2d(64, 32, 4, 2, 1)   # -> 128x128
+        self.deconv3 = nn.ConvTranspose2d(32, 1, 4, 2, 1)    # -> 256x256
+        self.res1 = ResidualBlock(256)
+        self.res2 = ResidualBlock(128)
+    
+    def forward(self, z):
+        x = self.fc(z)
+        x = self.unflatten(x)
+
+        x = F.relu(self.res1(x))  # new residual block
+        x = F.relu(self.deconv1(x))  # -> 64x64
+        x = F.relu(self.res2(x))
+        x = F.relu(self.deconv2(x))  # -> 128x128
+        x = torch.sigmoid(self.deconv3(x))  # -> 256x256
+
+        return x
 
 class VAE(nn.Module):
-    def __init__(self, latent_dim, in_channels=1, out_channels=1):
+    def __init__(self, latent_dim=4):
         super().__init__()
-
-        resnet = models.resnet18(pretrained=True)
-        new_conv1 = nn.Conv2d(in_channels, 64, kernel_size=7, stride=1, padding=3, bias=False)
-        with torch.no_grad():
-            avg_weight = resnet.conv1.weight.mean(dim=1, keepdim=True)
-            new_conv1.weight = nn.Parameter(avg_weight.repeat(1, in_channels, 1, 1))
-        resnet.conv1 = new_conv1
-        resnet.maxpool = nn.Identity()
-        resnet_layers = list(resnet.children())
-
-        self.encoder = nn.Sequential(
-            *resnet_layers[:8],
-            nn.Conv2d(512, 2*latent_dim, kernel_size=1, stride=1, padding=0, bias=False)
-        )
-
-        self.decoder = nn.Sequential(
-            nn.ConvTranspose2d(latent_dim, 512, kernel_size=1, stride=1, padding=0),
-            nn.ReLU(),
-
-            nn.ConvTranspose2d(512, 256, kernel_size=4, stride=2, padding=1),  # Upsample
-            nn.ReLU(),
-            nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1),  # Refinement conv
-            nn.ReLU(),
-
-            nn.ConvTranspose2d(256, 128, kernel_size=4, stride=2, padding=1),
-            nn.ReLU(),
-            nn.Conv2d(128, 128, kernel_size=3, stride=1, padding=1),
-            nn.ReLU(),
-
-            nn.ConvTranspose2d(128, 64, kernel_size=4, stride=2, padding=1),
-            nn.ReLU(),
-            nn.Conv2d(64, out_channels, kernel_size=3, stride=1, padding=1),
-            
-            nn.Sigmoid()
-        )
+        self.encoder = Encoder(latent_dim)
+        self.decoder = Decoder(latent_dim)
 
     def reparameterize(self, mu, logvar):
         std = torch.exp(0.5 * logvar)
@@ -47,10 +70,7 @@ class VAE(nn.Module):
         return mu + eps * std
 
     def forward(self, x):
-        latent = self.encoder(x)
-
-        mu, logvar = torch.chunk(latent, 2, dim=1)
+        mu, logvar = self.encoder(x)
         z = self.reparameterize(mu, logvar)
-
-        reconstructed = self.decoder(z)
-        return z, mu, logvar, reconstructed
+        recon = self.decoder(z)
+        return z, mu, logvar, recon

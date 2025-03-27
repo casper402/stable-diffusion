@@ -3,7 +3,7 @@ paths:
   train_CT: ../training_data/CT
 
 model:
-  latent_dim: 8
+  latent_dim: 4
   image_size: 256
   num_heads: 8
 
@@ -18,8 +18,8 @@ train:
   min_fine_tune_lr: 1e-7
   weight_decay: 1e-5
   fine_tune_weight_decay: 1e-6
-  scheduler_patience: 50
-  early_stopping_patience: 500
+  scheduler_patience: 10
+  early_stopping_patience: 200
   num_workers: 8
 
 diffusion:

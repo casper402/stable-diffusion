@@ -48,11 +48,10 @@ def run_training_loop(model, train_loader, val_loader, optimizer, loss_step_fn, 
         epoch_time = time.time() - start_time
 
         elapsed = time.strftime("%H:%M:%S", time.gmtime(epoch_time))
-        total_est = time.strftime("%H:%M:%S", time.gmtime(epoch_time * epochs))
         remaining_est = time.strftime("%H:%M:%S", time.gmtime(epoch_time * (epochs - epoch - 1)))
 
         current_lr = optimizer.param_groups[0]['lr']
-        print(f"Epoch {epoch+1}/{epochs} | Train Loss: {train_loss:.6f} | Val Loss: {val_loss:.6f} | LR: {current_lr:.6f} | Time/Epoch: {elapsed} | ETA: {remaining_est} | Total Est: {total_est}")
+        print(f"Epoch {epoch+1}/{epochs} | Train Loss: {train_loss:.6f} | Val Loss: {val_loss:.6f} | LR: {current_lr:.6f} | Time/Epoch: {elapsed} | ETA: {remaining_est} ")
 
         if scheduler is not None:
             scheduler.step(val_loss)

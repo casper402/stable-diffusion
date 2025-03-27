@@ -11,9 +11,9 @@ def kl_divergence(mu, logvar):
 class PerceptualLoss(nn.Module):
     def __init__(self):
         super().__init__()
-        # vgg = models.vgg19(pretrained=True).features[:15].eval()
-        vgg = models.vgg16(pretrained=True).features[:8].eval()
-        for param in vgg.parameters():
+        # self.vgg = models.vgg19(pretrained=True).features[:15].eval()
+        self.vgg = models.vgg16(pretrained=True).features[:8].eval()
+        for param in self.vgg.parameters():
             param.requires_grad = False
         self.normalize = Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]) # VGG normalization
 

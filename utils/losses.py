@@ -18,15 +18,16 @@ class PerceptualLoss(nn.Module):
         self.normalize = Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]) # VGG normalization
 
     def forward(self, recon_x, x):
-        # Expand grayscale to 3 channels for VGG
-        recon_x = recon_x.repeat(1, 3, 1, 1)
-        x = x.repeat(1, 3, 1, 1)
+        with torch.no_grad():
+            # Expand grayscale to 3 channels for VGG
+            recon_x = recon_x.repeat(1, 3, 1, 1)
+            x = x.repeat(1, 3, 1, 1)
 
-        recon_x = self.normalize(recon_x)
-        x = self.normalize(x)
+            recon_x = self.normalize(recon_x)
+            x = self.normalize(x)
 
-        feat_recon = self.vgg(recon_x)
-        feat_real = self.vgg(x)
+            feat_recon = self.vgg(recon_x)
+            feat_real = self.vgg(x)
 
         return F.mse_loss(feat_recon, feat_real)
     

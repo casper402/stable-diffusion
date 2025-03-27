@@ -5,13 +5,13 @@ import torch.nn.functional as F
 class Encoder(nn.Module):
     def __init__(self, latent_dim=4):
         super().__init__()
-        self.conv1 = nn.Conv2d(1, 64, 4, 2, 1)  # -> 128x128
-        self.conv2 = nn.Conv2d(64, 128, 4, 2, 1) # -> 64x64
-        self.conv3 = nn.Conv2d(128, 256, 4, 2, 1) # -> 32x32
+        self.conv1 = nn.Conv2d(1, 32, 4, 2, 1)  # -> 128x128
+        self.conv2 = nn.Conv2d(32, 64, 4, 2, 1) # -> 64x64
+        self.conv3 = nn.Conv2d(64, 128, 4, 2, 1) # -> 32x32
 
         self.flatten = nn.Flatten()
-        self.fc_mu = nn.Linear(256 * 32 * 32, latent_dim * 32 * 32)
-        self.fc_logvar = nn.Linear(256 * 32 * 32, latent_dim * 32 * 32)
+        self.fc_mu = nn.Linear(128 * 32 * 32, latent_dim * 32 * 32)
+        self.fc_logvar = nn.Linear(128 * 32 * 32, latent_dim * 32 * 32)
 
     def forward(self, x):
         x = F.relu(self.conv1(x))
@@ -38,13 +38,13 @@ class ResidualBlock(nn.Module):
 class Decoder(nn.Module):
     def __init__(self, latent_dim=16):
         super().__init__()
-        self.fc = nn.Linear(latent_dim * 32 * 32, 256 * 32 * 32)
-        self.unflatten = nn.Unflatten(1, (256, 32, 32))
-        self.deconv1 = nn.ConvTranspose2d(256, 128, 4, 2, 1) # -> 64x64
-        self.deconv2 = nn.ConvTranspose2d(128, 64, 4, 2, 1)   # -> 128x128
-        self.deconv3 = nn.ConvTranspose2d(64, 1, 4, 2, 1)    # -> 256x256
-        self.res1 = ResidualBlock(256)
-        self.res2 = ResidualBlock(128)
+        self.fc = nn.Linear(latent_dim * 32 * 32, 128 * 32 * 32)
+        self.unflatten = nn.Unflatten(1, (128, 32, 32))
+        self.deconv1 = nn.ConvTranspose2d(128, 64, 4, 2, 1) # -> 64x64
+        self.deconv2 = nn.ConvTranspose2d(64, 32, 4, 2, 1)   # -> 128x128
+        self.deconv3 = nn.ConvTranspose2d(32, 1, 4, 2, 1)    # -> 256x256
+        self.res1 = ResidualBlock(128)
+        self.res2 = ResidualBlock(64)
     
     def forward(self, z):
         x = self.fc(z)

@@ -36,7 +36,7 @@ def main():
     train_loader, val_loader = get_ct_dataloaders(config, transform, subset_size=config["train"]["subset_size"])
 
     vae = VAE(latent_dim=config["model"]["latent_dim"]).to(device)
-    perceptual_loss = PerceptualLoss()
+    perceptual_loss = PerceptualLoss(device)
     loss_step_fn = partial(vae_loss_step, perceptual_loss=perceptual_loss)
 
     optimizer = optim.Adam(

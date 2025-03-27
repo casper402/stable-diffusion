@@ -41,8 +41,8 @@ class Decoder(nn.Module):
         self.fc = nn.Linear(latent_dim * 32 * 32, 256 * 32 * 32)
         self.unflatten = nn.Unflatten(1, (256, 32, 32))
         self.deconv1 = nn.ConvTranspose2d(256, 128, 4, 2, 1) # -> 64x64
-        self.deconv2 = nn.ConvTranspose2d(64, 32, 4, 2, 1)   # -> 128x128
-        self.deconv3 = nn.ConvTranspose2d(32, 1, 4, 2, 1)    # -> 256x256
+        self.deconv2 = nn.ConvTranspose2d(128, 64, 4, 2, 1)   # -> 128x128
+        self.deconv3 = nn.ConvTranspose2d(64, 1, 4, 2, 1)    # -> 256x256
         self.res1 = ResidualBlock(256)
         self.res2 = ResidualBlock(128)
     

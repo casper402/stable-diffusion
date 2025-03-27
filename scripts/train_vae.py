@@ -63,7 +63,7 @@ def main():
         epochs=config["train"]["epochs"],
         config=config,
         device=device,
-        save_path="checkpoints/vae_ct_only.pth",
+        save_path="checkpoints/vae_resnet18_ldim8.pth",
         scheduler=scheduler
     )
 

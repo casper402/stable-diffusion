@@ -41,32 +41,70 @@ def main():
     perceptual_loss = PerceptualLoss(device)
     loss_step_fn = partial(vae_loss_step, perceptual_loss=perceptual_loss)
 
-    optimizer = optim.Adam(
+    # Phase 1: Freeze encoder
+    for param in vae.encoder.parameters():
+        param.requires_grad = False
+    print("Phase 1: Training decoder only (encoder frozen)")
+
+    optimizer_phase1 = optim.Adam(
         filter(lambda p: p.requires_grad, vae.parameters()), 
         lr=config["train"]["learning_rate"],
         weight_decay=config["train"]["weight_decay"]
     )
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer, 
+    scheduler_phase1 = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer_phase1, 
         mode='min', 
         factor=0.5, 
         patience=config["train"]["scheduler_patience"], 
         min_lr=config["train"]["min_learning_rate"]
-    )    
+    )
+
+    config_phase1 = config.copy()
+    config_phase1["train"]["epochs"] = 20 
 
     run_training_loop(
         model=vae,
         train_loader=train_loader,
         val_loader=val_loader,
-        optimizer=optimizer,
+        optimizer=optimizer_phase1,
+        loss_step_fn=loss_step_fn,
+        config=config_phase1,
+        device=device,
+        save_path="checkpoints/vae_frozen_encoder.pth",
+        scheduler=scheduler_phase1
+    )
+
+    # Phase 2: Unfreeze encoder for fine-tuning
+    print("Phase 2: Fine-tuning entire VAE (encoder + decoder)")
+    for param in vae.encoder.parameters():
+        param.requires_grad = True
+
+    optimizer_phase2 = optim.Adam(
+        filter(lambda p: p.requires_grad, vae.parameters()), 
+        lr=config["train"]["learning_rate"], 
+        weight_decay=config["train"]["weight_decay"]
+    )
+    scheduler_phase2 = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer_phase2, 
+        mode='min', 
+        factor=0.5, 
+        patience=config["train"]["scheduler_patience"], 
+        min_lr=config["train"]["min_learning_rate"]
+    )
+
+    run_training_loop(
+        model=vae,
+        train_loader=train_loader,
+        val_loader=val_loader,
+        optimizer=optimizer_phase2,
         loss_step_fn=loss_step_fn,
         config=config,
         device=device,
-        save_path="checkpoints/vae_ct_only.pth",
-        scheduler=scheduler
+        save_path="checkpoints/vae_finetuned.pth",
+        scheduler=scheduler_phase2
     )
 
-    print("training complete")
+    print("Training complete")
 
 if __name__ == "__main__":
     main()

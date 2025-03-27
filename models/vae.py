@@ -18,9 +18,9 @@ class Encoder(nn.Module):
     def __init__(self, latent_dim=4):
         super().__init__()
         self.conv1 = nn.Conv2d(1, 64, 4, 2, 1)  # -> 128x128
-        self.res1 = ResidualBlock(64)
+        #self.res1 = ResidualBlock(64)
         self.conv2 = nn.Conv2d(64, 128, 4, 2, 1) # -> 64x64
-        self.res2 = ResidualBlock(128)
+        #self.res2 = ResidualBlock(128)
         self.conv3 = nn.Conv2d(128, 256, 4, 2, 1) # -> 32x32
         self.res3 = ResidualBlock(256)
 
@@ -29,9 +29,9 @@ class Encoder(nn.Module):
 
     def forward(self, x):
         x = F.relu(self.conv1(x))
-        x = F.relu(self.res1(x))
+        #x = F.relu(self.res1(x))
         x = F.relu(self.conv2(x))
-        x = F.relu(self.res2(x))
+        #x = F.relu(self.res2(x))
         x = F.relu(self.conv3(x))
         x = F.relu(self.res3(x))
         mu = self.conv_mu(x)
@@ -46,7 +46,7 @@ class Decoder(nn.Module):
         self.deconv1 = nn.ConvTranspose2d(256, 128, 4, 2, 1) # -> 64x64
         self.res2 = ResidualBlock(128)
         self.deconv2 = nn.ConvTranspose2d(128, 64, 4, 2, 1)   # -> 128x128
-        self.res3 = ResidualBlock(64)
+        #self.res3 = ResidualBlock(64)
         self.deconv3 = nn.ConvTranspose2d(64, 1, 4, 2, 1)    # -> 256x256
     
     def forward(self, z):
@@ -55,7 +55,7 @@ class Decoder(nn.Module):
         x = F.relu(self.deconv1(x))  # -> 64x64
         x = F.relu(self.res2(x))
         x = F.relu(self.deconv2(x))  # -> 128x128
-        x = F.relu(self.res3(x))
+        #x = F.relu(self.res3(x))
         x = torch.sigmoid(self.deconv3(x))  # -> 256x256
 
         return x

@@ -3,7 +3,7 @@ os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:128"
 import torch
 import torch.nn.functional as F
 from torch import optim
-from models.resnet18Vae import VAE 
+from models.vae import VAE 
 from utils.losses import PerceptualLoss, kl_divergence
 from utils.train_helpers import run_training_loop
 from data.dataset import get_ct_dataloaders
@@ -19,13 +19,12 @@ def vae_loss_step(model, x, device, perceptual_loss, beta=0.1, lambda_ssim=0.1, 
 
     recon_loss = F.mse_loss(recon, CT)
     kl = kl_divergence(mu, logvar)
-    ssim_loss = 1 - ssim(recon.detach(), CT.detach())
+    #ssim_loss = 1 - ssim(recon.detach(), CT.detach())
     perceptual = perceptual_loss(recon.detach(), CT.detach())
 
     total_loss = (
         recon_loss +
         beta * kl +
-        lambda_ssim * ssim_loss +
         lambda_perceptual * perceptual
     )
     return total_loss
@@ -63,7 +62,7 @@ def main():
         epochs=config["train"]["epochs"],
         config=config,
         device=device,
-        save_path="checkpoints/vae_resnet18_ldim8.pth",
+        save_path="checkpoints/vae_ldim8.pth",
         scheduler=scheduler
     )
 

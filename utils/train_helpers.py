@@ -1,15 +1,20 @@
 import torch
-import torch.nn.functional as F
+from torch.cuda.amp import autocast, GradScaler
 
-def train_one_epoch(model, dataloader, loss_step_fn, optimizer, device):
+
+def train_one_epoch(model, dataloader, loss_step_fn, optimizer, device, scaler):
     model.train()
     running_loss = 0
 
     for batch in dataloader:
         optimizer.zero_grad()
-        loss = loss_step_fn(model, batch, device)
-        loss.backward()
-        optimizer.step()
+
+        with autocast():
+            loss = loss_step_fn(model, batch, device)
+
+        scaler.scale(loss).backward()
+        scaler.step(optimizer)
+        scaler.update()
 
         running_loss += loss.item()
     
@@ -29,8 +34,10 @@ def validate_one_epoch(model, dataloader, loss_step_fn, device):
 def run_training_loop(model, train_loader, val_loader, optimizer, loss_step_fn, config, device, save_path, scheduler=None):
     best_val_loss = float('inf')
     counter = 0
+    scaler = GradScaler()
+
     for epoch in range(config["train"]["epochs"]):
-        train_loss = train_one_epoch(model, train_loader, loss_step_fn, optimizer, device)
+        train_loss = train_one_epoch(model, train_loader, loss_step_fn, optimizer, device, scaler)
         val_loss = validate_one_epoch(model, val_loader, loss_step_fn, device)
 
         current_lr = optimizer.param_groups[0]['lr']

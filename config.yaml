@@ -8,8 +8,8 @@ model:
   num_heads: 8
 
 train:
-  batch_size: 4
-  epochs: 1000
+  batch_size: 16
+  epochs: 5000
   subset_size: 1000
   learning_rate: 1e-4
   fine_tune_lr: 1e-5

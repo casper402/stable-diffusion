@@ -9,17 +9,15 @@ class Encoder(nn.Module):
         self.conv2 = nn.Conv2d(32, 64, 4, 2, 1) # -> 64x64
         self.conv3 = nn.Conv2d(64, 128, 4, 2, 1) # -> 32x32
 
-        self.flatten = nn.Flatten()
-        self.fc_mu = nn.Linear(128 * 32 * 32, latent_dim * 32 * 32)
-        self.fc_logvar = nn.Linear(128 * 32 * 32, latent_dim * 32 * 32)
+        self.conv_mu = nn.Conv2d(128, latent_dim, 1)
+        self.conv_logvar = nn.Conv2d(128, latent_dim, 1)
 
     def forward(self, x):
         x = F.relu(self.conv1(x))
         x = F.relu(self.conv2(x))
         x = F.relu(self.conv3(x))
-        x = self.flatten(x)
-        mu = self.fc_mu(x)
-        logvar = self.fc_logvar(x)
+        mu = self.conv_mu(x)
+        logvar = self.conv_logvar(x)
         return mu, logvar
 
 
@@ -36,21 +34,18 @@ class ResidualBlock(nn.Module):
         return x + self.block(x)
 
 class Decoder(nn.Module):
-    def __init__(self, latent_dim=16):
+    def __init__(self, latent_dim=4):
         super().__init__()
-        self.fc = nn.Linear(latent_dim * 32 * 32, 128 * 32 * 32)
-        self.unflatten = nn.Unflatten(1, (128, 32, 32))
+        self.deconv_input = nn.ConvTranspose2d(latent_dim, 128, 3, 1, 1)
+        self.res1 = ResidualBlock(128)
         self.deconv1 = nn.ConvTranspose2d(128, 64, 4, 2, 1) # -> 64x64
+        self.res2 = ResidualBlock(64)
         self.deconv2 = nn.ConvTranspose2d(64, 32, 4, 2, 1)   # -> 128x128
         self.deconv3 = nn.ConvTranspose2d(32, 1, 4, 2, 1)    # -> 256x256
-        self.res1 = ResidualBlock(128)
-        self.res2 = ResidualBlock(64)
     
     def forward(self, z):
-        x = self.fc(z)
-        x = self.unflatten(x)
-
-        x = F.relu(self.res1(x))  # new residual block
+        x = F.relu(self.deconv_input(z))
+        x = F.relu(self.res1(x))
         x = F.relu(self.deconv1(x))  # -> 64x64
         x = F.relu(self.res2(x))
         x = F.relu(self.deconv2(x))  # -> 128x128

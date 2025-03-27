@@ -29,7 +29,7 @@ class PerceptualLoss(nn.Module):
             feat_recon = self.vgg(recon_x)
             feat_real = self.vgg(x)
 
-        return F.mse_loss(feat_recon, feat_real)
+            return F.mse_loss(feat_recon, feat_real)
     
 class SSIMLoss(nn.Module):
     def __init__(self, window_size=11, sigma=1.5):

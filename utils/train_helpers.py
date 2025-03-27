@@ -1,5 +1,6 @@
 import torch
 from torch.cuda.amp import autocast, GradScaler
+import time
 
 
 def train_one_epoch(model, dataloader, loss_step_fn, optimizer, device, scaler):
@@ -39,11 +40,19 @@ def run_training_loop(model, train_loader, val_loader, optimizer, loss_step_fn, 
     scaler = GradScaler()
 
     for epoch in range(epochs):
+        start_time = time.time()
+
         train_loss = train_one_epoch(model, train_loader, loss_step_fn, optimizer, device, scaler)
         val_loss = validate_one_epoch(model, val_loader, loss_step_fn, device)
 
+        epoch_time = time.time() - start_time
+
+        elapsed = time.strftime("%H:%M:%S", time.gmtime(epoch_time))
+        total_est = time.strftime("%H:%M:%S", time.gmtime(epoch_time * epochs))
+        remaining_est = time.strftime("%H:%M:%S", time.gmtime(epoch_time * (epochs - epoch - 1)))
+
         current_lr = optimizer.param_groups[0]['lr']
-        print(f"Epoch {epoch + 1}/{config['train']['epochs']}: Train Loss: {train_loss:.6f}, Val Loss: {val_loss:.6f}, LR: {current_lr:.6f}")
+        print(f"Epoch {epoch+1}/{epochs} | Train Loss: {train_loss:.6f} | Val Loss: {val_loss:.6f} | LR: {current_lr:.6f} | Time/Epoch: {elapsed} | ETA: {remaining_est} | Total Est: {total_est}")
 
         if scheduler is not None:
             scheduler.step(val_loss)

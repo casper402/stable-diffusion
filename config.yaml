@@ -18,7 +18,7 @@ train:
   min_fine_tune_lr: 1e-7
   weight_decay: 1e-5
   fine_tune_weight_decay: 1e-6
-  scheduler_patience: 20
+  scheduler_patience: 50
   early_stopping_patience: 500
   num_workers: 8
 

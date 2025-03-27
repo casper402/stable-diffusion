@@ -6,6 +6,8 @@ def train_one_epoch(model, dataloader, loss_step_fn, optimizer, device, scaler):
     model.train()
     running_loss = 0
 
+    # TODO: simulate batch size 8 with accumulation
+
     for batch in dataloader:
         optimizer.zero_grad()
 

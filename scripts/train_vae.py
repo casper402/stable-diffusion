@@ -2,7 +2,7 @@ import torch
 import torch.nn.functional as F
 from torch import optim
 from models.vae import VAE 
-from utils.losses import SSIMLoss, PerceptualLoss, kl_divergence
+from utils.losses import PerceptualLoss, kl_divergence
 from utils.train_helpers import run_training_loop
 from data.dataset import get_ct_dataloaders
 from data.transforms import build_train_transform
@@ -10,7 +10,7 @@ from utils.config import load_config, get_device
 from functools import partial
 from piq import ssim
 
-def vae_loss_step(model, x, device, perceptual, beta=0.1, lambda_ssim=0.2, lambda_perceptual=0.1):
+def vae_loss_step(model, x, device, perceptual_loss, beta=0.1, lambda_ssim=0.2, lambda_perceptual=0.1):
     CT = x.to(device)
 
     _, mu, logvar, recon = model(CT)
@@ -18,13 +18,13 @@ def vae_loss_step(model, x, device, perceptual, beta=0.1, lambda_ssim=0.2, lambd
     recon_loss = F.mse_loss(recon, CT)
     kl = kl_divergence(mu, logvar)
     ssim_loss = 1 - ssim(recon, CT)
-    perceptual_loss = perceptual(recon, CT)
+    perceptual = perceptual_loss(recon, CT)
 
     total_loss = (
         recon_loss +
         beta * kl +
         lambda_ssim * ssim_loss +
-        lambda_perceptual * perceptual_loss
+        lambda_perceptual * perceptual
     )
     return total_loss
 

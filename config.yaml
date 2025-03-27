@@ -3,7 +3,7 @@ paths:
   train_CT: ../training_data/CT
 
 model:
-  latent_dim: 4
+  latent_dim: 8
   image_size: 256
   num_heads: 8
 

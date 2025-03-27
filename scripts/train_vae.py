@@ -3,7 +3,7 @@ os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:128"
 import torch
 import torch.nn.functional as F
 from torch import optim
-from models.vae import VAE 
+from models.resnet50Vae import VAE 
 from utils.losses import PerceptualLoss, kl_divergence
 from utils.train_helpers import run_training_loop
 from data.dataset import get_ct_dataloaders

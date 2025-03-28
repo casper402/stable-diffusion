@@ -2,6 +2,33 @@ import torch
 import torch.nn as nn
 from torchvision import models
 
+class ResidualBlock(nn.Module):
+    def __init__(self, channels):
+        super().__init__()
+        self.block = nn.Sequential(
+            nn.Conv2d(channels, channels, 3, padding=1),
+            nn.GroupNorm(32, channels),
+            nn.SiLU(),
+            nn.Conv2d(channels, channels, 3, padding=1),
+            nn.GroupNorm(32, channels),
+        )
+
+    def forward(self, x):
+        return F.silu(x + self.block(x))
+    
+class AttentionBlock(nn.Module):
+    def __init__(self, channels):
+        super().__init__()
+        self.attention = nn.MultiheadAttention(channels, num_heads=4, batch_first=True)
+        self.norm = nn.GroupNorm(8, channels)
+
+    def forward(self, x):
+        B, C, H, W = x.size()
+        x_flat = x.view(B, C, H*W).transpose(1, 2)
+        x_attn, _ = self.attention(x_flat, x_flat, x_flat)
+        x_attn = x_attn.transpose(1, 2).view(B, C, H, W)
+        return x + self.norm(x_attn)
+
 class VAE(nn.Module):
     def __init__(self, latent_dim, in_channels=1, out_channels=1):
         super().__init__()
@@ -21,23 +48,15 @@ class VAE(nn.Module):
         )
 
         self.decoder = nn.Sequential(
-            nn.ConvTranspose2d(latent_dim, 512, kernel_size=1, stride=1, padding=0),
-            nn.ReLU(),
-
-            nn.ConvTranspose2d(512, 256, kernel_size=4, stride=2, padding=1),  # Upsample
-            nn.ReLU(),
-            nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1),  # Refinement conv
-            nn.ReLU(),
-
-            nn.ConvTranspose2d(256, 128, kernel_size=4, stride=2, padding=1),
-            nn.ReLU(),
-            nn.Conv2d(128, 128, kernel_size=3, stride=1, padding=1),
-            nn.ReLU(),
-
-            nn.ConvTranspose2d(128, 64, kernel_size=4, stride=2, padding=1),
-            nn.ReLU(),
-            nn.Conv2d(64, out_channels, kernel_size=3, stride=1, padding=1),
-            
+            nn.ConvTranspose2d(latent_dim, 512, 3, 1, 1),
+            ResidualBlock(512),
+            AttentionBlock(512),                    # Attention added
+            nn.ConvTranspose2d(512, 256, 4, 2, 1),  # ->64x64
+            ResidualBlock(256),
+            AttentionBlock(256),                    # Attention added
+            nn.ConvTranspose2d(256, 128, 4, 2, 1),   # ->128x128
+            ResidualBlock(128),
+            nn.ConvTranspose2d(128, 1, 4, 2, 1),     # ->256x256
             nn.Sigmoid()
         )
 

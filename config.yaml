@@ -19,7 +19,7 @@ train:
   learning_rate: 1e-4
   fine_tune_lr: 1e-5
   min_learning_rate: 1e-6
-  min_fine_tune_lr: 1e-7
+  min_fine_tune_lr: 1e-6
   weight_decay: 1e-5
   fine_tune_weight_decay: 1e-6
   scheduler_patience: 10

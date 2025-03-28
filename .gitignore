@@ -2,6 +2,6 @@ grendel.txt
 todo.txt
 checkpoints/
 results/
-
+pretrained_models/
 __pycache__/
 *.py[cod]

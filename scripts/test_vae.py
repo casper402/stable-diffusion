@@ -5,7 +5,6 @@ from data.transforms import build_train_transform
 from utils.config import load_config, get_device
 import matplotlib.pyplot as plt
 
-
 def main():
     device = get_device()
     config = load_config(device)
@@ -14,7 +13,8 @@ def main():
     train_loader, val_loader = get_ct_dataloaders(config, transform)
 
     vae = VAE(latent_dim=config["model"]["latent_dim"]).to(device)
-    checkpoint_path = "/home/casper/Documents/Thesis/stable-diffusion/checkpoints/test.pth"
+    checkpoint_path = "/home/casper/Documents/Thesis/stable-diffusion/checkpoints/test2.pth"
+    # checkpoint_path = "/home/casper/Documents/Thesis/stable-diffusion/pretrained_models/model.ckpt"
 
     try:
         vae.load_state_dict(torch.load(checkpoint_path, map_location=device))

@@ -20,9 +20,6 @@ def vae_loss_step(model, x, device, perceptual_loss, beta=0.00001, lambda_percep
     kl = kl_divergence(mu, logvar)
     perceptual = perceptual_loss(recon.detach(), CT.detach())
 
-    print(kl*beta)
-    print(lambda_perceptual*perceptual)
-
     total_loss = (
         recon_loss +
         beta * kl +

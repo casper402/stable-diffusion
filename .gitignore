@@ -1,6 +1,7 @@
 grendel.txt
 todo.txt
 checkpoints/
+results/
 
 __pycache__/
 *.py[cod]

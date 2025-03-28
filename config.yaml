@@ -11,7 +11,7 @@ train:
   batch_size: 4
   epochs: 5000
   initial_epochs: 20
-  subset_size: 2000
+  subset_size: 500
   learning_rate: 1e-4
   fine_tune_lr: 1e-5
   min_learning_rate: 1e-6

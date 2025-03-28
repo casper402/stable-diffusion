@@ -63,7 +63,7 @@ def main():
         epochs=config["train"]["epochs"],
         config=config,
         device=device,
-        save_path="checkpoints/vae_attention_ldim4.pth",
+        save_path="checkpoints/vae_attention_ldim4_500images.pth",
         scheduler=scheduler
     )
 

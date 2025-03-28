@@ -16,14 +16,14 @@ def vae_loss_step(model, x, device, perceptual_loss, beta=0.0005, lambda_percept
 
     _, mu, logvar, recon = model(CT)
 
-    recon_loss = F.mse_loss(recon, CT)
+    recon_loss = F.mse_loss(recon, input, reduction='mean')
     kl = kl_divergence(mu, logvar)
-    perceptual = perceptual_loss(recon.detach(), CT.detach())
+    #perceptual = perceptual_loss(recon.detach(), CT.detach())
 
     total_loss = (
         recon_loss +
-        beta * kl +
-        lambda_perceptual * perceptual
+        beta * kl
+        #lambda_perceptual * perceptual
     )
     return total_loss
 
@@ -63,7 +63,7 @@ def main():
         epochs=config["train"]["epochs"],
         config=config,
         device=device,
-        save_path="checkpoints/vae_attention_ldim4_500images.pth",
+        save_path="checkpoints/vae_only_mse_kl.pth",
         scheduler=scheduler
     )
 

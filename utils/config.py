@@ -17,8 +17,13 @@ def load_config(device, path="config.yaml"):
         config["train"]["batch_size"] = 1
         config["train"]["subset_size"] = 10
 
-    float_keys = ["learning_rate", "min_learning_rate", "fine_tune_lr", "min_fine_tune_lr", "weight_decay", "fine_tune_weight_decay"]
-    for key in float_keys:
+    train_float_keys = ["learning_rate", "min_learning_rate", "fine_tune_lr", "min_fine_tune_lr", "weight_decay", "fine_tune_weight_decay"]
+    for key in train_float_keys:
         config["train"][key] = float(config["train"][key])
+
+    vae_float_keys = ["beta", "lambda_perceptual"]
+    for key in vae_float_keys:
+        config["vae"][key] = float(config["vae"][key])
+        print(f"{key}: ", config["vae"][key])
 
     return config

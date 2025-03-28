@@ -36,7 +36,7 @@ def main():
 
     vae = VAE(latent_dim=4).to(device)
     perceptual_loss = PerceptualLoss(device)
-    loss_step_fn = partial(vae_loss_step, perceptual_loss=perceptual_loss)
+    loss_step_fn = partial(vae_loss_step, perceptual_loss=perceptual_loss, beta=config["vae"]["beta"], lambda_perceptual=config["vae"]["lambda_perceptual"] )
 
     optimizer = optim.AdamW(
         vae.parameters(),

@@ -7,6 +7,10 @@ model:
   image_size: 256
   num_heads: 8
 
+vae:
+  beta: 0.000001
+  lambda_perceptual: 0.05
+
 train:
   batch_size: 4
   epochs: 5000

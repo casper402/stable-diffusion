@@ -10,16 +10,14 @@ from data.dataset import get_ct_dataloaders
 from data.transforms import build_train_transform
 from utils.config import load_config, get_device
 from functools import partial
-from piq import ssim
 
-def vae_loss_step(model, x, device, perceptual_loss, beta=1.0, lambda_ssim=0.1, lambda_perceptual=0.1):
+def vae_loss_step(model, x, device, perceptual_loss, beta=0.0005, lambda_perceptual=0.1):
     CT = x.to(device)
 
     _, mu, logvar, recon = model(CT)
 
     recon_loss = F.mse_loss(recon, CT)
     kl = kl_divergence(mu, logvar)
-    #ssim_loss = 1 - ssim(recon.detach(), CT.detach())
     perceptual = perceptual_loss(recon.detach(), CT.detach())
 
     total_loss = (
@@ -36,22 +34,25 @@ def main():
     transform = build_train_transform(config["model"]["image_size"])
     train_loader, val_loader = get_ct_dataloaders(config, transform, subset_size=config["train"]["subset_size"])
 
-    vae = VAE(latent_dim=config["model"]["latent_dim"]).to(device)
+    vae = VAE(latent_dim=4).to(device)
     perceptual_loss = PerceptualLoss(device)
     loss_step_fn = partial(vae_loss_step, perceptual_loss=perceptual_loss)
 
-    optimizer = optim.Adam(
-        filter(lambda p: p.requires_grad, vae.parameters()), 
-        lr=config["train"]["learning_rate"],
-        #weight_decay=config["train"]["weight_decay"]
+    optimizer = optim.AdamW(
+        vae.parameters(),
+        lr=2e-4,
+        weight_decay=1e-5,
+        betas=(0.9, 0.999),
     )
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer, 
-        mode='min', 
-        factor=0.5, 
-        patience=config["train"]["scheduler_patience"], 
-        min_lr=config["train"]["min_learning_rate"]
-    )    
+        optimizer,
+        mode='min',            # minimize reconstruction or total loss
+        factor=0.5,            # LR reduction factor (usually 0.5–0.1)
+        patience=10,           # epochs without improvement before reduction
+        threshold=1e-4,        # significant improvement threshold
+        verbose=True,          # prints LR updates to keep track
+        min_lr=1e-6            # minimal LR allowed
+    ) 
 
     run_training_loop(
         model=vae,
@@ -62,7 +63,7 @@ def main():
         epochs=config["train"]["epochs"],
         config=config,
         device=device,
-        save_path="checkpoints/vae_ldim4.pth",
+        save_path="checkpoints/vae_attention_ldim4.pth",
         scheduler=scheduler
     )
 

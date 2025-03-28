@@ -3,37 +3,50 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class ResidualBlock(nn.Module):
-    def __init__(self, in_channels):
+    def __init__(self, channels):
         super().__init__()
         self.block = nn.Sequential(
-            nn.Conv2d(in_channels, in_channels, 3, padding=1),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(in_channels, in_channels, 3, padding=1),
+            nn.Conv2d(channels, channels, 3, padding=1),
+            nn.GroupNorm(32, channels),
+            nn.SiLU(),
+            nn.Conv2d(channels, channels, 3, padding=1),
+            nn.GroupNorm(32, channels),
         )
 
     def forward(self, x):
-        return x + self.block(x)
+        return F.silu(x + self.block(x))
+    
+class AttentionBlock(nn.Module):
+    def __init__(self, channels):
+        super().__init__()
+        self.attention = nn.MultiheadAttention(channels, num_heads=4, batch_first=True)
+        self.norm = nn.GroupNorm(8, channels)
+
+    def forward(self, x):
+        B, C, H, W = x.size()
+        x_flat = x.view(B, C, H*W).transpose(1, 2)
+        x_attn, _ = self.attention(x_flat, x_flat, x_flat)
+        x_attn = x_attn.transpose(1, 2).view(B, C, H, W)
+        return x + self.norm(x_attn)
 
 class Encoder(nn.Module):
     def __init__(self, latent_dim=4):
         super().__init__()
-        self.conv1 = nn.Conv2d(1, 64, 4, 2, 1)  # -> 128x128
-        #self.res1 = ResidualBlock(64)
-        self.conv2 = nn.Conv2d(64, 128, 4, 2, 1) # -> 64x64
-        #self.res2 = ResidualBlock(128)
-        self.conv3 = nn.Conv2d(128, 256, 4, 2, 1) # -> 32x32
-        self.res3 = ResidualBlock(256)
-
-        self.conv_mu = nn.Conv2d(256, latent_dim, 1)
-        self.conv_logvar = nn.Conv2d(256, latent_dim, 1)
+        self.encoder = nn.Sequential(
+            nn.Conv2d(1, 128, 4, 2, 1),  # -> 128x128
+            ResidualBlock(128),
+            nn.Conv2d(128, 256, 4, 2, 1), # -> 64x64
+            ResidualBlock(256),
+            AttentionBlock(256),
+            nn.Conv2d(256, 512, 4, 2, 1),  # -> 32x32
+            ResidualBlock(512),
+            AttentionBlock(512),
+        )
+        self.conv_mu = nn.Conv2d(512, latent_dim, 1)
+        self.conv_logvar = nn.Conv2d(512, latent_dim, 1)
 
     def forward(self, x):
-        x = F.relu(self.conv1(x))
-        #x = F.relu(self.res1(x))
-        x = F.relu(self.conv2(x))
-        #x = F.relu(self.res2(x))
-        x = F.relu(self.conv3(x))
-        x = F.relu(self.res3(x))
+        x = self.encoder(x)
         mu = self.conv_mu(x)
         logvar = self.conv_logvar(x)
         return mu, logvar
@@ -41,24 +54,21 @@ class Encoder(nn.Module):
 class Decoder(nn.Module):
     def __init__(self, latent_dim=4):
         super().__init__()
-        self.deconv_input = nn.ConvTranspose2d(latent_dim, 256, 3, 1, 1)
-        self.res1 = ResidualBlock(256)
-        self.deconv1 = nn.ConvTranspose2d(256, 128, 4, 2, 1) # -> 64x64
-        self.res2 = ResidualBlock(128)
-        self.deconv2 = nn.ConvTranspose2d(128, 64, 4, 2, 1)   # -> 128x128
-        #self.res3 = ResidualBlock(64)
-        self.deconv3 = nn.ConvTranspose2d(64, 1, 4, 2, 1)    # -> 256x256
-    
-    def forward(self, z):
-        x = F.relu(self.deconv_input(z))
-        x = F.relu(self.res1(x))
-        x = F.relu(self.deconv1(x))  # -> 64x64
-        x = F.relu(self.res2(x))
-        x = F.relu(self.deconv2(x))  # -> 128x128
-        #x = F.relu(self.res3(x))
-        x = torch.sigmoid(self.deconv3(x))  # -> 256x256
+        self.decoder = nn.Sequential(
+            nn.ConvTranspose2d(latent_dim, 512, 3, 1, 1),
+            ResidualBlock(512),
+            AttentionBlock(512),                    # Attention added
+            nn.ConvTranspose2d(512, 256, 4, 2, 1),  # ->64x64
+            ResidualBlock(256),
+            AttentionBlock(256),                    # Attention added
+            nn.ConvTranspose2d(256, 128, 4, 2, 1),   # ->128x128
+            ResidualBlock(128),
+            nn.ConvTranspose2d(128, 1, 4, 2, 1),     # ->256x256
+        )
 
-        return x
+    def forward(self, z):
+        x = self.decoder(z)
+        return torch.sigmoid(x)
 
 class VAE(nn.Module):
     def __init__(self, latent_dim=4):

@@ -15,6 +15,7 @@ def load_config(device, path="config.yaml"):
 
     if device.type == "cpu":
         config["train"]["batch_size"] = 1
+        config["train"]["subset_size"] = 10
 
     float_keys = ["learning_rate", "min_learning_rate", "fine_tune_lr", "min_fine_tune_lr", "weight_decay", "fine_tune_weight_decay"]
     for key in float_keys:

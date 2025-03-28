@@ -39,7 +39,7 @@ def main():
 
     vae = VAE(latent_dim=config["model"]["latent_dim"]).to(device)
     perceptual_loss = PerceptualLoss(device)
-    loss_step_fn = partial(vae_loss_step, perceptual_loss=perceptual_loss)
+    loss_step_fn = partial(vae_loss_step, perceptual_loss=perceptual_loss, beta=config["vae"]["beta"], lambda_perceptual=config["vae"]["lambda_perceptual"])
 
     # Phase 1: Freeze encoder
     for param in vae.encoder.parameters():

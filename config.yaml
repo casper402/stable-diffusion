@@ -8,8 +8,8 @@ model:
   num_heads: 8
 
 vae:
-  beta: 0.000001
-  lambda_perceptual: 0
+  beta: 0
+  lambda_perceptual: 0.1
 
 train:
   batch_size: 4

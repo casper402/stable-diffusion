@@ -18,7 +18,7 @@ def vae_loss_step(model, x, device, perceptual_loss, beta=0.00001, lambda_percep
 
     recon_loss = F.mse_loss(recon, CT, reduction='mean')
     kl = kl_divergence(mu, logvar)
-    perceptual = perceptual_loss(recon.detach(), CT.detach())
+    perceptual = perceptual_loss(recon, CT)
 
     total_loss = (
         recon_loss +
@@ -63,7 +63,7 @@ def main():
         epochs=config["train"]["epochs"],
         config=config,
         device=device,
-        save_path="checkpoints/test3.pth",
+        save_path="checkpoints/test_percept_no_kl.pth",
         scheduler=scheduler
     )
 

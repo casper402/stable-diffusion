@@ -63,7 +63,7 @@ def main():
         epochs=config["train"]["epochs"],
         config=config,
         device=device,
-        save_path="checkpoints/test2.pth",
+        save_path="checkpoints/test3.pth",
         scheduler=scheduler
     )
 

@@ -9,7 +9,7 @@ model:
 
 vae:
   beta: 0.000001
-  lambda_perceptual: 0.1
+  lambda_perceptual: 0
 
 train:
   batch_size: 4

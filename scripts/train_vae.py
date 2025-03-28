@@ -11,19 +11,19 @@ from data.transforms import build_train_transform
 from utils.config import load_config, get_device
 from functools import partial
 
-def vae_loss_step(model, x, device, perceptual_loss, beta=0.0005, lambda_perceptual=0.1):
+def vae_loss_step(model, x, device, perceptual_loss, beta=0.0000, lambda_perceptual=0.0):
     CT = x.to(device)
 
     _, mu, logvar, recon = model(CT)
 
-    recon_loss = F.mse_loss(recon, input, reduction='mean')
+    recon_loss = F.mse_loss(recon, CT, reduction='mean')
     kl = kl_divergence(mu, logvar)
-    #perceptual = perceptual_loss(recon.detach(), CT.detach())
+    perceptual = perceptual_loss(recon.detach(), CT.detach())
 
     total_loss = (
         recon_loss +
-        beta * kl
-        #lambda_perceptual * perceptual
+        beta * kl +
+        lambda_perceptual * perceptual
     )
     return total_loss
 

@@ -6,7 +6,7 @@ from torchvision import transforms
 from torchvision.transforms import Normalize
 
 def kl_divergence(mu, logvar):
-    return -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
+    return torch.mean(-0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=[1,2,3]))
 
 class PerceptualLoss(nn.Module):
     def __init__(self, device='cuda'):

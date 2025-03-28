@@ -11,7 +11,7 @@ from data.transforms import build_train_transform
 from utils.config import load_config, get_device
 from functools import partial
 
-def vae_loss_step(model, x, device, perceptual_loss, beta=0.0000, lambda_perceptual=0.0):
+def vae_loss_step(model, x, device, perceptual_loss, beta=0.00001, lambda_perceptual=0.0001):
     CT = x.to(device)
 
     _, mu, logvar, recon = model(CT)
@@ -19,6 +19,9 @@ def vae_loss_step(model, x, device, perceptual_loss, beta=0.0000, lambda_percept
     recon_loss = F.mse_loss(recon, CT, reduction='mean')
     kl = kl_divergence(mu, logvar)
     perceptual = perceptual_loss(recon.detach(), CT.detach())
+
+    print(kl*beta)
+    print(lambda_perceptual*perceptual)
 
     total_loss = (
         recon_loss +
@@ -63,7 +66,7 @@ def main():
         epochs=config["train"]["epochs"],
         config=config,
         device=device,
-        save_path="checkpoints/test.pth",
+        save_path="checkpoints/test2.pth",
         scheduler=scheduler
     )
 

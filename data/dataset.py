@@ -87,7 +87,7 @@ def get_ct_dataloaders(config, transform):
     val_subset, _ = random_split(val_dataset, [val_subset_length, len(val_dataset) - val_subset_length])
     print(f"Random val subset of {len(val_subset)} images")
 
-    train_dataloader = DataLoader(train_dataset, 
+    train_dataloader = DataLoader(train_subset, 
                             batch_size=config["train"]["batch_size"], 
                             shuffle=True, 
                             sampler=None, 
@@ -95,7 +95,7 @@ def get_ct_dataloaders(config, transform):
                             pin_memory=True,
                             drop_last=True)
     
-    val_dataloader = DataLoader(val_dataset,
+    val_dataloader = DataLoader(val_subset,
                             batch_size=config["train"]["batch_size"],
                             shuffle=False,
                             sampler=None,

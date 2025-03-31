@@ -4,9 +4,18 @@ import torch.nn.functional as F
 from torchvision import models
 from torchvision import transforms
 from torchvision.transforms import Normalize
+# import lpips
 
-def kl_divergence(mu, logvar):
-    return torch.mean(-0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=[1,2,3]))
+# class LPIPSLoss(nn.Module):
+#     def __init__(self, net='vgg', device='cuda'):
+#         super().__init__()
+#         self.loss_fn = lpips.LPIPS(net=net).to(device)  # options: 'vgg', 'alex', 'squeeze'
+
+#     def forward(self, recon_x, x):
+#         # Convert grayscale to 3 channels if needed
+#         recon_x = recon_x.repeat(1, 3, 1, 1)
+#         x = x.repeat(1, 3, 1, 1)
+#         return self.loss_fn(recon_x, x).mean()
 
 class PerceptualLoss(nn.Module):
     def __init__(self, device='cuda'):
@@ -32,7 +41,7 @@ class PerceptualLoss(nn.Module):
             return F.mse_loss(feat_recon, feat_real)
     
 class SSIMLoss(nn.Module):
-    def __init__(self, window_size=11, sigma=1.5):
+    def __init__(self, device='cuda', window_size=11, sigma=1.5):
         super().__init__()
         self.gaussian_blur = transforms.GaussianBlur(window_size, sigma)
         self.c1 = 0.01 ** 2  # Stability constant

@@ -4,40 +4,82 @@ import torch
 import torch.nn.functional as F
 from torch import optim
 from models.vae import VAE 
-from utils.losses import PerceptualLoss, kl_divergence
-from utils.train_helpers import run_training_loop
+from utils.losses import PerceptualLoss
 from data.dataset import get_ct_dataloaders
 from data.transforms import build_train_transform
 from utils.config import load_config, get_device
-from functools import partial
+from piq import ssim
+import time
 
-def vae_loss_step(model, x, device, perceptual_loss, beta=0.00001, lambda_perceptual=0.0001):
+def vae_loss_step(config, model, x, device, perceptual_loss, beta):
     CT = x.to(device)
-
     _, mu, logvar, recon = model(CT)
-
-    recon_loss = F.mse_loss(recon, CT, reduction='mean')
-    kl = kl_divergence(mu, logvar)
+    l2_loss = F.mse_loss(recon, CT, reduction='mean')
+    kl_divergence = torch.mean(-0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=[1,2,3]))
     perceptual = perceptual_loss(recon, CT)
-
+    ssim_loss = 1 - ssim(recon, CT)
     total_loss = (
-        recon_loss +
-        beta * kl +
-        lambda_perceptual * perceptual
+        config["vae"]["lambda_l2"] * l2_loss +
+        beta * kl_divergence +
+        config["vae"]["lambda_perceptual"] * perceptual + 
+        config["vae"]["lambda_ssim"] * ssim_loss
     )
     return total_loss
+
+def validate_one_epoch(config, model, dataloader, device, perceptual_loss, beta):
+    model.eval()
+    running_loss = 0
+    with torch.no_grad():
+        for batch in dataloader:
+            loss = vae_loss_step(config, model, batch, device, perceptual_loss, beta)
+            running_loss += loss.item()
+    return running_loss / len(dataloader)
+
+def train_one_epoch(config, model, dataloader, optimizer, device, perceptual_loss, beta):
+    model.train()
+    running_loss = 0
+    # TODO: simulate higher batch size with accumulation for faster training
+    # TODO: Use scaler / autocast for faster training
+    for batch in dataloader:
+        optimizer.zero_grad()
+        loss = vae_loss_step(config, model, batch, device, perceptual_loss, beta)
+        loss.backward()
+        optimizer.step()
+        running_loss += loss.item()
+    return running_loss / len(dataloader)
+
+def run_training_loop(config, model, device, train_loader, val_loader, optimizer, perceptual_loss, scheduler):
+    best_val_loss = float('inf')
+    counter = 0
+    beta = config["vae"]["beta"]
+    epochs = config["train"]["epochs"]
+    for epoch in range(epochs):
+        start_time = time.time()
+        if epoch > 50:
+            beta = min(config["vae"]["max_beta"], beta * 1.05)
+        train_loss = train_one_epoch(config, model, train_loader, optimizer, device, perceptual_loss, beta)
+        val_loss = validate_one_epoch(config, model, val_loader, device, perceptual_loss, beta)
+        epoch_time = time.time() - start_time
+        elapsed = time.strftime("%H:%M:%S", time.gmtime(epoch_time))
+        print(f"Epoch {epoch+1}/{epochs} | Train Loss: {train_loss:.6f} | Val Loss: {val_loss:.6f} | Time/Epoch: {elapsed}")
+        scheduler.step(val_loss)
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
+            counter = 0
+            torch.save(model.state_dict(), config["paths"]["save_path"])
+        else:
+            counter += 1
+            if counter >= config["train"]["early_stopping_patience"]:
+                print("Early stopping")
+                break
 
 def main():
     device = get_device()
     config = load_config(device)
-    
     transform = build_train_transform(config["model"]["image_size"])
     train_loader, val_loader = get_ct_dataloaders(config, transform, subset_size=config["train"]["subset_size"])
-
     vae = VAE(latent_dim=4).to(device)
     perceptual_loss = PerceptualLoss(device)
-    loss_step_fn = partial(vae_loss_step, perceptual_loss=perceptual_loss, beta=config["vae"]["beta"], lambda_perceptual=config["vae"]["lambda_perceptual"] )
-
     optimizer = optim.AdamW(
         vae.parameters(),
         lr=2e-4,
@@ -52,21 +94,17 @@ def main():
         threshold=1e-4,        # significant improvement threshold
         verbose=True,          # prints LR updates to keep track
         min_lr=1e-6            # minimal LR allowed
-    ) 
-
+    )
     run_training_loop(
+        config=config,
         model=vae,
+        device=device,
         train_loader=train_loader,
         val_loader=val_loader,
         optimizer=optimizer,
-        loss_step_fn=loss_step_fn,
-        epochs=config["train"]["epochs"],
-        config=config,
-        device=device,
-        save_path="checkpoints/test_percept_no_kl.pth",
-        scheduler=scheduler
+        perceptual_loss=perceptual_loss,
+        scheduler=scheduler,
     )
-
     print("training complete")
 
 if __name__ == "__main__":

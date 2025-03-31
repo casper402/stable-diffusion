@@ -4,7 +4,9 @@ from data.dataset import get_ct_dataloaders, get_dataloaders
 from data.transforms import build_train_transform
 from utils.config import load_config, get_device
 import matplotlib.pyplot as plt
-from utils.losses import PerceptualLoss
+from utils.losses import PerceptualLoss, SSIMLoss, LPIPSLoss
+from piq import ssim
+
 
 def main():
     device = get_device()
@@ -14,7 +16,7 @@ def main():
     train_loader, val_loader = get_ct_dataloaders(config, transform)
 
     vae = VAE(latent_dim=config["model"]["latent_dim"]).to(device)
-    checkpoint_path = "/home/casper/Documents/Thesis/stable-diffusion/checkpoints/blurry2.pth"
+    checkpoint_path = "/home/casper/Documents/Thesis/stable-diffusion/checkpoints/only_mse.pth"
     # checkpoint_path = "/home/casper/Documents/Thesis/stable-diffusion/pretrained_models/model.ckpt"
 
     try:
@@ -31,8 +33,21 @@ def main():
             z, mu, sd, recon = vae(CT)
 
             percept = PerceptualLoss(device)
+            lpips = LPIPSLoss(device)
+            ssimLoss = 1 - ssim(recon, CT)
+            ssimLossCheck = 1 - ssim(CT, CT)
+
+            print("perceptual loss")
             print(percept(recon, CT))
             print(percept(CT, CT))
+
+            print("lpips loss")
+            print(lpips(recon, CT))
+            print(lpips(CT, CT))
+
+            print("ssim loss")
+            print(ssimLoss)
+            print(ssimLossCheck)
 
             input_img = CT[0].cpu().squeeze()
             recon_img = recon[0].cpu().squeeze()

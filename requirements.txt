@@ -8,4 +8,3 @@ tqdm==4.65.0
 pillow==9.5.0
 pyyaml==6.0.2
 piq==0.8.0
-lpips=0.1.4

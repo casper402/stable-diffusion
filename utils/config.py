@@ -21,7 +21,7 @@ def load_config(device, path="config.yaml"):
     for key in train_float_keys:
         config["train"][key] = float(config["train"][key])
 
-    vae_float_keys = ["beta", "lambda_perceptual"]
+    vae_float_keys = ["beta", "lambda_perceptual", "lambda_ssim", "lambda_l2"]
     for key in vae_float_keys:
         config["vae"][key] = float(config["vae"][key])
         print(f"{key}: ", config["vae"][key])

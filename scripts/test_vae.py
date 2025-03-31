@@ -13,7 +13,7 @@ def main():
     train_loader, val_loader = get_ct_dataloaders(config, transform)
 
     vae = VAE(latent_dim=config["model"]["latent_dim"]).to(device)
-    checkpoint_path = "/home/casper/Documents/Thesis/stable-diffusion/checkpoints/test2.pth"
+    checkpoint_path = "/home/casper/Documents/Thesis/stable-diffusion/checkpoints/perceptual_no_kl.pth"
     # checkpoint_path = "/home/casper/Documents/Thesis/stable-diffusion/pretrained_models/model.ckpt"
 
     try:

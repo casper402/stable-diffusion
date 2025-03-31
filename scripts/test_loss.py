@@ -4,7 +4,7 @@ from data.dataset import get_ct_dataloaders, get_dataloaders
 from data.transforms import build_train_transform
 from utils.config import load_config, get_device
 import matplotlib.pyplot as plt
-from utils.losses import PerceptualLoss, SSIMLoss, LPIPSLoss
+from utils.losses import PerceptualLoss, LPIPSLoss
 from piq import ssim
 
 

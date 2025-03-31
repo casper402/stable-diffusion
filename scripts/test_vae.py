@@ -4,6 +4,9 @@ from data.dataset import get_ct_dataloaders, get_dataloaders
 from data.transforms import build_train_transform
 from utils.config import load_config, get_device
 import matplotlib.pyplot as plt
+from utils.losses import PerceptualLoss
+from piq import ssim
+import torch.nn.functional as F
 
 def main():
     device = get_device()
@@ -13,7 +16,7 @@ def main():
     train_loader, val_loader = get_ct_dataloaders(config, transform)
 
     vae = VAE(latent_dim=config["model"]["latent_dim"]).to(device)
-    checkpoint_path = "/home/casper/Documents/Thesis/stable-diffusion/checkpoints/perceptual_no_kl.pth"
+    checkpoint_path = "/home/casper/Documents/Thesis/stable-diffusion/checkpoints/ssim_only.pth"
     # checkpoint_path = "/home/casper/Documents/Thesis/stable-diffusion/pretrained_models/model.ckpt"
 
     try:
@@ -28,6 +31,19 @@ def main():
         for CT in val_loader:
             CT = CT.to(device)
             z, mu, sd, recon = vae(CT)
+
+            percept = PerceptualLoss(device)
+            ssimLoss = 1 - ssim(recon, CT)
+            l2_loss = F.mse_loss(recon, CT, reduction='mean')
+
+            print("perceptual loss")
+            print(percept(recon, CT))
+
+            print("ssim loss")
+            print(ssimLoss)
+
+            print("l2_loss")
+            print(l2_loss)
 
             input_img = CT[0].cpu().squeeze()
             recon_img = recon[0].cpu().squeeze()

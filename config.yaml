@@ -1,7 +1,7 @@
 paths:
   train_CBCT: ../training_data/CBCT
   train_CT: ../training_data/CT
-  save_path: "checkpoints/perceptual_ssim.pth"
+  save_path: "checkpoints/ssim_l1_overfit.pth"
 
 model:
   latent_dim: 4

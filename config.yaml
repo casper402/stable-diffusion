@@ -1,7 +1,7 @@
 paths:
   train_CBCT: ../training_data/CBCT
   train_CT: ../training_data/CT
-  save_path: "checkpoints/ssim_l1_kl.pth"
+  save_path: "checkpoints/ssim_percept_kl.pth"
 
 model:
   latent_dim: 4
@@ -11,10 +11,10 @@ model:
 vae:
   beta: 0.000001
   max_beta: 0.0001
-  lambda_perceptual: 0
+  lambda_perceptual: 0.05
   lambda_ssim: 1
   lambda_l2: 0
-  lambda_l1: 1
+  lambda_l1: 0
 
 train:
   batch_size: 4
@@ -23,11 +23,11 @@ train:
   subset_size: 500
   learning_rate: 2e-4
   fine_tune_lr: 1e-5
-  min_learning_rate: 1e-6
+  min_learning_rate: 2e-5
   min_fine_tune_lr: 1e-6
   weight_decay: 1e-5
   fine_tune_weight_decay: 1e-6
-  scheduler_patience: 10
+  scheduler_patience: 20
   early_stopping_patience: 50
   num_workers: 8
 

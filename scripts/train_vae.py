@@ -15,14 +15,16 @@ def vae_loss_step(config, model, x, device, perceptual_loss, beta):
     CT = x.to(device)
     _, mu, logvar, recon = model(CT)
     l2_loss = F.mse_loss(recon, CT, reduction='mean')
+    l1_loss = F.l1_loss(recon, CT, reduction='mean')
     kl_divergence = torch.mean(-0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=[1,2,3]))
     perceptual = perceptual_loss(recon, CT)
     ssim_loss = 1 - ssim(recon, CT)
     total_loss = (
+        config["vae"]["lambda_l1"] * l1_loss +
         config["vae"]["lambda_l2"] * l2_loss +
-        beta * kl_divergence +
         config["vae"]["lambda_perceptual"] * perceptual + 
-        config["vae"]["lambda_ssim"] * ssim_loss
+        config["vae"]["lambda_ssim"] * ssim_loss +
+        beta * kl_divergence
     )
     return total_loss
 
@@ -62,9 +64,9 @@ def run_training_loop(config, model, device, train_loader, val_loader, optimizer
         epoch_time = time.time() - start_time
         elapsed = time.strftime("%H:%M:%S", time.gmtime(epoch_time))
         print(f"Epoch {epoch+1}/{epochs} | Train Loss: {train_loss:.6f} | Val Loss: {val_loss:.6f} | Time/Epoch: {elapsed}")
-        scheduler.step(val_loss)
-        if val_loss < best_val_loss:
-            best_val_loss = val_loss
+        scheduler.step(train_loss) # TODO: change to val_loss
+        if train_loss < best_val_loss: # TODO: change to val_loss
+            best_val_loss = train_loss # TODO: change to val_loss
             counter = 0
             torch.save(model.state_dict(), config["paths"]["save_path"])
         else:

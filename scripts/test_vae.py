@@ -35,6 +35,7 @@ def main():
             percept = PerceptualLoss(device)
             ssimLoss = 1 - ssim(recon, CT)
             l2_loss = F.mse_loss(recon, CT, reduction='mean')
+            l1_loss = F.l1_loss(recon, CT, reduction='mean')
 
             print("perceptual loss")
             print(percept(recon, CT))
@@ -44,6 +45,9 @@ def main():
 
             print("l2_loss")
             print(l2_loss)
+
+            print("l1_loss")
+            print(l1_loss)
 
             input_img = CT[0].cpu().squeeze()
             recon_img = recon[0].cpu().squeeze()

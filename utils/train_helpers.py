@@ -49,7 +49,7 @@ def run_training_loop(model, train_loader, val_loader, optimizer, loss_step_fn, 
         # remaining_est = time.strftime("%H:%M:%S", time.gmtime(epoch_time * (epochs - epoch - 1)))
 
         # current_lr = optimizer.param_groups[0]['lr']
-        print(f"Epoch {epoch+1}/{epochs} | Train Loss: {train_loss:.6f} | Val Loss: {val_loss:.6f} | Time/Epoch: {elapsed}")
+        print(f"Epoch: {epoch+1}/{epochs} |time: {epoch_time} |Train Loss: {train_loss:.6f} | Val Loss: {val_loss:.6f} | beta:")
 
         scheduler.step(val_loss) # TODO: Change this to val loss
 

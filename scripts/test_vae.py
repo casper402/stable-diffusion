@@ -16,7 +16,7 @@ def main():
     train_loader, val_loader = get_ct_dataloaders(config, transform)
 
     vae = VAE(latent_dim=config["model"]["latent_dim"]).to(device)
-    checkpoint_path = "/home/casper/Documents/Thesis/stable-diffusion/checkpoints/ssim_only.pth"
+    checkpoint_path = "/home/casper/Documents/Thesis/stable-diffusion/checkpoints/ssim_l1_overfit.pth"
     # checkpoint_path = "/home/casper/Documents/Thesis/stable-diffusion/pretrained_models/model.ckpt"
 
     try:
@@ -26,44 +26,34 @@ def main():
         print(f"Could not load VAE weights: {e}")
 
     vae.eval()
+    percept = PerceptualLoss(device)
 
     with torch.no_grad():
-        for CT in val_loader:
+        for CT in train_loader:
             CT = CT.to(device)
             z, mu, sd, recon = vae(CT)
 
-            percept = PerceptualLoss(device)
-            ssimLoss = 1 - ssim(recon, CT)
+            ssim_loss = 1 - ssim(recon, CT)
+            perceptual_loss = percept(recon, CT)
             l2_loss = F.mse_loss(recon, CT, reduction='mean')
             l1_loss = F.l1_loss(recon, CT, reduction='mean')
 
-            print("perceptual loss")
-            print(percept(recon, CT))
-
-            print("ssim loss")
-            print(ssimLoss)
-
-            print("l2_loss")
-            print(l2_loss)
-
-            print("l1_loss")
-            print(l1_loss)
-
             input_img = CT[0].cpu().squeeze()
             recon_img = recon[0].cpu().squeeze()
+            fig, axs = plt.subplots(1, 2, figsize=(20, 10))
 
-            fig, axs = plt.subplots(1, 2)
             axs[0].imshow(input_img, cmap='gray')
             axs[0].set_title("Original")
             axs[0].axis('off')
 
             axs[1].imshow(recon_img, cmap='gray')
-            axs[1].set_title("Reconstruction")
+            axs[1].set_title(
+                f"Reconstruction\nL1: {l1_loss.item():.4f} | L2: {l2_loss.item():.4f}\nSSIM: {ssim_loss.item():.4f} | Perc: {perceptual_loss.item():.4f}"
+            )
             axs[1].axis('off')
 
+            plt.tight_layout()
             plt.show()
-
-            break
 
 if __name__ == "__main__":
     main()

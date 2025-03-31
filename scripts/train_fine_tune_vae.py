@@ -35,7 +35,7 @@ def main():
     config = load_config(device)
     
     transform = build_train_transform(config["model"]["image_size"])
-    train_loader, val_loader = get_ct_dataloaders(config, transform, subset_size=config["train"]["subset_size"])
+    train_loader, val_loader = get_ct_dataloaders(config, transform)
 
     vae = VAE(latent_dim=config["model"]["latent_dim"]).to(device)
     perceptual_loss = PerceptualLoss(device)

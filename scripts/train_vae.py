@@ -63,10 +63,10 @@ def run_training_loop(config, model, device, train_loader, val_loader, optimizer
         val_loss = validate_one_epoch(config, model, val_loader, device, perceptual_loss, beta)
         epoch_time = time.time() - start_time
         elapsed = time.strftime("%H:%M:%S", time.gmtime(epoch_time))
-        print(f"Epoch {epoch+1}/{epochs} | Train Loss: {train_loss:.6f} | Val Loss: {val_loss:.6f} | Time/Epoch: {elapsed}")
-        scheduler.step(train_loss) # TODO: change to val_loss
-        if train_loss < best_val_loss: # TODO: change to val_loss
-            best_val_loss = train_loss # TODO: change to val_loss
+        print(f"Epoch: {epoch+1}/{epochs} | Time: {elapsed} | Train Loss: {train_loss:.6f} | Val Loss: {val_loss:.6f} | Beta: {beta}")
+        scheduler.step(val_loss) # TODO: change to val_loss
+        if val_loss < best_val_loss: # TODO: change to val_loss
+            best_val_loss = val_loss # TODO: change to val_loss
             counter = 0
             torch.save(model.state_dict(), config["paths"]["save_path"])
         else:
@@ -79,12 +79,12 @@ def main():
     device = get_device()
     config = load_config(device)
     transform = build_train_transform(config["model"]["image_size"])
-    train_loader, val_loader = get_ct_dataloaders(config, transform, subset_size=config["train"]["subset_size"])
-    vae = VAE(latent_dim=4).to(device)
+    train_loader, val_loader = get_ct_dataloaders(config, transform)
+    vae = VAE(latent_dim=config["model"]["latent_dim"]).to(device)
     perceptual_loss = PerceptualLoss(device)
     optimizer = optim.AdamW(
         vae.parameters(),
-        lr=2e-4,
+        lr=config["train"]["learning_rate"],
         weight_decay=1e-5,
         betas=(0.9, 0.999),
     )

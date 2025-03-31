@@ -65,23 +65,27 @@ class CTDataset(Dataset):
 
         return CT_slice
     
-def get_ct_dataloaders(config, transform, subset_size=None):
-    dataset = CTDataset(
+def get_ct_dataloaders(config, transform):
+    full_dataset = CTDataset(
         CT_path=config["paths"]["train_CT"],
         image_size=config["model"]["image_size"],
         transform=transform
     )
     
-    if (subset_size != None and subset_size <= len(dataset)):
-        dataset, _ = random_split(dataset, [subset_size, len(dataset) - subset_size])
-
-    val_size = int(len(dataset) * 0.1)
-    train_size = len(dataset) - val_size
-    print(f"Splitting {len(dataset)} images into {train_size} train images and {val_size} validation images.")
-
     generator = torch.Generator().manual_seed(42)
+    
+    train_length = int(len(full_dataset)*0.8)
+    val_length = len(full_dataset)-train_length
+    train_dataset, val_dataset = random_split(full_dataset, [train_length, val_length], generator=generator)
+    print(f"Splitting {len(full_dataset)} images into {len(train_dataset)} train images and {len(val_dataset)} validation images.")
 
-    train_dataset, val_dataset = random_split(dataset, [train_size, val_size], generator=generator) # TODO: Use full dataset
+    train_subset_length = int(config["train"]["subset_size"]*0.8)
+    train_subset, _ = random_split(train_dataset, [train_subset_length, len(train_dataset) - train_subset_length])
+    print(f"Random train subset of {len(train_subset)} images")
+
+    val_subset_length = int(config["train"]["subset_size"]*0.2)
+    val_subset, _ = random_split(val_dataset, [val_subset_length, len(val_dataset) - val_subset_length])
+    print(f"Random val subset of {len(val_subset)} images")
 
     train_dataloader = DataLoader(train_dataset, 
                             batch_size=config["train"]["batch_size"], 
@@ -108,19 +112,22 @@ def get_dataloaders(config, transform):
         image_size=config["model"]["image_size"],
         transform=transform
     )
-
-    subset_size = 10
-    subset, _ = random_split(full_dataset, [subset_size, len(full_dataset) - subset_size])
-
-    val_size = int(len(subset) * 0.2)
-    train_size = len(subset) - val_size
-    print(f"Splitting {len(subset)} images into {train_size} train images and {val_size} validation images.")
-
     generator = torch.Generator().manual_seed(42)
 
-    train_dataset, val_dataset = random_split(subset, [train_size, val_size], generator=generator) # TODO: Use full dataset
+    train_length = int(len(full_dataset)*0.8)
+    val_length = len(full_dataset)-train_length
+    train_dataset, val_dataset = random_split(full_dataset, [train_length, val_length], generator=generator)
+    print(f"Splitting {len(full_dataset)} images into {len(train_dataset)} train images and {len(val_dataset)} validation images.")
 
-    train_dataloader = DataLoader(train_dataset, 
+    train_subset_length = int(config["train"]["subset_size"]*0.8)
+    train_subset, _ = random_split(train_dataset, [train_subset_length, len(train_subset) - train_subset_length])
+    print(f"Random train subset of {len(train_subset)} images")
+
+    val_subset_length = int(config["train"]["subset_size"]*0.2)
+    val_subset, _ = random_split(val_dataset, [val_subset_length, len(val_subset) - val_subset_length])
+    print(f"Random val subset of {len(val_subset)} images")
+
+    train_dataloader = DataLoader(train_subset, 
                             batch_size=config["train"]["batch_size"], 
                             shuffle=True, 
                             sampler=None, 
@@ -128,7 +135,7 @@ def get_dataloaders(config, transform):
                             pin_memory=True,
                             drop_last=True)
     
-    val_dataloader = DataLoader(val_dataset,
+    val_dataloader = DataLoader(val_subset,
                             batch_size=config["train"]["batch_size"],
                             shuffle=False,
                             sampler=None,

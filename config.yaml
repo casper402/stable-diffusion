@@ -1,7 +1,7 @@
 paths:
   train_CBCT: ../training_data/CBCT
   train_CT: ../training_data/CT
-  save_path: "checkpoints/ssim_only.pth"
+  save_path: "checkpoints/perceptual_only.pth"
 
 model:
   latent_dim: 4
@@ -11,8 +11,8 @@ model:
 vae:
   beta: 0.000000
   max_beta: 0.0000
-  lambda_perceptual: 0.0
-  lambda_ssim: 1
+  lambda_perceptual: 1.0
+  lambda_ssim: 0
   lambda_l2: 0
 
 train:

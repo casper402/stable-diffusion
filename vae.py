@@ -28,7 +28,7 @@ class PerceptualLoss(torch.nn.Module):
         self.vgg = vgg16(pretrained=True).features[:8].to(device).eval()
         for param in self.vgg.parameters():
             param.requires_grad = False
-        self.normalize = Normalize(mean=[0.5] * 3, std=[0.5] * 3)  # adjust if needed
+        self.normalize = Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])  # adjust if needed
 
     def forward(self, recon_x, x):
         recon_x = recon_x.repeat(1, 3, 1, 1)  # grayscale -> 3-channel
@@ -264,7 +264,7 @@ for epoch in range(1000):
 
     for x in train_loader:
         x = x.to(device)
-        z, mu, logvar, recon = vae(x)
+        _, mu, logvar, recon = vae(x)
         loss = vae_loss(recon, x, mu, logvar)
 
         optimizer.zero_grad()
@@ -280,7 +280,7 @@ for epoch in range(1000):
     with torch.no_grad():
         for x in val_loader:
             x = x.to(device)
-            z, mu, logvar, recon = vae(x)
+            _, mu, logvar, recon = vae(x)
             loss = vae_loss(recon, x, mu, logvar)
             val_loss += loss.item()
     val_loss /= len(val_loader)
@@ -304,7 +304,7 @@ for epoch in range(1000):
         with torch.no_grad():
             for i, x in enumerate(test_loader):
                 x = x.to(device)
-                recon, _, _ = vae(x)
+                _, _, _, recon = vae(x)
 
                 for j in range(min(x.size(0), 8)):
                     original = x[j]
@@ -326,7 +326,7 @@ os.makedirs(pred_dir, exist_ok=True)
 with torch.no_grad():
     for i, x in enumerate(test_loader):
         x = x.to(device)
-        recon, _, _ = vae(x)
+        _ , _, _, recon = vae(x)
 
         # Save the first few predictions
         for j in range(min(x.size(0), 8)):

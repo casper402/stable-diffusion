@@ -264,7 +264,7 @@ for epoch in range(1000):
 
     for x in train_loader:
         x = x.to(device)
-        recon, mu, logvar = vae(x)
+        z, mu, logvar, recon = vae(x)
         loss = vae_loss(recon, x, mu, logvar)
 
         optimizer.zero_grad()

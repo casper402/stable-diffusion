@@ -253,7 +253,7 @@ val_loader = DataLoader(val_dataset, batch_size=4, shuffle=False, num_workers=4)
 test_loader = DataLoader(test_dataset, batch_size=2, shuffle=False, num_workers=4)
 
 vae = VAE(latent_dim=4).to(device)
-optimizer = torch.optim.Adam(vae.parameters(), lr=1e-4)
+optimizer = torch.optim.Adam(vae.parameters(), lr=4.5e-6)
 
 best_val_loss = float('inf')
 save_path = 'best_vae_ct1.pth'
@@ -280,7 +280,7 @@ for epoch in range(1000):
     with torch.no_grad():
         for x in val_loader:
             x = x.to(device)
-            recon, mu, logvar = vae(x)
+            z, mu, logvar, recon = vae(x)
             loss = vae_loss(recon, x, mu, logvar)
             val_loss += loss.item()
     val_loss /= len(val_loader)

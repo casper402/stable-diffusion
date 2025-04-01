@@ -294,6 +294,28 @@ for epoch in range(1000):
         torch.save(vae.state_dict(), save_path)
         print(f"✅ Saved new best model at epoch {epoch+1} with val loss {val_loss:.4f}")
 
+    if (epoch+0) % 50 == 0:
+        vae.eval()
+        pred_dir = f"./predictions/epoch_{epoch+1}/"
+        os.makedirs(pred_dir, exist_ok=True)
+
+        print("Saving predictions")
+
+        with torch.no_grad():
+            for i, x in enumerate(test_loader):
+                x = x.to(device)
+                recon, _, _ = vae(x)
+
+                for j in range(min(x.size(0), 8)):
+                    original = x[j]
+                    reconstructed = recon[j]
+
+                    vutils.save_image(original, f"{pred_dir}/img_{i}_{j}_orig.png", normalize=True)
+                    vutils.save_image(reconstructed, f"{pred_dir}/img_{i}_{j}_recon.png", normalize=True)
+
+                if i >= 2:  # Save only a few batches
+                    break
+
 vae.load_state_dict(torch.load(save_path))
 vae.eval()
 

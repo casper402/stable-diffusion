@@ -52,26 +52,35 @@ def vae_loss(recon_x, x, mu, logvar, perceptual_weight=0.1, mse_weight=1.0, kl_w
 
     total_loss = mse_weight * mse + perceptual_weight * perceptual + kl_weight * kl
     return total_loss
-
+    
 class CTDataset(Dataset):
-    def __init__(self, root_dir, transform=None):
-        super().__init__()
-        self.root_dir = root_dir
-        self.image_files = [f for f in os.listdir(root_dir) if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
-        self.transform = transform if transform else transforms.Compose([
+    def __init__(self, CT_path):
+        self.CT_slices = self._collect_slices(CT_path)
+        self.transform = transforms.Compose([
             transforms.Grayscale(),
             transforms.Resize((256, 256)),
             transforms.ToTensor()
         ])
-
+        
+    def _collect_slices(self, dataset_path):
+        slice_paths = []
+        for subdir in os.listdir(dataset_path):
+            subdir_path = os.path.join(dataset_path, subdir)
+            if os.path.isdir(subdir_path):
+                for slice_name in os.listdir(subdir_path):
+                    slice_path = os.path.join(subdir_path, slice_name)
+                    slice_paths.append(slice_path)
+        return slice_paths
+    
     def __len__(self):
-        return len(self.image_files)
-
+        return len(self.CT_slices)
+    
     def __getitem__(self, idx):
-        img_path = os.path.join(self.root_dir, self.image_files[idx])
-        image = Image.open(img_path).convert('L')  # Ensure grayscale
-        image = self.transform(image)
-        return image
+        CT_path = self.CT_slices[idx]
+        CT_slice = Image.open(CT_path).convert("L")
+        if self.transform:
+            CT_slice = self.transform(CT_slice)
+        return CT_slice
 
 
 class Encoder(nn.Module):
@@ -162,7 +171,7 @@ transform = transforms.Compose([
 ])
 
 dataset = CTDataset('../training_data/CT')
-subset = random_split(dataset, [500, len(dataset) - 500])
+subset, _ = random_split(dataset, [500, len(dataset) - 500])
 
 train_size = int(0.8 * len(subset))
 val_size = len(subset) - train_size - 10

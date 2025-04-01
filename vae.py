@@ -83,6 +83,8 @@ class CTDataset(Dataset):
             CT_slice = self.transform(CT_slice)
         return CT_slice
 
+###############################################################################################
+
 # class ResidualBlock(nn.Module):
 #     def __init__(self, in_channels):
 #         super().__init__()
@@ -155,6 +157,102 @@ class CTDataset(Dataset):
 #         x_hat = self.decoder(z)
 #         return x_hat, mu, logvar
 
+#################################################################################
+
+# class ResidualBlock(nn.Module):
+#     def __init__(self, channels):
+#         super().__init__()
+#         self.block = nn.Sequential(
+#             nn.Conv2d(channels, channels, 3, padding=1),
+#             nn.GroupNorm(32, channels),
+#             nn.SiLU(),
+#             nn.Conv2d(channels, channels, 3, padding=1),
+#             nn.GroupNorm(32, channels),
+#         )
+
+#     def forward(self, x):
+#         return F.silu(x + self.block(x))
+    
+# class AttentionBlock(nn.Module):
+#     def __init__(self, channels):
+#         super().__init__()
+#         self.attention = nn.MultiheadAttention(channels, num_heads=4, batch_first=True)
+#         self.norm = nn.GroupNorm(8, channels)
+
+#     def forward(self, x):
+#         B, C, H, W = x.size()
+#         x_flat = x.view(B, C, H*W).transpose(1, 2)
+#         x_attn, _ = self.attention(x_flat, x_flat, x_flat)
+#         x_attn = x_attn.transpose(1, 2).view(B, C, H, W)
+#         return x + self.norm(x_attn)
+
+# class Encoder(nn.Module):
+#     def __init__(self, latent_dim=4):
+#         super().__init__()
+#         self.encoder = nn.Sequential(
+#             nn.Conv2d(1, 128, 4, 2, 1),  # -> 128x128
+#             ResidualBlock(128),
+#             nn.Conv2d(128, 256, 4, 2, 1), # -> 64x64
+#             ResidualBlock(256),
+#             AttentionBlock(256),
+#             nn.Conv2d(256, 512, 4, 2, 1),  # -> 32x32
+#             ResidualBlock(512),
+#             AttentionBlock(512),
+#         )
+#         self.conv_mu = nn.Conv2d(512, latent_dim, 1)
+#         self.conv_logvar = nn.Conv2d(512, latent_dim, 1)
+
+#     def forward(self, x):
+#         x = self.encoder(x)
+#         mu = self.conv_mu(x)
+#         logvar = self.conv_logvar(x)
+#         return mu, logvar
+
+# class Decoder(nn.Module):
+#     def __init__(self, latent_dim=4):
+#         super().__init__()
+#         self.decoder = nn.Sequential(
+#             nn.ConvTranspose2d(latent_dim, 512, 3, 1, 1),
+#             ResidualBlock(512),
+#             AttentionBlock(512),                    # Attention added
+#             nn.ConvTranspose2d(512, 256, 4, 2, 1),  # ->64x64
+#             ResidualBlock(256),
+#             AttentionBlock(256),                    # Attention added
+#             nn.ConvTranspose2d(256, 128, 4, 2, 1),   # ->128x128
+#             ResidualBlock(128),
+#             nn.ConvTranspose2d(128, 1, 4, 2, 1),     # ->256x256
+#         )
+
+#     def forward(self, z):
+#         x = self.decoder(z)
+#         return torch.sigmoid(x)
+
+# class VAE(nn.Module):
+#     def __init__(self, latent_dim=4):
+#         super().__init__()
+#         self.encoder = Encoder(latent_dim)
+#         self.decoder = Decoder(latent_dim)
+
+#     def reparameterize(self, mu, logvar):
+#         std = torch.exp(0.5 * logvar)
+#         eps = torch.randn_like(std)
+#         return mu + eps * std
+
+#     def forward(self, x):
+#         mu, logvar = self.encoder(x)
+#         z = self.reparameterize(mu, logvar)
+#         recon = self.decoder(z)
+#         return z, mu, logvar, recon
+
+################################################################################
+
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+# -------------------------------------------------
+# Basic Residual Block
+# -------------------------------------------------
 class ResidualBlock(nn.Module):
     def __init__(self, channels):
         super().__init__()
@@ -168,61 +266,162 @@ class ResidualBlock(nn.Module):
 
     def forward(self, x):
         return F.silu(x + self.block(x))
-    
+
+
+# -------------------------------------------------
+# Attention Block (Multi-Head Self-Attention)
+# -------------------------------------------------
 class AttentionBlock(nn.Module):
-    def __init__(self, channels):
+    def __init__(self, channels, num_heads=4):
+        """
+        channels: number of channels in the feature map
+        num_heads: how many parallel attention heads
+        """
         super().__init__()
-        self.attention = nn.MultiheadAttention(channels, num_heads=4, batch_first=True)
+        self.attention = nn.MultiheadAttention(channels, num_heads=num_heads, batch_first=True)
         self.norm = nn.GroupNorm(8, channels)
 
     def forward(self, x):
+        """
+        x: (B, C, H, W)
+        """
         B, C, H, W = x.size()
-        x_flat = x.view(B, C, H*W).transpose(1, 2)
-        x_attn, _ = self.attention(x_flat, x_flat, x_flat)
+
+        # Reshape into (B, H*W, C)
+        x_flat = x.view(B, C, H * W).transpose(1, 2)  # (B, H*W, C)
+
+        # Self-attention
+        x_attn, _ = self.attention(x_flat, x_flat, x_flat)  # (B, H*W, C)
+
+        # Reshape back to (B, C, H, W)
         x_attn = x_attn.transpose(1, 2).view(B, C, H, W)
+
+        # Residual + GroupNorm
         return x + self.norm(x_attn)
 
+
+# -------------------------------------------------
+# Encoder with Skip Connections
+# -------------------------------------------------
 class Encoder(nn.Module):
     def __init__(self, latent_dim=4):
         super().__init__()
-        self.encoder = nn.Sequential(
-            nn.Conv2d(1, 128, 4, 2, 1),  # -> 128x128
-            ResidualBlock(128),
-            nn.Conv2d(128, 256, 4, 2, 1), # -> 64x64
-            ResidualBlock(256),
-            AttentionBlock(256),
-            nn.Conv2d(256, 512, 4, 2, 1),  # -> 32x32
-            ResidualBlock(512),
-            AttentionBlock(512),
-        )
+
+        # Level 1 (from 256x256 down to 128x128)
+        self.down1_conv = nn.Conv2d(1, 128, 4, 2, 1)
+        self.down1_res = ResidualBlock(128)
+
+        # Level 2 (128x128 -> 64x64)
+        self.down2_conv = nn.Conv2d(128, 256, 4, 2, 1)
+        self.down2_res = ResidualBlock(256)
+        self.down2_attn = AttentionBlock(256)
+
+        # Level 3 (64x64 -> 32x32)
+        self.down3_conv = nn.Conv2d(256, 512, 4, 2, 1)
+        self.down3_res = ResidualBlock(512)
+        self.down3_attn = AttentionBlock(512)
+
+        # Turn final features into latent mean and log-variance
         self.conv_mu = nn.Conv2d(512, latent_dim, 1)
         self.conv_logvar = nn.Conv2d(512, latent_dim, 1)
 
     def forward(self, x):
-        x = self.encoder(x)
-        mu = self.conv_mu(x)
-        logvar = self.conv_logvar(x)
-        return mu, logvar
+        """
+        Returns:
+          mu, logvar: (B, latent_dim, 32, 32) by default
+          skip1: (B, 128, 128, 128)
+          skip2: (B, 256, 64, 64)
+          out:   (B, 512, 32, 32) (final deep features)
+        """
 
+        # -- Level 1 --
+        x1 = self.down1_conv(x)      # (B, 128, 128, 128)
+        x1 = self.down1_res(x1)      # skip1
+
+        # -- Level 2 --
+        x2 = self.down2_conv(x1)     # (B, 256, 64, 64)
+        x2 = self.down2_res(x2)
+        x2 = self.down2_attn(x2)     # skip2
+
+        # -- Level 3 (deepest) --
+        x3 = self.down3_conv(x2)     # (B, 512, 32, 32)
+        x3 = self.down3_res(x3)
+        x3 = self.down3_attn(x3)     # out (deep features)
+
+        # Get latent mean and log-variance
+        mu = self.conv_mu(x3)
+        logvar = self.conv_logvar(x3)
+
+        return mu, logvar, x1, x2, x3
+
+
+# -------------------------------------------------
+# Decoder with Skip Connections
+# -------------------------------------------------
 class Decoder(nn.Module):
     def __init__(self, latent_dim=4):
         super().__init__()
-        self.decoder = nn.Sequential(
-            nn.ConvTranspose2d(latent_dim, 512, 3, 1, 1),
-            ResidualBlock(512),
-            AttentionBlock(512),                    # Attention added
-            nn.ConvTranspose2d(512, 256, 4, 2, 1),  # ->64x64
-            ResidualBlock(256),
-            AttentionBlock(256),                    # Attention added
-            nn.ConvTranspose2d(256, 128, 4, 2, 1),   # ->128x128
-            ResidualBlock(128),
-            nn.ConvTranspose2d(128, 1, 4, 2, 1),     # ->256x256
-        )
 
-    def forward(self, z):
-        x = self.decoder(z)
-        return torch.sigmoid(x)
+        # First transform latent Z back to 512 channels at 32x32
+        # (We use a 1x1 conv transpose or just a normal conv if you prefer.)
+        self.up0 = nn.ConvTranspose2d(latent_dim, 512, kernel_size=1, stride=1)
+        self.up0_res = ResidualBlock(512)
+        self.up0_attn = AttentionBlock(512)
 
+        # Level 2 (32x32 -> 64x64)
+        self.up1 = nn.ConvTranspose2d(512, 256, 4, 2, 1)
+        self.merge1 = nn.Conv2d(256 + 256, 256, kernel_size=1)  # to combine skip
+        self.up1_res = ResidualBlock(256)
+        self.up1_attn = AttentionBlock(256)
+
+        # Level 1 (64x64 -> 128x128)
+        self.up2 = nn.ConvTranspose2d(256, 128, 4, 2, 1)
+        self.merge2 = nn.Conv2d(128 + 128, 128, kernel_size=1)
+        self.up2_res = ResidualBlock(128)
+
+        # Final layer (128x128 -> 256x256)
+        self.final = nn.ConvTranspose2d(128, 1, 4, 2, 1)
+
+    def forward(self, z, skip1, skip2, deep_feats):
+        """
+        z:         (B, latent_dim, 32, 32)
+        skip1:     (B, 128, 128, 128)
+        skip2:     (B, 256, 64, 64)
+        deep_feats:(B, 512, 32, 32) from encoder
+        Returns:
+          Reconstructed image (B, 1, 256, 256)
+        """
+
+        # -- Step 0: transform latent code up to 512-dim features at 32x32 --
+        x0 = self.up0(z)                    # (B, 512, 32, 32)
+        # Optionally fuse with deep_feats via concatenation or addition:
+        x0 = torch.cat([x0, deep_feats], dim=1)  # (B, 512+512=1024, 32, 32)
+        # Project back down to 512
+        x0 = F.silu(nn.Conv2d(1024, 512, 1)(x0))
+        x0 = self.up0_res(x0)              # (B, 512, 32, 32)
+        x0 = self.up0_attn(x0)
+
+        # -- Level 2: upsample to 64x64 and merge with skip2 --
+        x1 = self.up1(x0)                  # (B, 256, 64, 64)
+        x1 = torch.cat([x1, skip2], dim=1) # (B, 256+256=512, 64, 64)
+        x1 = self.merge1(x1)               # (B, 256, 64, 64)
+        x1 = self.up1_res(x1)
+        x1 = self.up1_attn(x1)
+
+        # -- Level 1: upsample to 128x128 and merge with skip1 --
+        x2 = self.up2(x1)                  # (B, 128, 128, 128)
+        x2 = torch.cat([x2, skip1], dim=1) # (B, 128+128=256, 128, 128)
+        x2 = self.merge2(x2)               # (B, 128, 128, 128)
+        x2 = self.up2_res(x2)
+
+        # -- Final upsample to 256x256 and output single-channel reconstruction --
+        out = self.final(x2)               # (B, 1, 256, 256)
+        return torch.sigmoid(out)
+
+
+# -------------------------------------------------
+# Full VAE
+# -------------------------------------------------
 class VAE(nn.Module):
     def __init__(self, latent_dim=4):
         super().__init__()
@@ -235,9 +434,12 @@ class VAE(nn.Module):
         return mu + eps * std
 
     def forward(self, x):
-        mu, logvar = self.encoder(x)
+        # Encode
+        mu, logvar, skip1, skip2, deep_feats = self.encoder(x)
+        # Reparameterize
         z = self.reparameterize(mu, logvar)
-        recon = self.decoder(z)
+        # Decode (with skip connections)
+        recon = self.decoder(z, skip1, skip2, deep_feats)
         return z, mu, logvar, recon
 
 dataset = CTDataset('../training_data/CT')
@@ -253,10 +455,10 @@ val_loader = DataLoader(val_dataset, batch_size=4, shuffle=False, num_workers=4)
 test_loader = DataLoader(test_dataset, batch_size=2, shuffle=False, num_workers=4)
 
 vae = VAE(latent_dim=4).to(device)
-optimizer = torch.optim.Adam(vae.parameters(), lr=4.5e-6)
+optimizer = torch.optim.Adam(vae.parameters(), lr=1e-4)
 
 best_val_loss = float('inf')
-save_path = 'best_vae_ct1.pth'
+save_path = 'best_vae_ct2.pth'
 
 for epoch in range(1000):
     vae.train()
@@ -296,7 +498,7 @@ for epoch in range(1000):
 
     if (epoch+0) % 50 == 0:
         vae.eval()
-        pred_dir = f"./predictions/epoch_{epoch+1}/"
+        pred_dir = f"./predictions2/epoch_{epoch+1}/"
         os.makedirs(pred_dir, exist_ok=True)
 
         print("Saving predictions")
@@ -320,7 +522,7 @@ vae.load_state_dict(torch.load(save_path))
 vae.eval()
 
 # Inference loop on test_loader
-pred_dir = "./predictions/"
+pred_dir = "./predictions2/"
 os.makedirs(pred_dir, exist_ok=True)
 
 with torch.no_grad():

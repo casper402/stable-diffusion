@@ -166,6 +166,7 @@ class VAE(nn.Module):
 
 transform = transforms.Compose([
     transforms.Grayscale(),
+    transforms.Pad((0, 64, 0, 64)),
     transforms.Resize((256, 256)),
     transforms.ToTensor(),
 ])
@@ -189,7 +190,9 @@ optimizer = torch.optim.Adam(vae.parameters(), lr=1e-4)
 best_val_loss = float('inf')
 save_path = 'best_vae_ct1.pth'
 
-for epoch in range(50):
+counter = 0
+
+for epoch in range(1000):
     vae.train()
     train_loss = 0
 
@@ -221,8 +224,13 @@ for epoch in range(50):
     # Save best model
     if val_loss < best_val_loss:
         best_val_loss = val_loss
+        conuter = 0
         torch.save(vae.state_dict(), save_path)
         print(f"✅ Saved new best model at epoch {epoch+1} with val loss {val_loss:.4f}")
+    else:
+        counter = counter + 1
+        if counter == 10:
+            break
 
 
 

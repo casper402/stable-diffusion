@@ -23,6 +23,6 @@ module load cuda/11.2.0
 source activate cuda_env
 
 export PYTHONPATH=$PYTHONPATH:$(pwd)
-python scripts/train_vae.py
+python vae.py
 
 echo "========= Job finished at $(date) =========="

@@ -14,9 +14,9 @@ import time
 def vae_loss_step(config, model, x, device, perceptual_loss, beta):
     CT = x.to(device)
     _, mu, logvar, recon = model(CT)
-    l2_loss = F.mse_loss(recon, CT, reduction='mean')
-    l1_loss = F.l1_loss(recon, CT, reduction='mean')
-    kl_divergence = torch.mean(-0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=[1,2,3]))
+    l2_loss = F.mse_loss(recon, CT)
+    l1_loss = F.l1_loss(recon, CT)
+    kl_divergence = torch.mean(-0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp()))
     perceptual = perceptual_loss(recon, CT)
     ssim_loss = 1 - ssim(recon, CT)
     total_loss = (

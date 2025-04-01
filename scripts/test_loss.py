@@ -30,12 +30,16 @@ def main():
     with torch.no_grad():
         for CT in val_loader:
             CT = CT.to(device)
-            z, mu, sd, recon = vae(CT)
+            z, mu, logvar, recon = vae(CT)
 
+            kl_divergence = torch.mean(-0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=[1,2,3]))
             percept = PerceptualLoss(device)
             lpips = LPIPSLoss(device)
             ssimLoss = 1 - ssim(recon, CT)
             ssimLossCheck = 1 - ssim(CT, CT)
+
+            print("kl_divergence")
+            print(kl_divergence)
 
             print("perceptual loss")
             print(percept(recon, CT))

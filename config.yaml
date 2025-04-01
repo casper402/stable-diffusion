@@ -10,8 +10,8 @@ model:
 
 vae:
   beta: 0.000001
-  max_beta: 0.00001
-  lambda_perceptual: 0
+  max_beta: 0.000001
+  lambda_perceptual: 0.1
   lambda_ssim: 1
   lambda_l2: 0
   lambda_l1: 0
@@ -21,7 +21,7 @@ train:
   epochs: 2000
   initial_epochs: 20
   subset_size: 500
-  learning_rate: 1e-4
+  learning_rate: 4.5e-6
   fine_tune_lr: 1e-5
   min_learning_rate: 1e-4
   min_fine_tune_lr: 1e-6

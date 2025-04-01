@@ -43,8 +43,8 @@ def train_one_epoch(config, model, dataloader, optimizer, device, perceptual_los
     # TODO: simulate higher batch size with accumulation for faster training
     # TODO: Use scaler / autocast for faster training
     for batch in dataloader:
-        optimizer.zero_grad()
         loss = vae_loss_step(config, model, batch, device, perceptual_loss, beta)
+        optimizer.zero_grad()
         loss.backward()
         optimizer.step()
         running_loss += loss.item()

@@ -58,8 +58,7 @@ class CTDataset(Dataset):
     def __getitem__(self, idx):
         CT_path = self.CT_slices[idx]
         CT_slice = Image.open(CT_path).convert("L")
-        if self.transform:
-            CT_slice = self.transform(CT_slice)
+        CT_slice = self.transform(CT_slice)
         return CT_slice
     
 def get_ct_dataloaders(config, transform):

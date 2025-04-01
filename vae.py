@@ -83,6 +83,17 @@ class CTDataset(Dataset):
             CT_slice = self.transform(CT_slice)
         return CT_slice
 
+class ResidualBlock(nn.Module):
+    def __init__(self, in_channels):
+        super().__init__()
+        self.block = nn.Sequential(
+            nn.Conv2d(in_channels, in_channels, 3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(in_channels, in_channels, 3, padding=1),
+        )
+
+    def forward(self, x):
+        return x + self.block(x)
 
 class Encoder(nn.Module):
     def __init__(self, latent_dim=4):
@@ -105,19 +116,6 @@ class Encoder(nn.Module):
         mu = self.mu_conv(x)       # [B, latent_channels, 16, 16]
         logvar = self.logvar_conv(x)
         return mu, logvar
-
-
-class ResidualBlock(nn.Module):
-    def __init__(self, in_channels):
-        super().__init__()
-        self.block = nn.Sequential(
-            nn.Conv2d(in_channels, in_channels, 3, padding=1),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(in_channels, in_channels, 3, padding=1),
-        )
-
-    def forward(self, x):
-        return x + self.block(x)
 
 class Decoder(nn.Module):
     def __init__(self, latent_dim=16):
@@ -144,7 +142,6 @@ class Decoder(nn.Module):
 
         return x
 
-
 class VAE(nn.Module):
     def __init__(self, latent_dim=4):
         super().__init__()
@@ -165,86 +162,102 @@ class VAE(nn.Module):
 dataset = CTDataset('../training_data/CT')
 subset, _ = random_split(dataset, [500, len(dataset) - 500])
 
-train_size = int(0.8 * len(subset))
-val_size = len(subset) - train_size - 10
-test_size = 10
-train_dataset, val_dataset, test_dataset = random_split(subset, [train_size, val_size, test_size])
+import os
+import shutil
 
-train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True, num_workers=4)
-val_loader = DataLoader(val_dataset, batch_size=16, shuffle=False, num_workers=4)
-test_loader = DataLoader(test_dataset, batch_size=2, shuffle=False, num_workers=4)
+# Create a new directory to save the 500 CT slices
+output_dir = './CT_subset_500'
+os.makedirs(output_dir, exist_ok=True)
 
+# Save the paths of the 500 images in your subset
+for i, sample in enumerate(subset):
+    # Get the original path from your custom Dataset
+    img_path = dataset.CT_slices[subset.indices[i]]  # index mapping
+    filename = os.path.basename(img_path)
+    shutil.copy(img_path, os.path.join(output_dir, f"{i:03d}_{filename}"))
 
-vae = VAE(latent_dim=4).to(device)
-optimizer = torch.optim.Adam(vae.parameters(), lr=1e-4)
+print("okay")
 
-best_val_loss = float('inf')
-save_path = 'best_vae_ct1.pth'
+# train_size = int(0.8 * len(subset))
+# val_size = len(subset) - train_size - 10
+# test_size = 10
+# train_dataset, val_dataset, test_dataset = random_split(subset, [train_size, val_size, test_size])
 
-for epoch in range(1000):
-    vae.train()
-    train_loss = 0
-
-    for x in train_loader:
-        x = x.to(device)
-        recon, mu, logvar = vae(x)
-        loss = vae_loss(recon, x, mu, logvar)
-
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
-        train_loss += loss.item()
-
-    train_loss /= len(train_loader)
-
-    # Validation
-    vae.eval()
-    val_loss = 0
-    with torch.no_grad():
-        for x in val_loader:
-            x = x.to(device)
-            recon, mu, logvar = vae(x)
-            loss = vae_loss(recon, x, mu, logvar)
-            val_loss += loss.item()
-    val_loss /= len(val_loader)
-
-    print(f"Epoch {epoch+1} | Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f}")
-
-    # Save best model
-    if val_loss < best_val_loss:
-        best_val_loss = val_loss
-        conuter = 0
-        torch.save(vae.state_dict(), save_path)
-        print(f"✅ Saved new best model at epoch {epoch+1} with val loss {val_loss:.4f}")
+# train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True, num_workers=4)
+# val_loader = DataLoader(val_dataset, batch_size=16, shuffle=False, num_workers=4)
+# test_loader = DataLoader(test_dataset, batch_size=2, shuffle=False, num_workers=4)
 
 
+# vae = VAE(latent_dim=4).to(device)
+# optimizer = torch.optim.Adam(vae.parameters(), lr=1e-4)
+
+# best_val_loss = float('inf')
+# save_path = 'best_vae_ct1.pth'
+
+# for epoch in range(1000):
+#     vae.train()
+#     train_loss = 0
+
+#     for x in train_loader:
+#         x = x.to(device)
+#         recon, mu, logvar = vae(x)
+#         loss = vae_loss(recon, x, mu, logvar)
+
+#         optimizer.zero_grad()
+#         loss.backward()
+#         optimizer.step()
+#         train_loss += loss.item()
+
+#     train_loss /= len(train_loader)
+
+#     # Validation
+#     vae.eval()
+#     val_loss = 0
+#     with torch.no_grad():
+#         for x in val_loader:
+#             x = x.to(device)
+#             recon, mu, logvar = vae(x)
+#             loss = vae_loss(recon, x, mu, logvar)
+#             val_loss += loss.item()
+#     val_loss /= len(val_loader)
+
+#     print(f"Epoch {epoch+1} | Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f}")
+
+#     # Save best model
+#     if val_loss < best_val_loss:
+#         best_val_loss = val_loss
+#         conuter = 0
+#         torch.save(vae.state_dict(), save_path)
+#         print(f"✅ Saved new best model at epoch {epoch+1} with val loss {val_loss:.4f}")
 
 
 
 
 
 
-vae.load_state_dict(torch.load(save_path))
-vae.eval()
 
-# Inference loop on test_loader
-pred_dir = "./predictions/"
-os.makedirs(pred_dir, exist_ok=True)
 
-with torch.no_grad():
-    for i, x in enumerate(test_loader):
-        x = x.to(device)
-        recon, _, _ = vae(x)
+# vae.load_state_dict(torch.load(save_path))
+# vae.eval()
 
-        # Save the first few predictions
-        for j in range(min(x.size(0), 8)):
-            original = x[j]
-            reconstructed = recon[j]
+# # Inference loop on test_loader
+# pred_dir = "./predictions/"
+# os.makedirs(pred_dir, exist_ok=True)
 
-            # Save originals and reconstructions as image files
-            vutils.save_image(original, f"{pred_dir}/img_{i}_{j}_orig.png", normalize=True)
-            vutils.save_image(reconstructed, f"{pred_dir}/img_{i}_{j}_recon.png", normalize=True)
+# with torch.no_grad():
+#     for i, x in enumerate(test_loader):
+#         x = x.to(device)
+#         recon, _, _ = vae(x)
 
-        # Optional: stop after a few batches
-        if i >= 2:
-            break
+#         # Save the first few predictions
+#         for j in range(min(x.size(0), 8)):
+#             original = x[j]
+#             reconstructed = recon[j]
+
+#             # Save originals and reconstructions as image files
+#             vutils.save_image(original, f"{pred_dir}/img_{i}_{j}_orig.png", normalize=True)
+#             vutils.save_image(reconstructed, f"{pred_dir}/img_{i}_{j}_recon.png", normalize=True)
+
+#         # Optional: stop after a few batches
+#         if i >= 2:
+#             break

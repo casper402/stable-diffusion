@@ -3,5 +3,7 @@ todo.txt
 checkpoints/
 results/
 pretrained_models/
+CT_subset_500/
+predictions/
 __pycache__/
 *.py[cod]

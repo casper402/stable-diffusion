@@ -49,7 +49,9 @@ def vae_loss(recon_x, x, mu, logvar, perceptual_weight=0.1, mse_weight=1.0, kl_w
     mse = F.mse_loss(recon_x, x)
     perceptual = perceptual_loss(recon_x, x)
     kl = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
-
+    # print("mse", mse)
+    # print("perceptual", perceptual)
+    # print("kl", kl)
     total_loss = mse_weight * mse + perceptual_weight * perceptual + kl_weight * kl
     return total_loss
     
@@ -61,6 +63,7 @@ class CTDataset(Dataset):
             transforms.Pad((0, 64, 0, 64)),
             transforms.Resize((256, 256)),
             transforms.ToTensor(),
+            transforms.Normalize(mean=[0.5], std=[0.5])
         ])
         
     def _collect_slices(self, dataset_path):
@@ -270,7 +273,7 @@ for epoch in range(1000):
 
     if (epoch+0) % 50 == 0:
         vae.eval()
-        pred_dir = f"./predictions2/epoch_{epoch+1}/"
+        pred_dir = f"./predictions/epoch_{epoch+1}/"
         os.makedirs(pred_dir, exist_ok=True)
 
         print("Saving predictions")
@@ -284,8 +287,8 @@ for epoch in range(1000):
                     original = x[j]
                     reconstructed = recon[j]
 
-                    vutils.save_image(original, f"{pred_dir}/img_{i}_{j}_orig.png", normalize=True)
-                    vutils.save_image(reconstructed, f"{pred_dir}/img_{i}_{j}_recon.png", normalize=True)
+                    vutils.save_image(original, f"{pred_dir}/img_{i}_{j}_orig.png", normalize=True, value_range=(-1, 1))
+                    vutils.save_image(reconstructed, f"{pred_dir}/img_{i}_{j}_recon.png", normalize=True, value_range=(-1, 1))
 
                 if i >= 2:  # Save only a few batches
                     break
@@ -294,7 +297,7 @@ vae.load_state_dict(torch.load(save_path))
 vae.eval()
 
 # Inference loop on test_loader
-pred_dir = "./predictions2/"
+pred_dir = "./predictions/"
 os.makedirs(pred_dir, exist_ok=True)
 
 with torch.no_grad():

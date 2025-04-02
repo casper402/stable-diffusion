@@ -59,10 +59,24 @@ class SsimLoss(torch.nn.Module):
 
 ssim_loss = SsimLoss(device=device)
 
-def vae_loss(recon, x, mu, logvar, perceptual_weight=0.1, ssim_weight=0.8, mse_weight=1.0, kl_weight=0.1, l1_weight=0.2):
+# def vae_loss(recon, x, mu, logvar, perceptual_weight=0.1, ssim_weight=0.8, mse_weight=1.0, kl_weight=0.1, l1_weight=0.2):
+#     mse = F.mse_loss(recon, x)
+#     perceptual = perceptual_loss(recon, x)
+#     kl = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
+#     ssim_val = ssim_loss(recon, x)
+#     l1 = F.l1_loss(recon, x)
+#     print(mse)
+#     print(perceptual)
+#     print(kl*kl_weight)
+#     print(ssim_val)
+#     print(l1)
+#     total_loss = mse_weight * mse + perceptual_weight * perceptual + kl_weight * kl + ssim_val * ssim_weight + l1 * l1_weight
+#     return total_loss
+
+def vae_loss(recon, x, mu, logvar, perceptual_weight=0.1, ssim_weight=0.8, mse_weight=1.0, kl_weight=0.00001, l1_weight=0.2):
     mse = F.mse_loss(recon, x)
     perceptual = perceptual_loss(recon, x)
-    kl = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
+    kl = torch.mean(-0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=[1,2,3]))
     ssim_val = ssim_loss(recon, x)
     l1 = F.l1_loss(recon, x)
     total_loss = mse_weight * mse + perceptual_weight * perceptual + kl_weight * kl + ssim_val * ssim_weight + l1 * l1_weight

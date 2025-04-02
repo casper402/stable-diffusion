@@ -4,6 +4,7 @@ import torch.nn.functional as F
 from torchvision import models
 from torchvision import transforms
 from torchvision.transforms import Normalize
+from piq import ssim
 # import lpips
 
 # class LPIPSLoss(nn.Module):
@@ -40,24 +41,15 @@ class PerceptualLoss(nn.Module):
 
             return F.mse_loss(feat_recon, feat_real)
     
-class SSIMLoss(nn.Module):
-    def __init__(self, device='cuda', window_size=11, sigma=1.5):
+class SsimLoss(torch.nn.Module):
+    def __init__(self, device='cuda'):
         super().__init__()
-        self.gaussian_blur = transforms.GaussianBlur(window_size, sigma)
-        self.c1 = 0.01 ** 2  # Stability constant
-        self.c2 = 0.03 ** 2
 
-    def forward(self, x, y):
-        # Compute local means
-        mu_x = self.gaussian_blur(x)
-        mu_y = self.gaussian_blur(y)
+    def normalize(self, x):
+        # Normalize fomr [-1, 1] to [0, 1]
+        return (x + 1) / 2.0
 
-        # Compute local variances and covariances
-        sigma_x = torch.clamp(self.gaussian_blur(x * x) - mu_x**2, min=1e-6)
-        sigma_y = torch.clamp(self.gaussian_blur(y * y) - mu_y**2, min=1e-6)
-        sigma_xy = self.gaussian_blur(x * y) - mu_x * mu_y
-
-        ssim_map = ((2 * mu_x * mu_y + self.c1) * (2 * sigma_xy + self.c2)) / ((mu_x**2 + mu_y**2 + self.c1) * (sigma_x + sigma_y + self.c2))
-        loss = 1 - ssim_map.mean()
-
-        return loss
+    def forward(self, recon, x):
+        recon = self.normalize(recon)
+        x = self.normalize(x)
+        return 1 - ssim(recon, x)

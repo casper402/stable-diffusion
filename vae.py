@@ -15,7 +15,7 @@ import os
 from PIL import Image
 from torch.utils.data import Dataset
 import torchvision.transforms as transforms
-
+from piq import ssim
 from torchvision.models import vgg16
 from torchvision.transforms import Normalize
 
@@ -44,15 +44,28 @@ class PerceptualLoss(torch.nn.Module):
 
 perceptual_loss = PerceptualLoss(device=device)
 
+class SsimLoss(torch.nn.Module):
+    def __init__(self, device='cuda'):
+        super().__init__()
 
-def vae_loss(recon_x, x, mu, logvar, perceptual_weight=0.1, mse_weight=1.0, kl_weight=1.0):
-    mse = F.mse_loss(recon_x, x)
-    perceptual = perceptual_loss(recon_x, x)
+    def normalize(self, x):
+        # Normalize fomr [-1, 1] to [0, 1]
+        return (x + 1) / 2.0
+
+    def forward(self, recon, x):
+        recon = self.normalize(recon)
+        x = self.normalize(x)
+        return 1 - ssim(recon, x)
+
+ssim_loss = SsimLoss(device=device)
+
+def vae_loss(recon, x, mu, logvar, perceptual_weight=0.1, ssim_weight=0.8, mse_weight=1.0, kl_weight=0.1, l1_weight=0.2):
+    mse = F.mse_loss(recon, x)
+    perceptual = perceptual_loss(recon, x)
     kl = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
-    # print("mse", mse)
-    # print("perceptual", perceptual)
-    # print("kl", kl)
-    total_loss = mse_weight * mse + perceptual_weight * perceptual + kl_weight * kl
+    ssim_val = ssim_loss(recon, x)
+    l1 = F.l1_loss(recon, x)
+    total_loss = mse_weight * mse + perceptual_weight * perceptual + kl_weight * kl + ssim_val * ssim_weight + l1 * l1_weight
     return total_loss
     
 class CTDataset(Dataset):
@@ -225,16 +238,16 @@ val_size = len(subset) - train_size - 10
 test_size = 10
 train_dataset, val_dataset, test_dataset = random_split(subset, [train_size, val_size, test_size])
 
-train_loader = DataLoader(train_dataset, batch_size=8, shuffle=True, num_workers=4)
-val_loader = DataLoader(val_dataset, batch_size=8, shuffle=False, num_workers=4)
+train_loader = DataLoader(train_dataset, batch_size=1, shuffle=True, num_workers=4)
+val_loader = DataLoader(val_dataset, batch_size=1, shuffle=False, num_workers=4)
 test_loader = DataLoader(test_dataset, batch_size=2, shuffle=False, num_workers=4)
 
 vae = AutoencoderKL().to(device)
 optimizer = torch.optim.Adam(vae.parameters(), lr=1e-4)
+scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=1000)
 
 best_val_loss = float('inf')
-save_path = 'best_vae_ct2.pth'
-
+save_path = 'best_vae_ct_2.pth'
 for epoch in range(1000):
     vae.train()
     train_loss = 0
@@ -273,7 +286,7 @@ for epoch in range(1000):
 
     if (epoch+0) % 50 == 0:
         vae.eval()
-        pred_dir = f"./predictions/epoch_{epoch+1}/"
+        pred_dir = f"./predictions_2/epoch_{epoch+1}/"
         os.makedirs(pred_dir, exist_ok=True)
 
         print("Saving predictions")
@@ -297,7 +310,7 @@ vae.load_state_dict(torch.load(save_path))
 vae.eval()
 
 # Inference loop on test_loader
-pred_dir = "./predictions/"
+pred_dir = "./predictions_2/"
 os.makedirs(pred_dir, exist_ok=True)
 
 with torch.no_grad():

@@ -289,7 +289,8 @@ for epoch in range(1000):
             val_loss += loss.item()
     val_loss /= len(val_loader)
 
-    print(f"Epoch {epoch+1} | Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f}")
+    current_lr = optimizer.param_groups[0]['lr']
+    print(f"Epoch {epoch+1} | Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f} | LR: {current_lr:.6f}")
 
     # Save best model
     if val_loss < best_val_loss:

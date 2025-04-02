@@ -261,7 +261,7 @@ optimizer = torch.optim.Adam(vae.parameters(), lr=1e-4)
 scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=1000)
 
 best_val_loss = float('inf')
-save_path = 'best_vae_ct_2.pth'
+save_path = 'best_vae_ct.pth'
 for epoch in range(1000):
     vae.train()
     train_loss = 0
@@ -271,9 +271,10 @@ for epoch in range(1000):
         _, mu, logvar, recon = vae(x)
         loss = vae_loss(recon, x, mu, logvar)
 
-        optimizer.zero_grad()
         loss.backward()
         optimizer.step()
+        scheduler.step()
+        optimizer.zero_grad()
         train_loss += loss.item()
 
     train_loss /= len(train_loader)
@@ -301,7 +302,7 @@ for epoch in range(1000):
 
     if (epoch+0) % 50 == 0:
         vae.eval()
-        pred_dir = f"./predictions_2/epoch_{epoch+1}/"
+        pred_dir = f"./predictions/epoch_{epoch+1}/"
         os.makedirs(pred_dir, exist_ok=True)
 
         print("Saving predictions")
@@ -325,7 +326,7 @@ vae.load_state_dict(torch.load(save_path))
 vae.eval()
 
 # Inference loop on test_loader
-pred_dir = "./predictions_2/"
+pred_dir = "./predictions/"
 os.makedirs(pred_dir, exist_ok=True)
 
 with torch.no_grad():

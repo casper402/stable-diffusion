@@ -283,9 +283,6 @@ for epoch in range(epochs):
         optimizer.step()
         optimizer.zero_grad()
         train_loss += loss.item()
-
-    scheduler.step()
-
     train_loss /= len(train_loader)
 
     # Validation
@@ -298,6 +295,8 @@ for epoch in range(epochs):
             loss = vae_loss(recon, x, mu, logvar)
             val_loss += loss.item()
     val_loss /= len(val_loader)
+
+    scheduler.step(val_loss)
 
     current_lr = optimizer.param_groups[0]['lr']
     print(f"Epoch {epoch+1} | Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f}")

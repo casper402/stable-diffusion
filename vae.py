@@ -269,7 +269,8 @@ scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
     )
 
 best_val_loss = float('inf')
-save_path = 'best_vae_ct.pth'
+save_path = 'best_vae_ct_2.pth'
+max_grad_norm = 1.0 # For gradient clipping, TODO: might need to tune this value
 for epoch in range(epochs):
     vae.train()
     train_loss = 0
@@ -280,6 +281,7 @@ for epoch in range(epochs):
         loss = vae_loss(recon, x, mu, logvar)
 
         loss.backward()
+        torch.nn.utils.clip_grad_norm_(vae.parameters(), max_norm=max_grad_norm) # Added beceause of wierd loss spikes
         optimizer.step()
         optimizer.zero_grad()
         train_loss += loss.item()
@@ -310,7 +312,7 @@ for epoch in range(epochs):
 
     if (epoch+0) % 50 == 0:
         vae.eval()
-        pred_dir = f"./predictions/epoch_{epoch+1}/"
+        pred_dir = f"./predictions_2/epoch_{epoch+1}/"
         os.makedirs(pred_dir, exist_ok=True)
 
         print("Saving predictions")
@@ -334,7 +336,7 @@ vae.load_state_dict(torch.load(save_path))
 vae.eval()
 
 # Inference loop on test_loader
-pred_dir = "./predictions/best_val_loss"
+pred_dir = "./predictions_2/best_val_loss"
 os.makedirs(pred_dir, exist_ok=True)
 
 with torch.no_grad():

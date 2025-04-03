@@ -73,7 +73,7 @@ ssim_loss = SsimLoss(device=device)
 #     total_loss = mse_weight * mse + perceptual_weight * perceptual + kl_weight * kl + ssim_val * ssim_weight + l1 * l1_weight
 #     return total_loss
 
-def vae_loss(recon, x, mu, logvar, perceptual_weight=0.1, ssim_weight=0.8, mse_weight=1.0, kl_weight=0.00001, l1_weight=0.2):
+def vae_loss(recon, x, mu, logvar, perceptual_weight=0.1, ssim_weight=0.8, mse_weight=0.5, kl_weight=0.00001, l1_weight=0.5):
     mse = F.mse_loss(recon, x)
     perceptual = perceptual_loss(recon, x)
     kl = torch.mean(-0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=[1,2,3]))
@@ -166,28 +166,25 @@ class UpBlock(nn.Module):
 # Encoder (3 downs => factor of 8)
 # -------------------------------------------------
 class Encoder(nn.Module):
-    def __init__(self, in_channels=1, base_channels=64, latent_channels=4):
+    def __init__(self, in_channels=1, base_channels=32, latent_channels=4):
         super().__init__()
-        # Initial conv: 1 -> 64
         self.conv_in = nn.Conv2d(in_channels, base_channels, kernel_size=3, padding=1)
 
-        # 3 down blocks: (64->128), (128->256), (256->256)
-        # You could pick 256->512 for the third block, but 256 is often enough for 8x factor.
-        self.down1 = DownBlock(base_channels, base_channels * 2)   # 64 -> 128
-        self.down2 = DownBlock(base_channels * 2, base_channels * 4)  # 128 -> 256
-        self.down3 = DownBlock(base_channels * 4, base_channels * 4)  # 256 -> 256
+        self.down1 = DownBlock(base_channels, base_channels * 2)   
+        self.down2 = DownBlock(base_channels * 2, base_channels * 4) 
+        self.down3 = DownBlock(base_channels * 4, base_channels * 8) 
 
         # Final 1x1 conv to produce 2*latent_channels => [mu, logvar]
-        self.conv_out = nn.Conv2d(base_channels * 4, latent_channels * 2, kernel_size=1)
+        self.conv_out = nn.Conv2d(base_channels * 8, latent_channels * 2, kernel_size=1)
 
     def forward(self, x):
-        x = self.conv_in(x)    # (B,64,256,256)
-        x = self.down1(x)      # (B,128,128,128)
-        x = self.down2(x)      # (B,256,64,64)
-        x = self.down3(x)      # (B,256,32,32)
+        x = self.conv_in(x) 
+        x = self.down1(x)
+        x = self.down2(x)
+        x = self.down3(x)
 
-        out = self.conv_out(x) # (B,8,32,32)
-        mu, logvar = torch.chunk(out, 2, dim=1)  # (B,4,32,32) each
+        out = self.conv_out(x)
+        mu, logvar = torch.chunk(out, 2, dim=1)
         return mu, logvar
 
 
@@ -195,25 +192,23 @@ class Encoder(nn.Module):
 # Decoder (3 ups => factor of 8)
 # -------------------------------------------------
 class Decoder(nn.Module):
-    def __init__(self, out_channels=1, base_channels=64, latent_channels=4):
+    def __init__(self, out_channels=1, base_channels=32, latent_channels=4):
         super().__init__()
-        # Project from 4 => (base_channels*4=256) at 32x32
-        self.conv_in = nn.Conv2d(latent_channels, base_channels * 4, kernel_size=3, padding=1)
+        self.conv_in = nn.Conv2d(latent_channels, base_channels * 8, kernel_size=3, padding=1)
 
         # 3 up blocks: mirror the 3 downs
-        self.up1 = UpBlock(base_channels * 4, base_channels * 4)    # 256 -> 256
-        self.up2 = UpBlock(base_channels * 4, base_channels * 2)    # 256 -> 128
-        self.up3 = UpBlock(base_channels * 2, base_channels)        # 128 -> 64
-
+        self.up1 = UpBlock(base_channels * 8, base_channels * 4)
+        self.up2 = UpBlock(base_channels * 4, base_channels * 2)
+        self.up3 = UpBlock(base_channels * 2, base_channels)
         # Final conv to get single grayscale channel
         self.conv_out = nn.Conv2d(base_channels, out_channels, kernel_size=3, padding=1)
 
     def forward(self, z):
-        x = self.conv_in(z)   # (B,256,32,32)
-        x = self.up1(x)       # (B,256,64,64)
-        x = self.up2(x)       # (B,128,128,128)
-        x = self.up3(x)       # (B,64,256,256)
-        x = self.conv_out(x)  # (B,1,256,256)
+        x = self.conv_in(z)
+        x = self.up1(x)
+        x = self.up2(x)
+        x = self.up3(x)
+        x = self.conv_out(x)
         return torch.tanh(x)
 
 
@@ -244,25 +239,29 @@ class AutoencoderKL(nn.Module):
         recon = self.decode(z)
         return z, mu, logvar, recon
 
+generator = torch.Generator().manual_seed(42)
+
 dataset = CTDataset('../training_data/CT')
-subset, _ = random_split(dataset, [500, len(dataset) - 500])
+subset_size = 5000
+subset, _ = random_split(dataset, [subset_size, len(dataset) - subset_size])
 
 train_size = int(0.8 * len(subset))
 val_size = len(subset) - train_size - 10
 test_size = 10
 train_dataset, val_dataset, test_dataset = random_split(subset, [train_size, val_size, test_size])
 
-train_loader = DataLoader(train_dataset, batch_size=8, shuffle=True, num_workers=4)
-val_loader = DataLoader(val_dataset, batch_size=8, shuffle=False, num_workers=4)
+train_loader = DataLoader(train_dataset, batch_size=1, shuffle=True, num_workers=4)
+val_loader = DataLoader(val_dataset, batch_size=1, shuffle=False, num_workers=4)
 test_loader = DataLoader(test_dataset, batch_size=2, shuffle=False, num_workers=4)
 
+epochs = 1000
 vae = AutoencoderKL().to(device)
 optimizer = torch.optim.Adam(vae.parameters(), lr=1e-4)
-scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=1000)
+# scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs)
 
 best_val_loss = float('inf')
 save_path = 'best_vae_ct.pth'
-for epoch in range(1000):
+for epoch in range(epochs):
     vae.train()
     train_loss = 0
 
@@ -273,9 +272,10 @@ for epoch in range(1000):
 
         loss.backward()
         optimizer.step()
-        scheduler.step()
         optimizer.zero_grad()
         train_loss += loss.item()
+
+    # scheduler.step()
 
     train_loss /= len(train_loader)
 
@@ -326,7 +326,7 @@ vae.load_state_dict(torch.load(save_path))
 vae.eval()
 
 # Inference loop on test_loader
-pred_dir = "./predictions/"
+pred_dir = "./predictions/best_val_loss"
 os.makedirs(pred_dir, exist_ok=True)
 
 with torch.no_grad():

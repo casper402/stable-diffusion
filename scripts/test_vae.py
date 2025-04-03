@@ -1,5 +1,5 @@
 import torch
-from pretrained_models.vae import VAE 
+from results.vae.vae_v1 import VAE 
 from data.dataset import get_ct_dataloaders, get_dataloaders
 from data.transforms import build_train_transform
 from utils.config import load_config, get_device

@@ -250,14 +250,23 @@ val_size = len(subset) - train_size - 10
 test_size = 10
 train_dataset, val_dataset, test_dataset = random_split(subset, [train_size, val_size, test_size])
 
-train_loader = DataLoader(train_dataset, batch_size=1, shuffle=True, num_workers=4)
-val_loader = DataLoader(val_dataset, batch_size=1, shuffle=False, num_workers=4)
+train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True, num_workers=4)
+val_loader = DataLoader(val_dataset, batch_size=16, shuffle=False, num_workers=4)
 test_loader = DataLoader(test_dataset, batch_size=2, shuffle=False, num_workers=4)
 
 epochs = 1000
 vae = AutoencoderKL().to(device)
-optimizer = torch.optim.Adam(vae.parameters(), lr=1e-4)
-# scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs)
+optimizer = torch.optim.Adam(vae.parameters(), lr=4e-4)
+
+scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer,
+        mode='min',            # minimize reconstruction or total loss
+        factor=0.5,            # LR reduction factor (usually 0.5–0.1)
+        patience=50,           # epochs without improvement before reduction
+        threshold=1e-4,        # significant improvement threshold
+        verbose=True,          # prints LR updates to keep track
+        min_lr=1e-6            # minimal LR allowed
+    )
 
 best_val_loss = float('inf')
 save_path = 'best_vae_ct.pth'
@@ -275,7 +284,7 @@ for epoch in range(epochs):
         optimizer.zero_grad()
         train_loss += loss.item()
 
-    # scheduler.step()
+    scheduler.step()
 
     train_loss /= len(train_loader)
 
@@ -291,7 +300,7 @@ for epoch in range(epochs):
     val_loss /= len(val_loader)
 
     current_lr = optimizer.param_groups[0]['lr']
-    print(f"Epoch {epoch+1} | Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f} | LR: {current_lr:.6f}")
+    print(f"Epoch {epoch+1} | Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f}")
 
     # Save best model
     if val_loss < best_val_loss:

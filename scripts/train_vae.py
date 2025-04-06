@@ -1,116 +1,155 @@
-import os
-os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:128"
+import torchvision.utils as vutils
+from torch.utils.data import random_split
+from torch.utils.data import DataLoader
+import torchvision.transforms as transforms
 import torch
 import torch.nn.functional as F
-from torch import optim
-from models.vae import VAE 
-from utils.losses import PerceptualLoss
-from data.dataset import get_ct_dataloaders
-from data.transforms import build_train_transform
-from utils.config import load_config, get_device
-from piq import ssim
-import time
+import os
+from models.vae import AutoencoderKL
+from utils.dataset import CTDataset
+from utils.losses import PerceptualLoss, SsimLoss
 
-def vae_loss_step(config, model, x, device, perceptual_loss, beta):
-    CT = x.to(device)
-    _, mu, logvar, recon = model(CT)
-    l2_loss = F.mse_loss(recon, CT)
-    l1_loss = F.l1_loss(recon, CT)
-    kl_divergence = torch.mean(-0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp()))
-    perceptual = perceptual_loss(recon, CT)
-    ssim_loss = 1 - ssim(recon, CT)
-    total_loss = (
-        config["vae"]["lambda_l1"] * l1_loss +
-        config["vae"]["lambda_l2"] * l2_loss +
-        config["vae"]["lambda_perceptual"] * perceptual + 
-        config["vae"]["lambda_ssim"] * ssim_loss +
-        beta * kl_divergence
-    )
+def vae_loss(recon, x, mu, logvar, perceptual_weight=0.1, ssim_weight=0.8, mse_weight=0.5, kl_weight=0.00001, l1_weight=0.5):
+    mse = F.mse_loss(recon, x)
+    perceptual = perceptual_loss(recon, x)
+    kl = torch.mean(-0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=[1,2,3]))
+    ssim_val = ssim_loss(recon, x)
+    l1 = F.l1_loss(recon, x)
+    total_loss = mse_weight * mse + perceptual_weight * perceptual + kl_weight * kl + ssim_val * ssim_weight + l1 * l1_weight
     return total_loss
 
-def validate_one_epoch(config, model, dataloader, device, perceptual_loss, beta):
-    model.eval()
-    running_loss = 0
-    with torch.no_grad():
-        for batch in dataloader:
-            loss = vae_loss_step(config, model, batch, device, perceptual_loss, beta)
-            running_loss += loss.item()
-    return running_loss / len(dataloader)
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-def train_one_epoch(config, model, dataloader, optimizer, device, perceptual_loss, beta):
-    model.train()
-    running_loss = 0
-    # TODO: simulate higher batch size with accumulation for faster training
-    # TODO: Use scaler / autocast for faster training
-    for batch in dataloader:
-        loss = vae_loss_step(config, model, batch, device, perceptual_loss, beta)
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
-        running_loss += loss.item()
-    return running_loss / len(dataloader)
+perceptual_loss = PerceptualLoss(device=device)
+ssim_loss = SsimLoss(device=device)
 
-def run_training_loop(config, model, device, train_loader, val_loader, optimizer, perceptual_loss, scheduler):
-    best_val_loss = float('inf')
-    counter = 0
-    beta = config["vae"]["beta"]
-    epochs = config["train"]["epochs"]
-    for epoch in range(epochs):
-        start_time = time.time()
-        if epoch > 50:
-            beta = min(config["vae"]["max_beta"], beta * 1.05)
-        train_loss = train_one_epoch(config, model, train_loader, optimizer, device, perceptual_loss, beta)
-        val_loss = validate_one_epoch(config, model, val_loader, device, perceptual_loss, beta)
-        epoch_time = time.time() - start_time
-        elapsed = time.strftime("%H:%M:%S", time.gmtime(epoch_time))
-        print(f"Epoch: {epoch+1}/{epochs} | Time: {elapsed} | Train Loss: {train_loss:.6f} | Val Loss: {val_loss:.6f} | Beta: {beta}")
-        scheduler.step(val_loss) # TODO: change to val_loss
-        if val_loss < best_val_loss: # TODO: change to val_loss
-            best_val_loss = val_loss # TODO: change to val_loss
-            counter = 0
-            torch.save(model.state_dict(), config["paths"]["save_path"])
-        else:
-            counter += 1
-            if counter >= config["train"]["early_stopping_patience"]:
-                print("Early stopping")
-                break
+dataset = CTDataset('../training_data/CT', transform=transforms.Compose([
+            transforms.Grayscale(),
+            transforms.Pad((0, 64, 0, 64)),
+            transforms.Resize((256, 256)),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.5], std=[0.5])
+        ]))
 
-def main():
-    device = get_device()
-    config = load_config(device)
-    transform = build_train_transform(config["model"]["image_size"])
-    train_loader, val_loader = get_ct_dataloaders(config, transform)
-    vae = VAE(latent_dim=config["model"]["latent_dim"]).to(device)
-    perceptual_loss = PerceptualLoss(device)
-    optimizer = optim.AdamW(
-        vae.parameters(),
-        lr=config["train"]["learning_rate"],
-        weight_decay=1e-5,
-        betas=(0.9, 0.999),
-    )
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+subset_size = 5000
+subset, _ = random_split(dataset, [subset_size, len(dataset) - subset_size])
+
+train_size = int(0.8 * len(subset))
+val_size = len(subset) - train_size - 10
+test_size = 10
+train_dataset, val_dataset, test_dataset = random_split(subset, [train_size, val_size, test_size])
+
+train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True, num_workers=4)
+val_loader = DataLoader(val_dataset, batch_size=16, shuffle=False, num_workers=4)
+test_loader = DataLoader(test_dataset, batch_size=2, shuffle=False, num_workers=4)
+
+epochs = 1000
+vae = AutoencoderKL().to(device)
+optimizer = torch.optim.Adam(vae.parameters(), lr=4e-4)
+
+scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer,
         mode='min',            # minimize reconstruction or total loss
         factor=0.5,            # LR reduction factor (usually 0.5–0.1)
-        patience=10,           # epochs without improvement before reduction
+        patience=50,           # epochs without improvement before reduction
         threshold=1e-4,        # significant improvement threshold
         verbose=True,          # prints LR updates to keep track
         min_lr=1e-6            # minimal LR allowed
     )
-    run_training_loop(
-        config=config,
-        model=vae,
-        device=device,
-        train_loader=train_loader,
-        val_loader=val_loader,
-        optimizer=optimizer,
-        perceptual_loss=perceptual_loss,
-        scheduler=scheduler,
-    )
-    print("training complete")
 
-if __name__ == "__main__":
-    main()
+best_val_loss = float('inf')
+save_path = 'best_vae_ct_2.pth'
+max_grad_norm = 1.0 # For gradient clipping, TODO: might need to tune this value
+
+for epoch in range(epochs):
+    vae.train()
+    train_loss = 0
+    
+    # Training
+    for x in train_loader:
+        x = x.to(device)
+        _, mu, logvar, recon = vae(x)
+        loss = vae_loss(recon, x, mu, logvar)
+
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(vae.parameters(), max_norm=max_grad_norm) # Added beceause of wierd loss spikes
+        optimizer.step()
+        optimizer.zero_grad()
+        train_loss += loss.item()
+    train_loss /= len(train_loader)
+
+    # Validation
+    vae.eval()
+    val_loss = 0
+    with torch.no_grad():
+        for x in val_loader:
+            x = x.to(device)
+            _, mu, logvar, recon = vae(x)
+            loss = vae_loss(recon, x, mu, logvar)
+            val_loss += loss.item()
+    val_loss /= len(val_loader)
+
+    # Update learning rate
+    scheduler.step(val_loss)
+
+    # Print training and validation loss
+    current_lr = optimizer.param_groups[0]['lr']
+    print(f"Epoch {epoch+1} | Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f}")
+
+    # Save best model
+    if val_loss < best_val_loss:
+        best_val_loss = val_loss
+        conuter = 0
+        torch.save(vae.state_dict(), save_path)
+        print(f"✅ Saved new best model at epoch {epoch+1} with val loss {val_loss:.4f}")
+
+    if (epoch+0) % 50 == 0:
+        vae.eval()
+        pred_dir = f"./predictions_2/epoch_{epoch+1}/"
+        os.makedirs(pred_dir, exist_ok=True)
+
+        print("Saving predictions")
+
+        with torch.no_grad():
+            for i, x in enumerate(test_loader):
+                x = x.to(device)
+                _, _, _, recon = vae(x)
+
+                for j in range(min(x.size(0), 8)):
+                    original = x[j]
+                    reconstructed = recon[j]
+
+                    vutils.save_image(original, f"{pred_dir}/img_{i}_{j}_orig.png", normalize=True, value_range=(-1, 1))
+                    vutils.save_image(reconstructed, f"{pred_dir}/img_{i}_{j}_recon.png", normalize=True, value_range=(-1, 1))
+
+                if i >= 2:  # Save only a few batches
+                    break
+
+# Load best model for final evaluation
+vae.load_state_dict(torch.load(save_path))
+vae.eval()
+
+# Inference loop on test_loader
+pred_dir = "./predictions_2/best_val_loss"
+os.makedirs(pred_dir, exist_ok=True)
+
+with torch.no_grad():
+    for i, x in enumerate(test_loader):
+        x = x.to(device)
+        _ , _, _, recon = vae(x)
+
+        # Save the first few predictions
+        for j in range(min(x.size(0), 8)):
+            original = x[j]
+            reconstructed = recon[j]
+
+            # Save originals and reconstructions as image files
+            vutils.save_image(original, f"{pred_dir}/img_{i}_{j}_orig.png", normalize=True)
+            vutils.save_image(reconstructed, f"{pred_dir}/img_{i}_{j}_recon.png", normalize=True)
+
+        # Optional: stop after a few batches
+        if i >= 2:
+            break
 
     
 

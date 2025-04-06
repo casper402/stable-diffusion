@@ -1,6 +1,6 @@
 import torch
 from models.vae import VAE 
-from data.dataset import get_ct_dataloaders, get_dataloaders
+from utils.dataset import get_ct_dataloaders, get_dataloaders
 from data.transforms import build_train_transform
 from utils.config import load_config, get_device
 import matplotlib.pyplot as plt

@@ -2,87 +2,126 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-class ResidualBlock(nn.Module):
-    def __init__(self, channels):
+# -------------------------------------------------
+# Residual Block
+# -------------------------------------------------
+class ResBlock(nn.Module):
+    def __init__(self, in_channels, out_channels=None):
         super().__init__()
-        self.block = nn.Sequential(
-            nn.Conv2d(channels, channels, 3, padding=1),
-            nn.GroupNorm(32, channels),
-            nn.SiLU(),
-            nn.Conv2d(channels, channels, 3, padding=1),
-            nn.GroupNorm(32, channels),
-        )
+        if out_channels is None:
+            out_channels = in_channels
+
+        # Two 3x3 conv layers
+        self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1)
+        self.norm1 = nn.GroupNorm(8, out_channels)
+        self.conv2 = nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1)
+        self.norm2 = nn.GroupNorm(8, out_channels)
 
     def forward(self, x):
-        return F.silu(x + self.block(x))
-    
-class AttentionBlock(nn.Module):
-    def __init__(self, channels):
+        x = self.norm1(self.conv1(x))
+        x = F.silu(x)
+        x = self.norm2(self.conv2(x))
+        return F.silu(x)
+
+# -------------------------------------------------
+# Downsample Block (factor 2)
+# -------------------------------------------------
+class DownBlock(nn.Module):
+    def __init__(self, in_channels, out_channels):
         super().__init__()
-        self.attention = nn.MultiheadAttention(channels, num_heads=4, batch_first=True)
-        self.norm = nn.GroupNorm(8, channels)
+        self.res = ResBlock(in_channels, out_channels)
+        self.down = nn.Conv2d(out_channels, out_channels, kernel_size=4, stride=2, padding=1)
 
     def forward(self, x):
-        B, C, H, W = x.size()
-        x_flat = x.view(B, C, H*W).transpose(1, 2)
-        x_attn, _ = self.attention(x_flat, x_flat, x_flat)
-        x_attn = x_attn.transpose(1, 2).view(B, C, H, W)
-        return x + self.norm(x_attn)
+        x = self.res(x)
+        x = self.down(x)  # (B, out_channels, H/2, W/2)
+        return x
 
+# -------------------------------------------------
+# Upsample Block (factor 2)
+# -------------------------------------------------
+class UpBlock(nn.Module):
+    def __init__(self, in_channels, out_channels):
+        super().__init__()
+        self.res = ResBlock(in_channels, out_channels)
+        self.up = nn.ConvTranspose2d(out_channels, out_channels, kernel_size=4, stride=2, padding=1)
+
+    def forward(self, x):
+        x = self.res(x)
+        x = self.up(x)  # (B, out_channels, 2H, 2W)
+        return x
+
+# -------------------------------------------------
+# Encoder (3 downs => factor of 8)
+# -------------------------------------------------
 class Encoder(nn.Module):
-    def __init__(self, latent_dim=4):
+    def __init__(self, in_channels=1, base_channels=32, latent_channels=4):
         super().__init__()
-        self.encoder = nn.Sequential(
-            nn.Conv2d(1, 128, 4, 2, 1),  # -> 128x128
-            ResidualBlock(128),
-            nn.Conv2d(128, 256, 4, 2, 1), # -> 64x64
-            ResidualBlock(256),
-            AttentionBlock(256),
-            nn.Conv2d(256, 512, 4, 2, 1),  # -> 32x32
-            ResidualBlock(512),
-            AttentionBlock(512),
-        )
-        self.conv_mu = nn.Conv2d(512, latent_dim, 1)
-        self.conv_logvar = nn.Conv2d(512, latent_dim, 1)
+        self.conv_in = nn.Conv2d(in_channels, base_channels, kernel_size=3, padding=1)
+
+        self.down1 = DownBlock(base_channels, base_channels * 2)   
+        self.down2 = DownBlock(base_channels * 2, base_channels * 4) 
+        self.down3 = DownBlock(base_channels * 4, base_channels * 8) 
+
+        # Final 1x1 conv to produce 2*latent_channels => [mu, logvar]
+        self.conv_out = nn.Conv2d(base_channels * 8, latent_channels * 2, kernel_size=1)
 
     def forward(self, x):
-        x = self.encoder(x)
-        mu = self.conv_mu(x)
-        logvar = self.conv_logvar(x)
+        x = self.conv_in(x) 
+        x = self.down1(x)
+        x = self.down2(x)
+        x = self.down3(x)
+
+        out = self.conv_out(x)
+        mu, logvar = torch.chunk(out, 2, dim=1)
         return mu, logvar
 
+# -------------------------------------------------
+# Decoder (3 ups => factor of 8)
+# -------------------------------------------------
 class Decoder(nn.Module):
-    def __init__(self, latent_dim=4):
+    def __init__(self, out_channels=1, base_channels=32, latent_channels=4):
         super().__init__()
-        self.decoder = nn.Sequential(
-            nn.ConvTranspose2d(latent_dim, 512, 3, 1, 1),
-            ResidualBlock(512),
-            AttentionBlock(512),                    # Attention added
-            nn.ConvTranspose2d(512, 256, 4, 2, 1),  # ->64x64
-            ResidualBlock(256),
-            AttentionBlock(256),                    # Attention added
-            nn.ConvTranspose2d(256, 128, 4, 2, 1),   # ->128x128
-            ResidualBlock(128),
-            nn.ConvTranspose2d(128, 1, 4, 2, 1),     # ->256x256
-        )
+        self.conv_in = nn.Conv2d(latent_channels, base_channels * 8, kernel_size=3, padding=1)
+
+        # 3 up blocks: mirror the 3 downs
+        self.up1 = UpBlock(base_channels * 8, base_channels * 4)
+        self.up2 = UpBlock(base_channels * 4, base_channels * 2)
+        self.up3 = UpBlock(base_channels * 2, base_channels)
+        # Final conv to get single grayscale channel
+        self.conv_out = nn.Conv2d(base_channels, out_channels, kernel_size=3, padding=1)
 
     def forward(self, z):
-        x = self.decoder(z)
-        return torch.sigmoid(x)
+        x = self.conv_in(z)
+        x = self.up1(x)
+        x = self.up2(x)
+        x = self.up3(x)
+        x = self.conv_out(x)
+        return torch.tanh(x)
 
-class VAE(nn.Module):
-    def __init__(self, latent_dim=4):
+# -------------------------------------------------
+# Full AutoencoderKL
+# -------------------------------------------------
+class AutoencoderKL(nn.Module):
+    def __init__(self, in_channels=1, out_channels=1, base_channels=64, latent_channels=4):
         super().__init__()
-        self.encoder = Encoder(latent_dim)
-        self.decoder = Decoder(latent_dim)
+        self.encoder = Encoder(in_channels, base_channels, latent_channels)
+        self.decoder = Decoder(out_channels, base_channels, latent_channels)
+
+    def encode(self, x):
+        mu, logvar = self.encoder(x)
+        return mu, logvar
 
     def reparameterize(self, mu, logvar):
         std = torch.exp(0.5 * logvar)
         eps = torch.randn_like(std)
         return mu + eps * std
 
+    def decode(self, z):
+        return self.decoder(z)
+
     def forward(self, x):
-        mu, logvar = self.encoder(x)
+        mu, logvar = self.encode(x)
         z = self.reparameterize(mu, logvar)
-        recon = self.decoder(z)
+        recon = self.decode(z)
         return z, mu, logvar, recon

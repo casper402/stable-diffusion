@@ -5,6 +5,8 @@ from torchvision import models
 from torchvision import transforms
 from torchvision.transforms import Normalize
 from piq import ssim
+from torchvision.models import vgg16
+
 # import lpips
 
 # class LPIPSLoss(nn.Module):
@@ -18,28 +20,25 @@ from piq import ssim
 #         x = x.repeat(1, 3, 1, 1)
 #         return self.loss_fn(recon_x, x).mean()
 
-class PerceptualLoss(nn.Module):
+class PerceptualLoss(torch.nn.Module):
     def __init__(self, device='cuda'):
         super().__init__()
-        # self.vgg = models.vgg19(pretrained=True).features[:15].eval()
-        self.vgg = models.vgg16(pretrained=True).features[:8].to(device).eval()
+        self.vgg = vgg16(pretrained=True).features[:8].to(device).eval()
         for param in self.vgg.parameters():
             param.requires_grad = False
-        self.normalize = Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]) # VGG normalization
+        self.normalize = Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])  # adjust if needed
 
     def forward(self, recon_x, x):
-        with torch.no_grad():
-            # Expand grayscale to 3 channels for VGG
-            recon_x = recon_x.repeat(1, 3, 1, 1)
-            x = x.repeat(1, 3, 1, 1)
+        recon_x = recon_x.repeat(1, 3, 1, 1)  # grayscale -> 3-channel
+        x = x.repeat(1, 3, 1, 1)
 
-            recon_x = self.normalize(recon_x)
-            x = self.normalize(x)
+        recon_x = self.normalize(recon_x)
+        x = self.normalize(x)
 
-            feat_recon = self.vgg(recon_x)
-            feat_real = self.vgg(x)
+        feat_recon = self.vgg(recon_x)
+        feat_real = self.vgg(x)
 
-            return F.mse_loss(feat_recon, feat_real)
+        return F.mse_loss(feat_recon, feat_real)
     
 class SsimLoss(torch.nn.Module):
     def __init__(self, device='cuda'):

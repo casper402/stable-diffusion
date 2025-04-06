@@ -36,7 +36,7 @@ val_loader = DataLoader(val_dataset, batch_size=8, shuffle=False, num_workers=4)
 test_loader = DataLoader(test_dataset, batch_size=2, shuffle=False, num_workers=4)
 
 vae = VAE().to(device)
-vae_path = 'pretrained_models/vae.pth'
+vae_path = '../pretrained_models/vae.pth'
 vae.load_state_dict(torch.load(vae_path, map_location=device))
 vae.eval()
 

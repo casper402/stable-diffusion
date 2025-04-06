@@ -100,9 +100,9 @@ class Decoder(nn.Module):
         return torch.tanh(x)
 
 # -------------------------------------------------
-# Full AutoencoderKL
+# Full VAE
 # -------------------------------------------------
-class AutoencoderKL(nn.Module):
+class VAE(nn.Module):
     def __init__(self, in_channels=1, out_channels=1, base_channels=64, latent_channels=4):
         super().__init__()
         self.encoder = Encoder(in_channels, base_channels, latent_channels)

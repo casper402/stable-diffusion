@@ -2,9 +2,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-# -------------------------------------------------
-# Residual Block
-# -------------------------------------------------
 class ResBlock(nn.Module):
     def __init__(self, in_channels, out_channels=None):
         super().__init__()
@@ -23,9 +20,6 @@ class ResBlock(nn.Module):
         x = self.norm2(self.conv2(x))
         return F.silu(x)
 
-# -------------------------------------------------
-# Downsample Block (factor 2)
-# -------------------------------------------------
 class DownBlock(nn.Module):
     def __init__(self, in_channels, out_channels):
         super().__init__()
@@ -37,9 +31,6 @@ class DownBlock(nn.Module):
         x = self.down(x)  # (B, out_channels, H/2, W/2)
         return x
 
-# -------------------------------------------------
-# Upsample Block (factor 2)
-# -------------------------------------------------
 class UpBlock(nn.Module):
     def __init__(self, in_channels, out_channels):
         super().__init__()
@@ -51,9 +42,6 @@ class UpBlock(nn.Module):
         x = self.up(x)  # (B, out_channels, 2H, 2W)
         return x
 
-# -------------------------------------------------
-# Encoder (3 downs => factor of 8)
-# -------------------------------------------------
 class Encoder(nn.Module):
     def __init__(self, in_channels=1, base_channels=32, latent_channels=4):
         super().__init__()
@@ -76,9 +64,6 @@ class Encoder(nn.Module):
         mu, logvar = torch.chunk(out, 2, dim=1)
         return mu, logvar
 
-# -------------------------------------------------
-# Decoder (3 ups => factor of 8)
-# -------------------------------------------------
 class Decoder(nn.Module):
     def __init__(self, out_channels=1, base_channels=32, latent_channels=4):
         super().__init__()
@@ -99,10 +84,7 @@ class Decoder(nn.Module):
         x = self.conv_out(x)
         return torch.tanh(x)
 
-# -------------------------------------------------
-# Full AutoencoderKL
-# -------------------------------------------------
-class AutoencoderKL(nn.Module):
+class VAE(nn.Module):
     def __init__(self, in_channels=1, out_channels=1, base_channels=64, latent_channels=4):
         super().__init__()
         self.encoder = Encoder(in_channels, base_channels, latent_channels)

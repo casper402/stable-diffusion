@@ -5,7 +5,7 @@ import torchvision.transforms as transforms
 import torch
 import torch.nn.functional as F
 import os
-from models.vae import AutoencoderKL
+from models.vae import VAE
 from utils.dataset import CTDataset
 from utils.losses import PerceptualLoss, SsimLoss
 
@@ -44,7 +44,7 @@ val_loader = DataLoader(val_dataset, batch_size=16, shuffle=False, num_workers=4
 test_loader = DataLoader(test_dataset, batch_size=2, shuffle=False, num_workers=4)
 
 epochs = 1000
-vae = AutoencoderKL().to(device)
+vae = VAE().to(device)
 optimizer = torch.optim.Adam(vae.parameters(), lr=4e-4)
 
 scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(

@@ -23,7 +23,7 @@ dataset = CTDataset('../training_data/CT', transform=transforms.Compose([
             transforms.Normalize(mean=[0.5], std=[0.5])
         ]))
 
-subset_size = 1000
+subset_size = 5000
 subset, _ = random_split(dataset, [subset_size, len(dataset) - subset_size])
 
 train_size = int(0.8 * len(subset))
@@ -48,7 +48,7 @@ scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
     optimizer,
     mode='min',
     factor=0.5,
-    patience=50,
+    patience=20,
     threshold=1e-4,
     verbose=True,
     min_lr=1e-6
@@ -117,7 +117,7 @@ for epoch in range(epochs):
     if val_loss < best_val_loss:
         best_val_loss = val_loss
         conuter = 0
-        torch.save(vae.state_dict(), save_path)
+        torch.save(unet.state_dict(), save_path)
         print(f"✅ Saved new best model at epoch {epoch+1} with val loss {val_loss:.4f}")
 
     if (epoch+0) % 50 == 0:
@@ -134,7 +134,7 @@ for epoch in range(epochs):
                 z_mu, z_logvar = vae.encode(x)
                 z = vae.reparameterize(z_mu, z_logvar)
 
-                t = diffusion.sample_timesteps(x.size(0))
+                t = diffusion.sample_timesteps(z.size(0))
                 noise = torch.randn_like(z)
                 z_noisy = diffusion.add_noise(z, t, noise)
 

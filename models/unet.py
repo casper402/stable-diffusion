@@ -100,23 +100,23 @@ class UNet(nn.Module):
     def __init__(self, 
                  in_channels=4, 
                  out_channels=4, 
-                 base_channels=64, 
+                 base_channels=128, 
                  time_emb_dim=256, 
-                 num_heads=8,
+                 num_heads=16,
                  dropout_rate=0.1):
         super().__init__()
         
         self.time_embedding = TimestepEmbedding(time_emb_dim)
         self.init_conv = nn.Conv2d(in_channels, base_channels, kernel_size=3, padding=1)
 
-        ch1 = base_channels       # 64
-        ch2 = base_channels * 2   # 128
-        ch3 = base_channels * 4   # 256
-        ch4 = base_channels * 8   # 512
+        ch1 = base_channels
+        ch2 = base_channels * 2
+        ch3 = base_channels * 4
+        ch4 = base_channels * 8
 
-        attn_level_0 = False # Corresponds to ch2 (128 channels)
-        attn_level_1 = True  # Corresponds to ch3 (256 channels)
-        attn_level_2 = True  # Corresponds to ch4 (512 channels)
+        attn_level_0 = False # Corresponds to ch2
+        attn_level_1 = True  # Corresponds to ch3
+        attn_level_2 = True  # Corresponds to ch4
 
         self.down1 = DownBlock(ch1, ch2, time_emb_dim, has_attn=attn_level_0, num_heads=num_heads, dropout_rate=dropout_rate)
         self.down2 = DownBlock(ch2, ch3, time_emb_dim, has_attn=attn_level_1, num_heads=num_heads, dropout_rate=dropout_rate)

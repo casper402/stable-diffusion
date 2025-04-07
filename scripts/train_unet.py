@@ -144,14 +144,17 @@ for epoch in range(epochs):
                 alpha_cumprod_t = diffusion.alpha_cumprod[t].view(-1, 1, 1, 1)
                 z_denoised = (z_noisy - torch.sqrt(1 - alpha_cumprod_t) * pred_noise) / torch.sqrt(alpha_cumprod_t)
 
-                recon = vae.decode(z_denoised)
+                unet_recon = vae.decode(z_denoised)
+                vae_recon = vae.decode(z)
 
                 for j in range(min(x.size(0), 8)):
                     original = x[j]
-                    reconstructed = recon[j]
+                    vae_recon = vae_recon[j]
+                    unet_recon = unet_recon[j]
 
                     vutils.save_image(original, f"{pred_dir}/img_{i}_{j}_orig.png", normalize=True, value_range=(-1, 1))
-                    vutils.save_image(reconstructed, f"{pred_dir}/img_{i}_{j}_recon.png", normalize=True, value_range=(-1, 1))
+                    vutils.save_image(unet_recon, f"{pred_dir}/img_{i}_{j}_unet_recon.png", normalize=True, value_range=(-1, 1))
+                    vutils.save_image(vae_recon, f"{pred_dir}/img_{i}_{j}_vae_recon.png", normalize=True, value_range=(-1, 1))
 
                 if i >= 2:  # Save only a few batches
                     break
@@ -182,18 +185,21 @@ with torch.no_grad():
         alpha_cumprod_t = diffusion.alpha_cumprod[t].view(-1, 1, 1, 1)
         z_denoised = (z_noisy - torch.sqrt(1 - alpha_cumprod_t) * pred_noise) / torch.sqrt(alpha_cumprod_t)
 
-        recon = vae.decode(z_denoised)
+        unet_recon = vae.decode(z_denoised)
+        vae_recon = vae.decode(z)
 
         for j in range(min(x.size(0), 8)):
             original = x[j]
-            reconstructed = recon[j]
+            vae_recon = vae_recon[j]
+            unet_recon = unet_recon[j]
 
             vutils.save_image(original, f"{pred_dir}/img_{i}_{j}_orig.png", normalize=True, value_range=(-1, 1))
-            vutils.save_image(reconstructed, f"{pred_dir}/img_{i}_{j}_recon.png", normalize=True, value_range=(-1, 1))
+            vutils.save_image(unet_recon, f"{pred_dir}/img_{i}_{j}_unet_recon.png", normalize=True, value_range=(-1, 1))
+            vutils.save_image(vae_recon, f"{pred_dir}/img_{i}_{j}_vae_recon.png", normalize=True, value_range=(-1, 1))
 
         if i >= 2:  # Save only a few batches
             break
-    
+
 
 
 

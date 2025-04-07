@@ -31,13 +31,17 @@ val_size = len(subset) - train_size - 10
 test_size = 10
 train_dataset, val_dataset, test_dataset = random_split(subset, [train_size, val_size, test_size])
 
-train_loader = DataLoader(train_dataset, batch_size=2, shuffle=True, num_workers=4)
-val_loader = DataLoader(val_dataset, batch_size=2, shuffle=False, num_workers=4)
-test_loader = DataLoader(test_dataset, batch_size=2, shuffle=False, num_workers=4)
+train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True, num_workers=8)
+val_loader = DataLoader(val_dataset, batch_size=16, shuffle=False, num_workers=8)
+test_loader = DataLoader(test_dataset, batch_size=2, shuffle=False, num_workers=2)
 
-print(f"Train dataset size: {len(train_loader)}")
-print(f"Validation dataset size: {len(val_loader)}")
-print(f"Test dataset size: {len(test_loader)}")
+print(f"Train dataset size: {len(train_dataset)}")
+print(f"Validation dataset size: {len(val_dataset)}")
+print(f"Test dataset size: {len(test_dataset)}")
+
+print(f"Number of batches in train_loader: {len(train_loader)}")
+print(f"Number of batches in val_loader: {len(val_loader)}")
+print(f"Number of batches in test_loader: {len(test_loader)}")
 
 vae = VAE().to(device)
 vae_path = '../pretrained_models/vae.pth'

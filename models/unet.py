@@ -24,28 +24,23 @@ class TimestepEmbedding(nn.Module):
 class AttentionBlock(nn.Module):
     def __init__(self, channels, num_heads=8, num_groups=32):
         super().__init__()
-        self.channels = channels
         self.num_heads = num_heads
-        self.scale = (channels // num_heads) ** -0.5 # 1 / sqrt(dim_head)
+
         self.norm = nn.GroupNorm(num_groups, channels)
-        self.to_qkv = nn.Conv2d(channels, channels * 3, kernel_size=1, bias=False)
-        self.to_out = nn.Conv2d(channels, channels, kernel_size=1)
+        self.mha = nn.MultiheadAttention(
+            embed_dim=channels,
+            num_heads=num_heads,
+            batch_first=True # Crucial for our reshaping (B, L, E)
+        )
 
     def forward(self, x):
         b, c, h, w = x.shape
-        res = x 
+        res = x
         x = self.norm(x)
-        qkv = self.to_qkv(x).chunk(3, dim=1)
-        q, k, v = map(
-            lambda t: t.reshape(b, self.num_heads, c // self.num_heads, h * w), qkv
-        )
-        q = q.transpose(-1, -2)
-        k = k.transpose(-1, -2)
-        v = v.transpose(-1, -2)
-        out = F.scaled_dot_product_attention(q, k, v)
-        out = out.transpose(-1, -2).reshape(b, c, h, w)
-        return self.to_out(out) + res
-
+        x = x.view(b, c, h * w).transpose(1, 2) # Now shape (B, H*W, C)
+        attn_output, _ = self.mha(x, x, x) # Output shape (B, H*W, C)
+        attn_output = attn_output.transpose(1, 2).view(b, c, h, w)
+        return attn_output + res
 
 class ResBlock(nn.Module):
     def __init__(self, in_channels, out_channels=None, time_emb_dim=None, dropout_rate=0.1, num_groups=32):

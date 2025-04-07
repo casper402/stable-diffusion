@@ -31,9 +31,13 @@ val_size = len(subset) - train_size - 10
 test_size = 10
 train_dataset, val_dataset, test_dataset = random_split(subset, [train_size, val_size, test_size])
 
-train_loader = DataLoader(train_dataset, batch_size=8, shuffle=True, num_workers=4)
-val_loader = DataLoader(val_dataset, batch_size=8, shuffle=False, num_workers=4)
+train_loader = DataLoader(train_dataset, batch_size=2, shuffle=True, num_workers=4)
+val_loader = DataLoader(val_dataset, batch_size=2, shuffle=False, num_workers=4)
 test_loader = DataLoader(test_dataset, batch_size=2, shuffle=False, num_workers=4)
+
+print(f"Train dataset size: {len(train_loader)}")
+print(f"Validation dataset size: {len(val_loader)}")
+print(f"Test dataset size: {len(test_loader)}")
 
 vae = VAE().to(device)
 vae_path = '../pretrained_models/vae.pth'
@@ -128,13 +132,13 @@ for epoch in range(epochs):
         print("Saving predictions")
 
         with torch.no_grad():
-            for i, x in enumerate(test_loader):
-                x = x.to(device)
+            for i, x_batch in enumerate(test_loader):
+                x_batch = x_batch.to(device)
                 
-                z_mu, z_logvar = vae.encode(x)
+                z_mu, z_logvar = vae.encode(x_batch)
                 z = vae.reparameterize(z_mu, z_logvar)
 
-                t = diffusion.sample_timesteps(z.size(0))
+                t = diffusion.sample_timesteps(x_batch.size(0))
                 noise = torch.randn_like(z)
                 z_noisy = diffusion.add_noise(z, t, noise)
 
@@ -142,19 +146,24 @@ for epoch in range(epochs):
 
                 # Approximate denoised latent
                 alpha_cumprod_t = diffusion.alpha_cumprod[t].view(-1, 1, 1, 1)
-                z_denoised = (z_noisy - torch.sqrt(1 - alpha_cumprod_t) * pred_noise) / torch.sqrt(alpha_cumprod_t)
+                sqrt_alpha_cumprod_t = torch.sqrt(alpha_cumprod_t)
+                sqrt_one_minus_alpha_cumprod_t = torch.sqrt(1.0 - alpha_cumprod_t)
 
-                unet_recon = vae.decode(z_denoised)
-                vae_recon = vae.decode(z)
+                z_denoised_pred = (z_noisy - sqrt_one_minus_alpha_cumprod_t * pred_noise) / sqrt_alpha_cumprod_t
 
-                for j in range(min(x.size(0), 8)):
-                    original = x[j]
-                    vae_recon = vae_recon[j]
-                    unet_recon = unet_recon[j]
+                unet_recon_batch = vae.decode(z_denoised_pred)
+                vae_recon_batch = vae.decode(z)
 
-                    vutils.save_image(original, f"{pred_dir}/img_{i}_{j}_orig.png", normalize=True, value_range=(-1, 1))
-                    vutils.save_image(unet_recon, f"{pred_dir}/img_{i}_{j}_unet_recon.png", normalize=True, value_range=(-1, 1))
-                    vutils.save_image(vae_recon, f"{pred_dir}/img_{i}_{j}_vae_recon.png", normalize=True, value_range=(-1, 1))
+                num_images_to_save = min(x_batch.size(0), 8)
+
+                for j in range(num_images_to_save):
+                    original_img = x_batch[j]
+                    vae_recon_img = vae_recon_batch[j]
+                    unet_recon_img = unet_recon_batch[j]
+
+                    vutils.save_image(original_img, f"{pred_dir}/img_{i}_{j}_orig.png", normalize=True, value_range=(-1, 1))
+                    vutils.save_image(unet_recon_img, f"{pred_dir}/img_{i}_{j}_unet_recon.png", normalize=True, value_range=(-1, 1))
+                    vutils.save_image(vae_recon_img, f"{pred_dir}/img_{i}_{j}_vae_recon.png", normalize=True, value_range=(-1, 1))
 
                 if i >= 2:  # Save only a few batches
                     break
@@ -169,13 +178,13 @@ os.makedirs(pred_dir, exist_ok=True)
 print("Saving predictions")
 
 with torch.no_grad():
-    for i, x in enumerate(test_loader):
-        x = x.to(device)
+    for i, x_batch in enumerate(test_loader):
+        x_batch = x_batch.to(device)
         
-        z_mu, z_logvar = vae.encode(x)
+        z_mu, z_logvar = vae.encode(x_batch)
         z = vae.reparameterize(z_mu, z_logvar)
 
-        t = diffusion.sample_timesteps(x.size(0))
+        t = diffusion.sample_timesteps(x_batch.size(0))
         noise = torch.randn_like(z)
         z_noisy = diffusion.add_noise(z, t, noise)
 
@@ -183,19 +192,24 @@ with torch.no_grad():
 
         # Approximate denoised latent
         alpha_cumprod_t = diffusion.alpha_cumprod[t].view(-1, 1, 1, 1)
-        z_denoised = (z_noisy - torch.sqrt(1 - alpha_cumprod_t) * pred_noise) / torch.sqrt(alpha_cumprod_t)
+        sqrt_alpha_cumprod_t = torch.sqrt(alpha_cumprod_t)
+        sqrt_one_minus_alpha_cumprod_t = torch.sqrt(1.0 - alpha_cumprod_t)
 
-        unet_recon = vae.decode(z_denoised)
-        vae_recon = vae.decode(z)
+        z_denoised_pred = (z_noisy - sqrt_one_minus_alpha_cumprod_t * pred_noise) / sqrt_alpha_cumprod_t
 
-        for j in range(min(x.size(0), 8)):
-            original = x[j]
-            vae_recon = vae_recon[j]
-            unet_recon = unet_recon[j]
+        unet_recon_batch = vae.decode(z_denoised_pred)
+        vae_recon_batch = vae.decode(z)
 
-            vutils.save_image(original, f"{pred_dir}/img_{i}_{j}_orig.png", normalize=True, value_range=(-1, 1))
-            vutils.save_image(unet_recon, f"{pred_dir}/img_{i}_{j}_unet_recon.png", normalize=True, value_range=(-1, 1))
-            vutils.save_image(vae_recon, f"{pred_dir}/img_{i}_{j}_vae_recon.png", normalize=True, value_range=(-1, 1))
+        num_images_to_save = min(x_batch.size(0), 8)
+
+        for j in range(num_images_to_save):
+            original_img = x_batch[j]
+            vae_recon_img = vae_recon_batch[j]
+            unet_recon_img = unet_recon_batch[j]
+
+            vutils.save_image(original_img, f"{pred_dir}/img_{i}_{j}_orig.png", normalize=True, value_range=(-1, 1))
+            vutils.save_image(unet_recon_img, f"{pred_dir}/img_{i}_{j}_unet_recon.png", normalize=True, value_range=(-1, 1))
+            vutils.save_image(vae_recon_img, f"{pred_dir}/img_{i}_{j}_vae_recon.png", normalize=True, value_range=(-1, 1))
 
         if i >= 2:  # Save only a few batches
             break

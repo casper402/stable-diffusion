@@ -3,6 +3,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torchvision import transforms
 from diffusers import AutoencoderKL, UNet2DConditionModel
+import os
+from torch.utils.data import Dataset, DataLoader, random_split
+from PIL import Image
 
 # ---- Config Paths ---- #
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
@@ -119,8 +122,6 @@ class ControlNetLDM(nn.Module):
         residuals = []
         x = self.conv_in(x)
         for block in self.down_blocks:
-            # Some down blocks return (x, res), others return just x depending on config
-            # So we check and unpack accordingly to avoid crashing later in up blocks
             out = block(x, emb, null_emb)
             if isinstance(out, tuple) and len(out) == 2:
                 x, res = out
@@ -131,14 +132,11 @@ class ControlNetLDM(nn.Module):
         x = self.mid_block(x, emb, null_emb)
 
         for i, block in enumerate(self.up_blocks):
-            # If no residuals were returned (e.g., from a non-skipping block), default to empty tuple
             res = residuals.pop()
-            # Ensure res is a tuple as required by UpBlock2D
             if res is None:
                 res = ()
             elif not isinstance(res, tuple):
                 res = (res,)
-            # Pad with dummy tensors if the up block expects more residuals than provided
             expected_args = len(getattr(block, 'resnets', []))
             while len(res) < expected_args:
                 ref = res[-1] if res else x
@@ -170,6 +168,80 @@ model = ControlNetLDM(base_unet, control_channels=4, attn_type='mha').to(DEVICE)
 trainable_params = [p for n, p in model.named_parameters() if p.requires_grad]
 diffusion = Diffusion(device=DEVICE)
 optimizer = torch.optim.Adam(trainable_params, lr=1e-4)
+
+
+# ---- Dataset for Real Images ---- #
+class CBCTtoCTDataset(Dataset):
+    def __init__(self, CBCT_path, CT_path, image_size, transform=None):
+        self.CBCT_slices = self._collect_slices(CBCT_path)
+        self.CT_slices = self._collect_slices(CT_path)
+        self.image_size = image_size
+        self.transform = transform
+        
+    def _collect_slices(self, dataset_path):
+        slice_paths = []
+        for subdir in os.listdir(dataset_path):
+            subdir_path = os.path.join(dataset_path, subdir)
+            if os.path.isdir(subdir_path):
+                for slice_name in os.listdir(subdir_path):
+                    slice_path = os.path.join(subdir_path, slice_name)
+                    slice_paths.append(slice_path)
+        return slice_paths
+    
+    def __len__(self):
+        return min(len(self.CBCT_slices), len(self.CT_slices))
+    
+    def __getitem__(self, idx):
+        CBCT_path = self.CBCT_slices[idx]
+        CT_path = self.CT_slices[idx]
+
+        CBCT_slice = Image.open(CBCT_path).convert("L")
+        CT_slice = Image.open(CT_path).convert("L")
+        
+        if self.transform:
+            CBCT_slice = self.transform(CBCT_slice)
+            CT_slice = self.transform(CT_slice)
+
+        return CBCT_slice, CT_slice
+
+
+# ---- Dataloader Setup ---- #
+# probably have to do something similar to 
+# x = x.expand(-1, 3, -1, -1) // Expand to 3 channels for compatibility with the autoencoder
+def get_dataloaders(config, transform):
+    full_dataset = CBCTtoCTDataset(
+        CBCT_path=config["paths"]["train_CBCT"],
+        CT_path=config["paths"]["train_CT"],
+        image_size=config["model"]["image_size"],
+        transform=transform
+    )
+
+    subset_size = 10  # Adjust for your desired subset size
+    subset, _ = random_split(full_dataset, [subset_size, len(full_dataset) - subset_size])
+
+    val_size = int(len(subset) * 0.2)
+    train_size = len(subset) - val_size
+    print(f"Splitting {len(subset)} images into {train_size} train images and {val_size} validation images.")
+
+    generator = torch.Generator().manual_seed(42)
+
+    train_dataset, val_dataset = random_split(subset, [train_size, val_size], generator=generator)
+
+    train_dataloader = DataLoader(train_dataset, 
+                            batch_size=config["train"]["batch_size"], 
+                            shuffle=True, 
+                            num_workers=config["train"]["num_workers"],
+                            pin_memory=True,
+                            drop_last=True)
+    
+    val_dataloader = DataLoader(val_dataset,
+                            batch_size=config["train"]["batch_size"],
+                            shuffle=False,
+                            num_workers=config["train"]["num_workers"],
+                            pin_memory=True,
+                            drop_last=True)
+    
+    return train_dataloader, val_dataloader
 
 
 # ---- Training Loop ---- #
@@ -211,14 +283,32 @@ def generate_sct(cbct):
 
 # ---- Dummy Test Driver ---- #
 if __name__ == "__main__":
-    print("🔧 Starting single-epoch training test...")
+    print("🔧 Starting training with real images...")
 
-    def get_dummy_dataloader(batch_size=2, image_size=64, num_batches=2):
-        x = torch.randn(num_batches * batch_size, 1, image_size, image_size)
-        x = x.expand(-1, 3, -1, -1)  # Expand to 3 channels for compatibility with the autoencoder
-        dataset = torch.utils.data.TensorDataset(x, x)
-        return torch.utils.data.DataLoader(dataset, batch_size=batch_size)
+    # Set up your configurations and transformations
+    config = {
+        "paths": {
+            "train_CBCT": "path_to_CBCT_images",
+            "train_CT": "path_to_CT_images"
+        },
+        "model": {
+            "image_size": 256  # Adjust as needed
+        },
+        "train": {
+            "batch_size": 8,
+            "num_workers": 4
+        }
+    }
 
-    dummy_loader = get_dummy_dataloader()
-    train(dummy_loader, epochs=1)
-    print("✅ Single-epoch test complete.")
+    transform = transforms.Compose([
+        transforms.Resize((256, 256)),  # Adjust the image size if needed
+        transforms.ToTensor(),  # Convert the images to tensors
+        transforms.Normalize((0.5,), (0.5,))  # Normalize the images
+    ])
+
+    train_loader, val_loader = get_dataloaders(config, transform)
+
+    # Start training with real images
+    train(train_loader, epochs=10)
+
+    print("✅ Training complete.")

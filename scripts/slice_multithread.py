@@ -3,8 +3,13 @@ import nibabel as nib
 import matplotlib.pyplot as plt
 from concurrent.futures import ProcessPoolExecutor
 
-input_dir = '/media/casper/Lenovo PS8/Casper/kaggle_dataset/TESTCTAlignedToCBCT'
-output_dir = '/media/casper/Lenovo PS8/Casper/kaggle_dataset/TESTCTAlignedToCBCT2D'
+# Casper
+# input_dir = '/media/casper/Lenovo PS8/Casper/kaggle_dataset/TESTCTAlignedToCBCT'
+# output_dir = '/media/casper/Lenovo PS8/Casper/kaggle_dataset/TESTCTAlignedToCBCT2D'
+
+# Niklas
+input_dir = os.path.expanduser('~/Downloads/cbct-liver-and-liver-tumor-segmentation-train-data/TRAINCTAlignedToCBCT')
+output_dir = os.path.expanduser('~/thesis/images/TRAINCTAlignedToCBCT2D')
 
 os.makedirs(output_dir, exist_ok=True)
 

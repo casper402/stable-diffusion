@@ -1,14 +1,10 @@
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
 import os
 import torchvision
 import torchvision.transforms as transforms
-import torchvision.utils as vutils
 from torch.utils.data import DataLoader, random_split
 from tqdm import tqdm 
-import matplotlib.pyplot as plt 
-
 from models.vae import VAE
 from models.conditional import UNet, ControlNet
 from models.diffusion import Diffusion
@@ -182,9 +178,9 @@ for epoch in range(epochs):
              print(f"✅ Saved new best ControlNet model (no PACA found/saved) at epoch {epoch+1} with val loss {val_loss:.4f}")
 
 
-    if (epoch % 10 == 0) or epoch==1: # Save every 10 epochs
+    if (epoch % 10 == 0): # Save every 10 epochs
         print(f"--- Saving prediction for epoch {epoch+1} ---")
-        pred_dir = f"./predictions_control/epoch_{epoch+1}/"
+        pred_dir = f"./predictions/"
         os.makedirs(pred_dir, exist_ok=True)
 
         unet.eval()
@@ -231,7 +227,7 @@ for epoch in range(epochs):
                 x_target_vis = (ct / 2 + 0.5).clamp(0, 1).squeeze(0)
 
                 images_to_save = [x_condition_vis, x_target_vis, generated_image]
-                save_filename = f"epoch_{epoch+1}_comparison.png"
+                save_filename = f"{pred_dir}/epoch_{epoch+1}_comparison.png"
                 torchvision.utils.save_image(
                     images_to_save,
                     save_filename,

@@ -29,8 +29,8 @@ class CTDataset(Dataset):
     
 class CBCTtoCTDataset(Dataset):
     def __init__(self, CBCT_path, CT_path, transform):
-        self.CBCT_slices = self._collect_slices(CBCT_path)
-        self.CT_slices = self._collect_slices(CT_path)
+        self.CBCT_path = CBCT_path
+        self.CT_path = CT_path
         self.transform = transform
         self.paired_slice_paths = self._find_paired_slices()
 

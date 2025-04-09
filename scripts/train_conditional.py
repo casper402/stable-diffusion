@@ -23,7 +23,7 @@ controlnet_save_path = 'controlnet.pth'
 unet_paca_save_path = 'unet_paca_layers.pth'
 
 subset_size = 1000
-batch_size = 4
+batch_size = 8
 test_batch_size = 1
 learning_rate = 1e-4
 epochs = 500

@@ -19,13 +19,15 @@ ct_dir = '../training_data/CT'
 cbct_dir = '../training_data/CBCT'
 vae_weights_path = '../pretrained_models/vae.pth'
 unet_weights_path = '../pretrained_models/best_unet.pth'
-controlnet_save_path = 'controlnet.pth'
-unet_paca_save_path = 'unet_paca_layers.pth'
+controlnet_save_path = 'controlnet_2.pth'
+unet_paca_save_path = 'unet_paca_layers_2.pth'
+pred_dir = f"./predictions_2/"
 
-subset_size = 1000
+
+subset_size = 5000
 batch_size = 8
 test_batch_size = 1
-learning_rate = 1e-4
+learning_rate = 1e-5
 epochs = 500
 num_workers = 8
 max_grad_norm = 1.0
@@ -94,10 +96,10 @@ scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
     optimizer,
     mode='min',
     factor=0.5,
-    patience=20, # Adjust patience if needed
+    patience=30, # Adjust patience if needed
     threshold=1e-4,
     verbose=True,
-    min_lr=1e-6 # Allow lower min_lr
+    min_lr=1e-7 # Allow lower min_lr
 )
 
 # --- Training Loop ---
@@ -180,7 +182,6 @@ for epoch in range(epochs):
 
     if (epoch % 10 == 0): # Save every 10 epochs
         print(f"--- Saving prediction for epoch {epoch+1} ---")
-        pred_dir = f"./predictions/"
         os.makedirs(pred_dir, exist_ok=True)
 
         unet.eval()

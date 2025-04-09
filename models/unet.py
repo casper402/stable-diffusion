@@ -75,7 +75,7 @@ class DownBlock(nn.Module):
         self.attn = AttentionBlock(out_channels, num_heads) if has_attn else nn.Identity()
         self.down = nn.Conv2d(out_channels, out_channels, kernel_size=4, stride=2, padding=1)
 
-    def forward(self, x, t_emb):
+    def forward(self, x, t_emb=None):
         x = self.res(x, t_emb)
         x = self.attn(x)
         skip = x
@@ -135,6 +135,7 @@ class UNet(nn.Module):
         self.final_conv = nn.Conv2d(ch1, out_channels, kernel_size=1)
 
     def forward(self, x, t):
+
         t_emb = self.time_embedding(t)
         x = self.init_conv(x)         # Initial convolution: [B, 4, H, W] -> [B, 64, H, W]
 

@@ -31,17 +31,13 @@ val_size = len(subset) - train_size - 10
 test_size = 10
 train_dataset, val_dataset, test_dataset = random_split(subset, [train_size, val_size, test_size])
 
-train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True, num_workers=8)
-val_loader = DataLoader(val_dataset, batch_size=16, shuffle=False, num_workers=8)
+train_loader = DataLoader(train_dataset, batch_size=2, shuffle=True, num_workers=8)
+val_loader = DataLoader(val_dataset, batch_size=2, shuffle=False, num_workers=8)
 test_loader = DataLoader(test_dataset, batch_size=2, shuffle=False, num_workers=2)
 
 print(f"Train dataset size: {len(train_dataset)}")
 print(f"Validation dataset size: {len(val_dataset)}")
 print(f"Test dataset size: {len(test_dataset)}")
-
-print(f"Number of batches in train_loader: {len(train_loader)}")
-print(f"Number of batches in val_loader: {len(val_loader)}")
-print(f"Number of batches in test_loader: {len(test_loader)}")
 
 vae = VAE().to(device)
 vae_path = '../pretrained_models/vae.pth'
@@ -166,10 +162,10 @@ for epoch in range(epochs):
                     unet_recon_img = unet_recon_batch[j]
 
                     vutils.save_image(original_img, f"{pred_dir}/img_{i}_{j}_orig.png", normalize=True, value_range=(-1, 1))
-                    vutils.save_image(unet_recon_img, f"{pred_dir}/img_{i}_{j}_unet_recon.png", normalize=True, value_range=(-1, 1))
+                    vutils.save_image(unet_recon_img, f"{pred_dir}/img_{i}_{j}_t={t[j]}_unet_recon.png", normalize=True, value_range=(-1, 1))
                     vutils.save_image(vae_recon_img, f"{pred_dir}/img_{i}_{j}_vae_recon.png", normalize=True, value_range=(-1, 1))
 
-                if i >= 2:  # Save only a few batches
+                if i >= 3:  # Save only a few batches
                     break
 
 # Load best model for final evaluation
@@ -212,10 +208,10 @@ with torch.no_grad():
             unet_recon_img = unet_recon_batch[j]
 
             vutils.save_image(original_img, f"{pred_dir}/img_{i}_{j}_orig.png", normalize=True, value_range=(-1, 1))
-            vutils.save_image(unet_recon_img, f"{pred_dir}/img_{i}_{j}_unet_recon.png", normalize=True, value_range=(-1, 1))
+            vutils.save_image(unet_recon_img, f"{pred_dir}/img_{i}_{j}_t={t[j]}_unet_recon.png", normalize=True, value_range=(-1, 1))
             vutils.save_image(vae_recon_img, f"{pred_dir}/img_{i}_{j}_vae_recon.png", normalize=True, value_range=(-1, 1))
 
-        if i >= 2:  # Save only a few batches
+        if i >= 3:  # Save only a few batches
             break
 
 

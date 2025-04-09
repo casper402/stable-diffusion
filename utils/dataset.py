@@ -28,10 +28,9 @@ class CTDataset(Dataset):
         return CT_slice
     
 class CBCTtoCTDataset(Dataset):
-    def __init__(self, CBCT_path, CT_path, image_size, transform):
+    def __init__(self, CBCT_path, CT_path, transform):
         self.CBCT_slices = self._collect_slices(CBCT_path)
         self.CT_slices = self._collect_slices(CT_path)
-        self.image_size = image_size
         self.transform = transform
         
     def _collect_slices(self, dataset_path):

@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import os
+import torchvision
 import torchvision.transforms as transforms
 import torchvision.utils as vutils
 from torch.utils.data import DataLoader, random_split
@@ -22,17 +23,17 @@ ct_dir = '../training_data/CT'
 cbct_dir = '../training_data/CBCT'
 vae_weights_path = '../pretrained_models/vae.pth'
 unet_weights_path = '../pretrained_models/best_unet.pth'
-controlnet_save_path = 'best_controlnet_paca.pth'
-unet_paca_save_path = 'best_unet_paca_layers.pth'
+controlnet_save_path = 'controlnet.pth'
+unet_paca_save_path = 'unet_paca_layers.pth'
 
-batch_size = 1
+subset_size = 1000
+batch_size = 8
 test_batch_size = 1
-learning_rate = 1e-5
-epochs = 300
+learning_rate = 1e-4
+epochs = 500
 num_workers = 8
 max_grad_norm = 1.0
-subset_size = 500
-test_image_count = 10
+test_image_count = 1
 
 transform = transforms.Compose([
             transforms.Grayscale(),
@@ -75,12 +76,9 @@ for name, param in unet.named_parameters():
         trainable_unet_params += param.numel()
 print(f"UNet PACA parameters set to trainable ({trainable_unet_params} parameters).")
 if trainable_unet_params == 0:
-    print("Warning: No PACA parameters found or unfrozen in UNet!")
+    print("Warning: No PACA parameters found or unfrozen in UNetI am using the original PACA layer!")
 
-unet_channels = (unet.down1.res.conv2.out_channels, # ch2
-                 unet.down2.res.conv2.out_channels, # ch3
-                 unet.down3.res.conv2.out_channels) # ch4
-controlnet = ControlNet(in_channels=1, base_channels=128, num_heads=16, unet_channels=unet_channels).to(device)
+controlnet = ControlNet(in_channels=4, base_channels=128, num_heads=16).to(device)
 controlnet.train()
 trainable_controlnet_params = sum(p.numel() for p in controlnet.parameters())
 print(f"ControlNet instantiated ({trainable_controlnet_params} trainable parameters).")
@@ -100,10 +98,10 @@ scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
     optimizer,
     mode='min',
     factor=0.5,
-    patience=15, # Adjust patience if needed
+    patience=20, # Adjust patience if needed
     threshold=1e-4,
     verbose=True,
-    min_lr=1e-7 # Allow lower min_lr
+    min_lr=1e-6 # Allow lower min_lr
 )
 
 # --- Training Loop ---
@@ -121,14 +119,16 @@ for epoch in range(epochs):
         ct_img = ct_img.to(device)
 
         with torch.no_grad():
-            z_mu, z_logvar = vae.encode(ct_img)
-            z_ct = vae.reparameterize(z_mu, z_logvar)
+            ct_mu, ct_logvar = vae.encode(ct_img)
+            z_ct = vae.reparameterize(ct_mu, ct_logvar)
+            cbct_mu, cbct_logvar = vae.encode(cbct_img)
+            z_cbct = vae.reparameterize(cbct_mu, cbct_logvar)
 
         t = diffusion.sample_timesteps(ct_img.size(0))
         noise = torch.randn_like(z_ct)
         z_noisy_ct = diffusion.add_noise(z_ct, t, noise=noise)
 
-        control_features = controlnet(cbct_img)
+        control_features = controlnet(z_cbct)
         pred_noise = unet(z_noisy_ct, t, control_features)
 
         loss = noise_loss(pred_noise, noise)
@@ -149,14 +149,17 @@ for epoch in range(epochs):
             cbct_img = cbct_img.to(device)
             ct_img = ct_img.to(device)
 
-            z_mu, z_logvar = vae.encode(ct_img)
-            z_ct = vae.reparameterize(z_mu, z_logvar)
+            ct_mu, ct_logvar = vae.encode(ct_img)
+            z_ct = vae.reparameterize(ct_mu, ct_logvar)
+
+            cbct_mu, cbct_logvar = vae.encode(cbct_img)
+            z_cbct = vae.reparameterize(cbct_mu, cbct_logvar)
 
             t = diffusion.sample_timesteps(ct_img.size(0))
             noise = torch.randn_like(z_ct)
             z_noisy_ct = diffusion.add_noise(z_ct, t, noise=noise)
 
-            control_features = controlnet(cbct_img)
+            control_features = controlnet(z_cbct)
             pred_noise = unet(z_noisy_ct, t, control_features)
 
             loss = noise_loss(pred_noise, noise)
@@ -179,8 +182,8 @@ for epoch in range(epochs):
              print(f"✅ Saved new best ControlNet model (no PACA found/saved) at epoch {epoch+1} with val loss {val_loss:.4f}")
 
 
-    if (epoch + 1) % 25 == 0: # Save every 25 epochs
-        print(f"--- Saving validation predictions for epoch {epoch+1} ---")
+    if (epoch % 10 == 0) or epoch==1: # Save every 10 epochs
+        print(f"--- Saving prediction for epoch {epoch+1} ---")
         pred_dir = f"./predictions_control/epoch_{epoch+1}/"
         os.makedirs(pred_dir, exist_ok=True)
 
@@ -188,70 +191,53 @@ for epoch in range(epochs):
         controlnet.eval()
         vae.eval()
 
-        # Get a fixed batch from validation or test set for consistent viz
-        try:
-            ct_img_viz, cbct_img_viz = next(iter(val_loader))
-        except StopIteration:
-            print("Warning: Validation loader empty, cannot generate viz.")
-            continue # Skip visualization if loader is empty
-
-        ct_img_viz = ct_img_viz.to(device)
-        cbct_img_viz = cbct_img_viz.to(device)
-
         with torch.no_grad():
-            # Encode CT for VAE reconstruction comparison
-            z_mu_viz, _ = vae.encode(ct_img_viz)
-            z_ct_viz = z_mu_viz # Use mean for viz
-            vae_recon_batch = vae.decode(z_ct_viz)
+            for cbct, ct in test_loader:
+                cbct = cbct.to(device)
+                ct = ct.to(device)
 
-            # Get control features
-            control_features_viz = controlnet(cbct_img_viz)
+                ct_mu, ct_logvar = vae.encode(ct)
+                ct_z = vae.reparameterize(ct_mu, ct_logvar)
 
-            # Perform full reverse diffusion sampling
-            T = diffusion.timesteps
-            x_t = torch.randn_like(z_ct_viz) # Start with noise matching latent shape
+                cbct_mu, cbct_logvar = vae.encode(cbct)
+                cbct_z = vae.reparameterize(cbct_mu, cbct_logvar)
 
-            for t_int in range(T - 1, -1, -1):
-                t_viz = torch.full((x_t.shape[0],), t_int, device=device, dtype=torch.long)
-                beta_t = diffusion.beta[t_viz].view(-1, 1, 1, 1)
-                alpha_t = diffusion.alpha[t_viz].view(-1, 1, 1, 1)
-                alpha_cumprod_t = diffusion.alpha_cumprod[t_viz].view(-1, 1, 1, 1)
-                sqrt_one_minus_alpha_cumprod_t = torch.sqrt(1.0 - alpha_cumprod_t)
-                sqrt_recip_alpha_t = torch.sqrt(1.0 / alpha_t)
+                control_features = controlnet(cbct_z)
+                z_t = torch.randn_like(ct_z)
+                T = diffusion.timesteps
 
-                pred_noise_viz = unet(x_t, t_viz, control_features_viz) # Use fixed control features
+                for t_int in tqdm(range(T - 1, -1, -1), desc="Sampling latent"): 
+                    t = torch.full((ct_z.size(0),), t_int, device=device, dtype=torch.long)
+                    beta_t = diffusion.beta[t_int].view(-1, 1, 1, 1)
+                    alpha_t = diffusion.alpha[t_int].view(-1, 1, 1, 1)
+                    alpha_cumprod_t = diffusion.alpha_cumprod[t_int].view(-1, 1, 1, 1)
+                    sqrt_one_minus_alpha_cumprod_t = torch.sqrt(1.0 - alpha_cumprod_t)
+                    sqrt_reciprocal_alpha_t = torch.sqrt(1.0 / alpha_t)
+                    pred_noise = unet(z_t, t, control_features)
+                    model_mean_coef2 = beta_t / sqrt_one_minus_alpha_cumprod_t
+                    model_mean = sqrt_reciprocal_alpha_t * (z_t - model_mean_coef2 * pred_noise)
+                    if t_int > 0:
+                        variance = beta_t
+                        noise = torch.randn_like(z_t)
+                        z_t_minus_1 = model_mean + torch.sqrt(variance) * noise
+                    else:
+                        z_t_minus_1 = model_mean
+                    z_t = z_t_minus_1
 
-                model_mean_coef2 = beta_t / sqrt_one_minus_alpha_cumprod_t
-                model_mean = sqrt_recip_alpha_t * (x_t - model_mean_coef2 * pred_noise_viz)
+                z_0 = z_t
+                generated_image = vae.decode(z_0)
+                generated_image = (generated_image / 2 + 0.5).clamp(0, 1).squeeze(0)
+                x_condition_vis = (cbct / 2 + 0.5).clamp(0, 1).squeeze(0)
+                x_target_vis = (ct / 2 + 0.5).clamp(0, 1).squeeze(0)
 
-                if t_int > 0:
-                    variance = beta_t
-                    noise_viz = torch.randn_like(x_t)
-                    x_t_minus_1 = model_mean + torch.sqrt(variance) * noise_viz
-                else:
-                    x_t_minus_1 = model_mean
-                x_t = x_t_minus_1
-
-            z_0_generated = x_t # Final generated latent
-            conditional_recon_batch = vae.decode(z_0_generated)
-
-            # Save comparison images for the batch
-            num_images_to_save = min(ct_img_viz.size(0), 4) # Save fewer images for viz
-            for j in range(num_images_to_save):
-                imgs_to_save = [
-                    ct_img_viz[j],      # Original CT
-                    cbct_img_viz[j],    # CBCT Condition
-                    vae_recon_batch[j], # VAE Recon of CT
-                    conditional_recon_batch[j] # Conditional Generation
-                ]
-                vutils.save_image(
-                    imgs_to_save,
-                    f"{pred_dir}/img_{j}_comparison.png",
-                    nrow=len(imgs_to_save), # Arrange images in a row
-                    normalize=True,
-                    value_range=(-1, 1)
+                images_to_save = [x_condition_vis, x_target_vis, generated_image]
+                save_filename = f"epoch_{epoch+1}_comparison.png"
+                torchvision.utils.save_image(
+                    images_to_save,
+                    save_filename,
+                    nrow=len(images_to_save),
                 )
-        print(f"--- Finished saving validation predictions ---")
+                print(f"Saved comparison image to {save_filename}")
 
 print("Training finished.")
 

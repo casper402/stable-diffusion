@@ -124,7 +124,7 @@ for epoch in range(epochs):
         torch.save(unet.state_dict(), save_path)
         print(f"✅ Saved new best model at epoch {epoch+1} with val loss {val_loss:.4f}")
 
-    if (epoch+0) % 50 == 0:
+    if (epoch) % 50 == 0:
         unet.eval()
         pred_dir = f"./predictions/epoch_{epoch+1}/"
         os.makedirs(pred_dir, exist_ok=True)

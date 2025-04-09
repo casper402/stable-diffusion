@@ -93,55 +93,82 @@ class UpBlock(nn.Module):
         x = self.attn(x)
         return x
     
-class SimplePACALayer(nn.Module):
-    def __init__(self, channels, num_heads=8, num_groups=32):
+class PACALayer(nn.Module):
+    def __init__(self, query_dim, kv_dim, num_heads=8, num_groups=32):
         super().__init__()
-        if channels <= 0:
-            raise ValueError("channels must be positive")
-        if channels % num_heads != 0:
-            raise ValueError(f"channels ({channels}) must be divisible by num_heads ({num_heads})")
-        if channels % num_groups != 0:
-            num_groups = 8 if channels % 8 == 0 else (4 if channels % 4 == 0 else (2 if channels % 2 == 0 else 1))
-            if channels % num_groups != 0: num_groups = 1
+        if query_dim <= 0 or kv_dim <= 0:
+             raise ValueError("Query and KV dimensions must be positive")
+        if query_dim % num_heads != 0:
+            raise ValueError(f"query_dim ({query_dim}) must be divisible by num_heads ({num_heads})")
+        # Ensure num_groups is valid for both dims, potentially choosing the smaller constraint
+        q_num_groups = num_groups
+        if query_dim % q_num_groups != 0:
+            q_num_groups = 8 if query_dim % 8 == 0 else (4 if query_dim % 4 == 0 else (2 if query_dim % 2 == 0 else 1))
+            if query_dim % q_num_groups != 0: q_num_groups = 1
+        kv_num_groups = num_groups
+        if kv_dim % kv_num_groups != 0:
+            kv_num_groups = 8 if kv_dim % 8 == 0 else (4 if kv_dim % 4 == 0 else (2 if kv_dim % 2 == 0 else 1))
+            if kv_dim % kv_num_groups != 0: kv_num_groups = 1
 
         self.num_heads = num_heads
 
-        self.norm_q = nn.GroupNorm(num_groups, channels)
-        self.norm_kv = nn.GroupNorm(num_groups, channels)
+        # Norm for query (UNet features) and key/value (ControlNet features)
+        self.norm_q = nn.GroupNorm(q_num_groups, query_dim)
+        self.norm_kv = nn.GroupNorm(kv_num_groups, kv_dim)
 
-        self.to_q = nn.Conv2d(channels, channels, kernel_size=1, bias=False)
-        self.to_k = nn.Conv2d(channels, channels, kernel_size=1, bias=False)
-        self.to_v = nn.Conv2d(channels, channels, kernel_size=1, bias=False)
+        # Projections: Q from query_dim, K and V from kv_dim
+        self.to_q = nn.Conv2d(query_dim, query_dim, kernel_size=1, bias=False)
+        self.to_k = nn.Conv2d(kv_dim, query_dim, kernel_size=1, bias=False) # Project K to query_dim
+        self.to_v = nn.Conv2d(kv_dim, query_dim, kernel_size=1, bias=False) # Project V to query_dim
 
+        # Use MultiheadAttention with separate K, V inputs (projected to query_dim)
         self.mha = nn.MultiheadAttention(
-            embed_dim=channels,
+            embed_dim=query_dim, # Attention operates in query dimension space
             num_heads=num_heads,
             batch_first=True
+            # kdim and vdim args are not needed as we project K, V manually first
         )
-        self.to_out = nn.Conv2d(channels, channels, kernel_size=1)
+
+        # Output projection
+        self.to_out = nn.Conv2d(query_dim, query_dim, kernel_size=1)
 
     def forward(self, q_features, kv_features):
-        res = q_features
-        b, c, h, w = q_features.shape
+        # q_features: from UNet decoder (Query)
+        # kv_features: from ControlNet encoder (Key, Value)
+        res = q_features # Residual connection starts from query features
+        b, c_q, h, w = q_features.shape
+        _, c_kv, _, _ = kv_features.shape # H, W assumed to match q_features
+
+        # Normalize features
         q = self.norm_q(q_features)
         kv = self.norm_kv(kv_features)
+
+        # Project to Q, K, V (K, V projected to query dimension c_q)
         q = self.to_q(q)
         k = self.to_k(kv)
         v = self.to_v(kv)
-        q = q.view(b, c, h * w).transpose(1, 2)
-        k = k.view(b, c, h * w).transpose(1, 2)
-        v = v.view(b, c, h * w).transpose(1, 2)
-        attn_output, _ = self.mha(query=q, key=k, value=v)
-        attn_output = attn_output.transpose(1, 2).view(b, c, h, w)
+
+        # Reshape for MultiheadAttention: (B, C, H, W) -> (B, L, C) where L=H*W
+        q = q.view(b, c_q, h * w).transpose(1, 2)
+        k = k.view(b, c_q, h * w).transpose(1, 2) # K is now shape (B, L, C_q)
+        v = v.view(b, c_q, h * w).transpose(1, 2) # V is now shape (B, L, C_q)
+
+        # Apply cross-attention
+        attn_output, _ = self.mha(query=q, key=k, value=v) # Output shape (B, L, C_q)
+
+        # Reshape back: (B, L, C) -> (B, C, L) -> (B, C, H, W)
+        attn_output = attn_output.transpose(1, 2).view(b, c_q, h, w)
+
+        # Final projection and residual connection
         return self.to_out(attn_output) + res
         
 class ControlNet(nn.Module):
     def __init__(self,
-                 in_channels=1, # Input channels for condition (e.g., CBCT)
+                 in_channels=4, # Input channels for condition (e.g., CBCT)
                  base_channels=128,
                  num_heads=16,
                  dropout_rate=0.1,
-                 unet_channels=(256, 512, 1024)): # ch1, ch2, ch3, ch4 from UNet
+                 unet_channels=(128, 256, 512)): # ch1, ch2, ch3, ch4 from UNet
         super().__init__()
 
         unet_ch1, unet_ch2, unet_ch3 = unet_channels
@@ -175,18 +202,18 @@ class ControlNet(nn.Module):
     def forward(self, x_condition):
         x = self.init_conv(x_condition)
 
-        x1_ctrl_orig, _ = self.down1(x)
-        x2_ctrl_orig, _ = self.down2(x1_ctrl_orig)
-        x3_ctrl_orig, _ = self.down3(x2_ctrl_orig)
+        x1, _ = self.down1(x)
+        x2, _ = self.down2(x1)
+        x3, _ = self.down3(x2)
 
         # xb_ctrl = self.bottleneck_res1(x3_ctrl_orig)
         # xb_ctrl = self.bottleneck_attn(xb_ctrl)
         # xb_ctrl = self.bottleneck_res2(xb_ctrl)
 
         # Project features to match UNet decoder dims for SimplePACALayer
-        c1 = self.proj_c1(x1_ctrl_orig)
-        c2 = self.proj_c2(x2_ctrl_orig)
-        c3 = self.proj_c3(x3_ctrl_orig)
+        c1 = self.proj_c1(x1)
+        c2 = self.proj_c2(x2)
+        c3 = self.proj_c3(x3)
         # cb = xb_ctrl # Bottleneck features often not projected unless used by PACA
 
         return c1, c2, c3
@@ -229,9 +256,9 @@ class UNet(nn.Module): # Modified UNet for ControlNet
         self.final_act = nn.SiLU()
         self.final_conv = nn.Conv2d(ch1, out_channels, kernel_size=1)
 
-        self.paca1 = SimplePACALayer(channels=ch1, num_heads=num_heads)
-        self.paca2 = SimplePACALayer(channels=ch2, num_heads=num_heads)
-        self.paca3 = SimplePACALayer(channels=ch3, num_heads=num_heads)
+        self.paca1 = PACALayer(query_dim=ch1, kv_dim=ch1, num_heads=num_heads)
+        self.paca2 = PACALayer(query_dim=ch2, kv_dim=ch2, num_heads=num_heads)
+        self.paca3 = PACALayer(query_dim=ch3, kv_dim=ch3, num_heads=num_heads)
 
 
     def forward(self, x, t, control_features):
@@ -249,13 +276,24 @@ class UNet(nn.Module): # Modified UNet for ControlNet
         x = self.bottleneck_res2(x, t_emb) # -> [B, 512, H/8, W/8]
 
         x = self.up3(x, skip3, t_emb)    # -> [B, 256, H/4, W/4]
-        x = self.paca3(q_features=x, kv_features=c3)
+
+        q_features_paca3 = x
+        kv_features_paca3 = F.interpolate(c3, size=q_features_paca3.shape[-2:], mode='nearest')
+        x = self.paca3(q_features=q_features_paca3, kv_features=kv_features_paca3)
+
         x = self.up2(x, skip2, t_emb)     # -> [B, 128, H/2, W/2]
-        x = self.paca2(q_features=x, kv_features=c2)
+
+        q_features_paca2 = x
+        kv_features_paca2 = F.interpolate(c2, size=q_features_paca2.shape[-2:], mode='nearest')
+        x = self.paca2(q_features=q_features_paca2, kv_features=kv_features_paca2)
+
         x = self.up1(x, skip1, t_emb)
-        x = self.paca1(q_features=x, kv_features=c1)     # -> [B, 64, H, W]
+
+        q_features_paca1 = x
+        kv_features_paca1 = F.interpolate(c1, size=q_features_paca1.shape[-2:], mode='nearest')
+        x = self.paca1(q_features=q_features_paca1, kv_features=kv_features_paca1)     # -> [B, 64, H, W]
 
         x = self.final_norm(x)
         x = self.final_act(x)
-        x = self.final_conv(x)            # -> [B, 4, H, W]
+        x = self.final_conv(x) # -> [B, 4, H, W]
         return x

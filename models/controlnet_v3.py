@@ -18,8 +18,8 @@ from diffusers import (
 # ----------------------- CONFIG -----------------------
 # CBCT_DIR = '/Volumes/Lenovo PS8/Casper/kaggle_dataset/TRAINCBCTSimulated2D/256/REC-1'
 # SCT_DIR = '/Volumes/Lenovo PS8/Casper/kaggle_dataset/TRAINCTAlignedToCBCT2D/volume-1'
-CBCT_DIR = '/training_data/CBCT'
-SCT_DIR = '/training_data/volume-1/CT'
+CBCT_DIR = '../../training_data/CBCT'
+SCT_DIR = '../../training_data/CT/volume-1'
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 DTYPE = torch.float16 if DEVICE == "cuda" else torch.float32
 IMG_SIZE = 512

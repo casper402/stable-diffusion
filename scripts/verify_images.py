@@ -4,6 +4,8 @@ import torch
 from torchvision import transforms
 
 # ---------------- CONFIG ----------------
+# CBCT_DIR = '/Volumes/Lenovo PS8/Casper/kaggle_dataset/TRAINCBCTSimulated2D/256/REC-1'
+# SCT_DIR = '/Volumes/Lenovo PS8/Casper/kaggle_dataset/TRAINCTAlignedToCBCT2D/volume-1'
 CBCT_DIR = '../../training_data/CBCT'
 SCT_DIR = '../../training_data/CT/volume-1'
 IMG_SIZE = 512
@@ -17,12 +19,23 @@ def preprocess_image_pil(path, size=512):
         transforms.ToTensor()
     ])
     image = transform(image)
-    return image.repeat(3, 1, 1)  # [3, H, W]
+    return image.repeat(3, 1, 1)
+
+def is_valid_image(filename):
+    return (
+        filename.endswith(".png") and
+        not filename.startswith("._") and
+        not filename.startswith(".")
+    )
 
 def verify_images(cbct_dir, sct_dir, size=512):
-    filenames = sorted(os.listdir(cbct_dir))
+    filenames = sorted([
+        f for f in os.listdir(cbct_dir)
+        if is_valid_image(f)
+    ])
+
     if not filenames:
-        print("❌ No CBCT images found.")
+        print("❌ No valid CBCT images found.")
         return
 
     passed = 0

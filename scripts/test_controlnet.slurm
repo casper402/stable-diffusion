@@ -6,7 +6,7 @@
 #SBATCH --gres=gpu:v100:1
 #SBATCH --mem=32G
 #SBATCH --cpus-per-task=8
-#SBATCH --time=00:00:10
+#SBATCH --time=02:00:00
 #SBATCH --export=NONE
 
 cd $SLURM_SUBMIT_DIR
@@ -20,9 +20,9 @@ module load anaconda3/2021.05
 module load gcc/9.3.0
 module load cuda/11.2.0
 
-source activate cuda_env
+source activate sd-gpu
 
 export PYTHONPATH=$PYTHONPATH:$(pwd)
-python scripts/train_vae.py
+python models/controlnet_v3.py
 
 echo "========= Job finished at $(date) =========="

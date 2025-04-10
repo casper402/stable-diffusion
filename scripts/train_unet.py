@@ -60,7 +60,7 @@ scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
 
 epochs = 1000
 best_val_loss = float('inf')
-save_path = 'best_unet.pth'
+save_path = 'best_unet_2.pth'
 max_grad_norm = 1.0 # For gradient clipping, TODO: might need to tune this value
 
 for epoch in range(epochs):
@@ -126,7 +126,7 @@ for epoch in range(epochs):
 
     if (epoch) % 50 == 0:
         unet.eval()
-        pred_dir = f"./predictions/epoch_{epoch+1}/"
+        pred_dir = f"./predictions_2/epoch_{epoch+1}/"
         os.makedirs(pred_dir, exist_ok=True)
 
         print("Saving predictions")
@@ -172,7 +172,7 @@ for epoch in range(epochs):
 unet.load_state_dict(torch.load(save_path))
 unet.eval()
 
-pred_dir = f"./predictions/best_loss/"
+pred_dir = f"./predictions_2/best_loss/"
 os.makedirs(pred_dir, exist_ok=True)
 
 print("Saving predictions")

@@ -47,15 +47,15 @@ vae.eval()
 unet = UNet().to(device)
 diffusion = Diffusion(device, timesteps=1000)
 
-optimizer = torch.optim.Adam(unet.parameters(), lr=4e-4)
+optimizer = torch.optim.AdamW(unet.parameters(), lr=5.0e-05)
 scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
     optimizer,
     mode='min',
     factor=0.5,
-    patience=20,
+    patience=50,
     threshold=1e-4,
     verbose=True,
-    min_lr=1e-6
+    min_lr=1e-7
 )
 
 epochs = 1000

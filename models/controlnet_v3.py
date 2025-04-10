@@ -22,7 +22,7 @@ DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 DTYPE = torch.float16 if DEVICE == "cuda" else torch.float32
 IMG_SIZE = 512
 BATCH_SIZE = 4
-NUM_EPOCHS = 1  # Make larger when training properly
+NUM_EPOCHS = 50
 LR = 1e-5
 # ------------------------------------------------------
 
@@ -88,14 +88,12 @@ def train():
     print("About to start training")
     for epoch in range(NUM_EPOCHS):
         for batch in dataloader:
-            print("Doing a batch!")
             cbct = batch["conditioning_image"].to(DEVICE, dtype=DTYPE)
             sct = batch["target_image"].to(DEVICE, dtype=DTYPE)
 
             with torch.no_grad():
                 latents = vae.encode(sct).latent_dist.sample() * 0.18215
 
-            print("adding noise")
             noise = torch.randn_like(latents)
             timesteps = torch.randint(0, scheduler.config.num_train_timesteps, (latents.shape[0],), device=latents.device).long()
             noisy_latents = scheduler.add_noise(latents, noise, timesteps)
@@ -104,7 +102,6 @@ def train():
             # Stable Diffusion uses 77 tokens with 768-dim embeddings (from CLIP)
             encoder_hidden_states = torch.zeros((batch_size, 77, 768), device=DEVICE, dtype=DTYPE)
 
-            print("going through controlnet")
             controlnet_output = controlnet(
                 noisy_latents,
                 timesteps,
@@ -115,7 +112,6 @@ def train():
             down = controlnet_output.down_block_res_samples
             mid = controlnet_output.mid_block_res_sample
 
-            print("making a prediction")
             pred = unet(
                 noisy_latents,
                 timesteps,
@@ -125,7 +121,6 @@ def train():
             ).sample
 
 
-            print("calculating loss")
             loss = loss_fn(pred, noise)
             loss.backward()
             optimizer.step()

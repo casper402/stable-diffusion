@@ -23,7 +23,7 @@ dataset = CTDataset('../training_data/CT', transform=transforms.Compose([
             transforms.Normalize(mean=[0.5], std=[0.5])
         ]))
 
-subset_size = 5000
+subset_size = 20000
 subset, _ = random_split(dataset, [subset_size, len(dataset) - subset_size])
 
 test_size = 10
@@ -52,15 +52,15 @@ scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
     optimizer,
     mode='min',
     factor=0.5,
-    patience=50,
+    patience=20,
     threshold=1e-4,
     verbose=True,
     min_lr=1e-7
 )
 
-epochs = 1000
+epochs = 200
 best_val_loss = float('inf')
-save_path = 'best_unet.pth'
+save_path = 'best_unet_3.pth'
 max_grad_norm = 1.0 # For gradient clipping, TODO: might need to tune this value
 
 for epoch in range(epochs):
@@ -126,7 +126,7 @@ for epoch in range(epochs):
 
     if (epoch) % 50 == 0:
         unet.eval()
-        pred_dir = f"./predictions/epoch_{epoch+1}/"
+        pred_dir = f"./predictions_3/epoch_{epoch+1}/"
         os.makedirs(pred_dir, exist_ok=True)
 
         print("Saving predictions")
@@ -172,7 +172,7 @@ for epoch in range(epochs):
 unet.load_state_dict(torch.load(save_path))
 unet.eval()
 
-pred_dir = f"./predictions/best_loss/"
+pred_dir = f"./predictions_3/best_loss/"
 os.makedirs(pred_dir, exist_ok=True)
 
 print("Saving predictions")

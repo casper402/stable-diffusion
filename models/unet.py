@@ -48,7 +48,7 @@ class TimestepEmbedding(nn.Module):
         self.act = nn.SiLU()
         self.linear2 = nn.Linear(dim * 4, dim)
 
-    def forward(self, timesteps):
+    def forward(self, timesteps): #TODO: Use time embedding implementation form ldm: https://github.com/CompVis/latent-diffusion/blob/main/ldm/modules/diffusionmodules/model.py#L218
         half_dim = self.dim // 2
         emb = math.log(10000.0) / (half_dim - 1)
         emb = torch.exp(torch.arange(half_dim, dtype=torch.float32, device=timesteps.device) * -emb)

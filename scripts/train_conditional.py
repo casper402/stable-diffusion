@@ -203,7 +203,7 @@ for epoch in range(epochs):
                 z_t = torch.randn_like(ct_z)
                 T = diffusion.timesteps
 
-                for t_int in tqdm(range(T - 1, -1, -1), desc="Sampling latent"): 
+                for t_int in range(T - 1, -1, -1): 
                     t = torch.full((ct_z.size(0),), t_int, device=device, dtype=torch.long)
                     beta_t = diffusion.beta[t_int].view(-1, 1, 1, 1)
                     alpha_t = diffusion.alpha[t_int].view(-1, 1, 1, 1)

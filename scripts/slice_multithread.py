@@ -28,7 +28,7 @@ def save_slices_as_png(image_data, output_path):
         output_file = os.path.join(output_path, f'slice_{i}.png')
         plt.imsave(output_file, img_slice.T)  # Transpose to match orientation
 
-def process_nifti_file(file_name):
+def process_nifti_file(file_name)
     file_path = os.path.join(input_dir, file_name)
     img_data = load_nifti_image(file_path)
     output_path = os.path.join(output_dir, file_name.split('.')[0])

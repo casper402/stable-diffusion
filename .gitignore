@@ -3,5 +3,11 @@ todo.txt
 checkpoints/
 results/
 
+models/outputs/
+
 __pycache__/
 *.py[cod]
+
+.DS_Store
+**/.DS_Store.DS_Store
+**/.DS_Store

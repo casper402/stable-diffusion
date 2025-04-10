@@ -168,8 +168,8 @@ class UNet(nn.Module): # Modified UNet for ControlNet
     def __init__(self, 
                  in_channels=4, 
                  out_channels=4, 
-                 base_channels=128, 
-                 time_emb_dim=512, 
+                 base_channels=256, 
+                 time_emb_dim=1024, 
                  num_heads=16,
                  dropout_rate=0.1):
         super().__init__()

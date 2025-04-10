@@ -31,8 +31,8 @@ train_size = int(0.8 * len(subset) - test_size)
 val_size = len(subset) - train_size - test_size
 train_dataset, val_dataset, test_dataset = random_split(subset, [train_size, val_size, test_size])
 
-train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True, num_workers=8)
-val_loader = DataLoader(val_dataset, batch_size=16, shuffle=False, num_workers=8)
+train_loader = DataLoader(train_dataset, batch_size=8, shuffle=True, num_workers=8)
+val_loader = DataLoader(val_dataset, batch_size=8, shuffle=False, num_workers=8)
 test_loader = DataLoader(test_dataset, batch_size=2, shuffle=False, num_workers=2)
 
 print(f"Train dataset size: {len(train_dataset)}")

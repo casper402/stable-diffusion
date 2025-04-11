@@ -19,10 +19,10 @@ from diffusers import (
 SAVE_DIR = 'trained_model'
 # CBCT_DIR = '/Volumes/Lenovo PS8/Casper/kaggle_dataset/TRAINCBCTSimulated2D/256/REC-1' # full local
 # SCT_DIR = '/Volumes/Lenovo PS8/Casper/kaggle_dataset/TRAINCTAlignedToCBCT2D/volume-1' # full local
-# CBCT_DIR = '../../training_data/CBCT' # grendel
-# SCT_DIR = '../../training_data/CT/volume-1' # grendel
-CBCT_DIR = '../../training_data/CBCT' # limited local
-SCT_DIR = '../../training_data/CT' # limited local
+CBCT_DIR = '../training_data/CBCT' # grendel
+SCT_DIR = '../training_data/CT/volume-1' # grendel
+# CBCT_DIR = '../../training_data/CBCT' # limited local
+# SCT_DIR = '../../training_data/CT' # limited local
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 DTYPE = torch.float16 if DEVICE == "cuda" else torch.float32
 IMG_SIZE = 512
@@ -102,7 +102,6 @@ def train():
         running_loss = 0.0
 
         for batch in dataloader:
-            print("starting a batch!")
             cbct = batch["conditioning_image"].to(DEVICE, dtype=DTYPE)
             sct = batch["target_image"].to(DEVICE, dtype=DTYPE)
 
@@ -122,7 +121,6 @@ def train():
 
             noise = torch.randn_like(latents)
             timesteps = torch.randint(0, scheduler.config.num_train_timesteps, (batch_size,), device=DEVICE).long()
-            print("adding noise")
             noisy_latents = scheduler.add_noise(latents, noise, timesteps)
 
             # TODO: testing — check latent tensor before forward
@@ -130,14 +128,12 @@ def train():
                 print("⚠️ Noisy latents contain NaNs — skipping batch")
                 continue
 
-            print("going through control net")
             controlnet_output = controlnet(
                 noisy_latents, timesteps,
                 encoder_hidden_states=encoder_hidden_states,
                 controlnet_cond=cbct
             )
 
-            print("going through unet")
             pred = unet(
                 noisy_latents,
                 timesteps,
@@ -146,7 +142,6 @@ def train():
                 mid_block_additional_residual=controlnet_output.mid_block_res_sample
             ).sample
 
-            print("getting loss")
             loss = mse_loss(pred, noise)
 
             # TODO: testing — handle NaN loss
@@ -154,7 +149,6 @@ def train():
                 print("❌ Loss is NaN — skipping step")
                 continue
 
-            print("loss backwards")
             loss.backward()
 
             # TODO: testing — gradient clipping to stabilize training

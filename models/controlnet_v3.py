@@ -16,15 +16,18 @@ from diffusers import (
 )
 
 # ----------------------- CONFIG -----------------------
-# CBCT_DIR = '/Volumes/Lenovo PS8/Casper/kaggle_dataset/TRAINCBCTSimulated2D/256/REC-1'
-# SCT_DIR = '/Volumes/Lenovo PS8/Casper/kaggle_dataset/TRAINCTAlignedToCBCT2D/volume-1'
-CBCT_DIR = '../../training_data/CBCT'
-SCT_DIR = '../../training_data/CT/volume-1'
+SAVE_DIR = 'trained_model'
+# CBCT_DIR = '/Volumes/Lenovo PS8/Casper/kaggle_dataset/TRAINCBCTSimulated2D/256/REC-1' # full local
+# SCT_DIR = '/Volumes/Lenovo PS8/Casper/kaggle_dataset/TRAINCTAlignedToCBCT2D/volume-1' # full local
+# CBCT_DIR = '../../training_data/CBCT' # grendel
+# SCT_DIR = '../../training_data/CT/volume-1' # grendel
+CBCT_DIR = '../../training_data/CBCT' # limited local
+SCT_DIR = '../../training_data/CT' # limited local
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 DTYPE = torch.float16 if DEVICE == "cuda" else torch.float32
 IMG_SIZE = 512
-BATCH_SIZE = 4
-NUM_EPOCHS = 50
+BATCH_SIZE = 2
+NUM_EPOCHS = 1
 LR = 1e-5
 # ------------------------------------------------------
 
@@ -63,6 +66,7 @@ class CBCT2SCTDataset(Dataset):
             "target_image": sct
         }
 
+# not actually used right now?
 def load_models():
     vae = AutoencoderKL.from_pretrained("runwayml/stable-diffusion-v1-5", subfolder="vae").to(DEVICE, dtype=DTYPE)
     unet = UNet2DConditionModel.from_pretrained("runwayml/stable-diffusion-v1-5", subfolder="unet").to(DEVICE, dtype=DTYPE)
@@ -71,73 +75,111 @@ def load_models():
     return vae, unet, controlnet, scheduler
 
 def train():
-    print("loading dataset")
     dataset = CBCT2SCTDataset(CBCT_DIR, SCT_DIR, size=IMG_SIZE)
     dataloader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=True)
 
     print("loading models")
-    vae, unet, controlnet, scheduler = load_models()
+    vae = AutoencoderKL.from_pretrained("runwayml/stable-diffusion-v1-5", subfolder="vae").to(DEVICE, dtype=DTYPE)
+    unet = UNet2DConditionModel.from_pretrained("runwayml/stable-diffusion-v1-5", subfolder="unet").to(DEVICE, dtype=DTYPE)
+    controlnet = ControlNetModel.from_pretrained("lllyasviel/sd-controlnet-canny").to(DEVICE, dtype=DTYPE)
+    scheduler = DDPMScheduler(num_train_timesteps=1000)
+
+    print("eval")
     vae.eval()
+
+    print("train")
     unet.train()
     controlnet.train()
 
-    print("starting optimizer")
-    optimizer = torch.optim.AdamW(
-        list(unet.parameters()) + list(controlnet.parameters()), lr=LR
-    )
-    loss_fn = nn.MSELoss()
+    optimizer = torch.optim.AdamW(list(unet.parameters()) + list(controlnet.parameters()), lr=LR)
 
-    print("About to start training")
+    mse_loss = nn.MSELoss()
+    best_loss = float("inf")  # TODO: testing — track best model
+
+    print(f"🔧 Training on device: {DEVICE}, dtype: {DTYPE}")
+
     for epoch in range(NUM_EPOCHS):
+        running_loss = 0.0
+
         for batch in dataloader:
+            print("starting a batch!")
             cbct = batch["conditioning_image"].to(DEVICE, dtype=DTYPE)
             sct = batch["target_image"].to(DEVICE, dtype=DTYPE)
+
+            # TODO: testing — check for bad input values
+            if torch.isnan(cbct).any() or torch.isinf(cbct).any():
+                print("⚠️ CBCT input contains NaNs or Infs — skipping batch")
+                continue
+            if torch.isnan(sct).any() or torch.isinf(sct).any():
+                print("⚠️ SCT input contains NaNs or Infs — skipping batch")
+                continue
+
+            batch_size = cbct.shape[0]
+            encoder_hidden_states = torch.zeros((batch_size, 77, 768), device=DEVICE, dtype=DTYPE)
 
             with torch.no_grad():
                 latents = vae.encode(sct).latent_dist.sample() * 0.18215
 
             noise = torch.randn_like(latents)
-            timesteps = torch.randint(0, scheduler.config.num_train_timesteps, (latents.shape[0],), device=latents.device).long()
+            timesteps = torch.randint(0, scheduler.config.num_train_timesteps, (batch_size,), device=DEVICE).long()
+            print("adding noise")
             noisy_latents = scheduler.add_noise(latents, noise, timesteps)
 
-            batch_size = cbct.shape[0]
-            # Stable Diffusion uses 77 tokens with 768-dim embeddings (from CLIP)
-            encoder_hidden_states = torch.zeros((batch_size, 77, 768), device=DEVICE, dtype=DTYPE)
+            # TODO: testing — check latent tensor before forward
+            if torch.isnan(noisy_latents).any():
+                print("⚠️ Noisy latents contain NaNs — skipping batch")
+                continue
 
+            print("going through control net")
             controlnet_output = controlnet(
-                noisy_latents,
-                timesteps,
+                noisy_latents, timesteps,
                 encoder_hidden_states=encoder_hidden_states,
                 controlnet_cond=cbct
             )
 
-            down = controlnet_output.down_block_res_samples
-            mid = controlnet_output.mid_block_res_sample
-
+            print("going through unet")
             pred = unet(
                 noisy_latents,
                 timesteps,
                 encoder_hidden_states=encoder_hidden_states,
-                down_block_additional_residuals=down,
-                mid_block_additional_residual=mid
+                down_block_additional_residuals=controlnet_output.down_block_res_samples,
+                mid_block_additional_residual=controlnet_output.mid_block_res_sample
             ).sample
 
+            print("getting loss")
+            loss = mse_loss(pred, noise)
 
-            loss = loss_fn(pred, noise)
+            # TODO: testing — handle NaN loss
+            if torch.isnan(loss):
+                print("❌ Loss is NaN — skipping step")
+                continue
+
+            print("loss backwards")
             loss.backward()
+
+            # TODO: testing — gradient clipping to stabilize training
+            torch.nn.utils.clip_grad_norm_(unet.parameters(), 1.0)
+            torch.nn.utils.clip_grad_norm_(controlnet.parameters(), 1.0)
+
+            print("stepping")
             optimizer.step()
             optimizer.zero_grad()
 
-        print(f"✅ Epoch {epoch + 1} | Loss: {loss.item():.4f}")
 
-    # Save models
-    save_dir = "trained_model"
-    os.makedirs(save_dir, exist_ok=True)
+            print("loss added")
+            running_loss += loss.item()
 
-    unet.save_pretrained(os.path.join(save_dir, "unet"))
-    controlnet.save_pretrained(os.path.join(save_dir, "controlnet"))
+        avg_loss = running_loss / len(dataloader)
+        print(f"✅ Epoch {epoch+1} | Avg Loss: {avg_loss:.6f}")
 
-    print(f"✅ Model saved to: {save_dir}/unet and {save_dir}/controlnet")
+        # TODO: testing — save best model based on validation or lowest loss
+        if avg_loss < best_loss:
+            best_loss = avg_loss
+            unet.save_pretrained(os.path.join(SAVE_DIR, "unet_best"))
+            controlnet.save_pretrained(os.path.join(SAVE_DIR, "controlnet_best"))
+            print(f"💾 Best model updated! Loss: {best_loss:.6f}")
+
+    print("🏁 Training complete.")
 
 def infer(cbct_path, save_path="generated_sct.png"):
     # 🔁 Load trained models
@@ -154,7 +196,7 @@ def infer(cbct_path, save_path="generated_sct.png"):
 
     # 📥 Preprocess CBCT image
     print("*** Preprocessing CBCT ***")
-    cbct = preprocess_image_pil(cbct_path, size=IMG_SIZE).unsqueeze(0).to(DEVICE, dtype=DTYPE)
+    cbct = preprocess_image_pil(CBCT_DIR + "/" + cbct_path, size=IMG_SIZE).unsqueeze(0).to(DEVICE, dtype=DTYPE)
 
     # Dummy prompt embedding (required for shape)
     print("*** Dummy prompt embedding ***")
@@ -213,4 +255,4 @@ if __name__ == "__main__":
     if MODE == "train":
         train()
     elif MODE == "infer":
-        infer("slice_49.png")
+        infer("slice_10.png")

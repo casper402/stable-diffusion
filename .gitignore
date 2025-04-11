@@ -4,6 +4,8 @@ checkpoints/
 results/
 
 models/outputs/
+models/*.png
+models/trained_model/
 
 __pycache__/
 *.py[cod]

@@ -26,8 +26,8 @@ SCT_DIR = '../../training_data/CT' # limited local
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 DTYPE = torch.float16 if DEVICE == "cuda" else torch.float32
 IMG_SIZE = 512
-BATCH_SIZE = 2
-NUM_EPOCHS = 1
+BATCH_SIZE = 4
+NUM_EPOCHS = 50
 LR = 1e-5
 # ------------------------------------------------------
 
@@ -46,7 +46,7 @@ class CBCT2SCTDataset(Dataset):
     def __init__(self, cbct_dir, sct_dir, size=512):
         self.cbct_dir = cbct_dir
         self.sct_dir = sct_dir
-        self.filenames = sorted(os.listdir(cbct_dir))
+        self.filenames = sorted(os.listdir(cbct_dir))[:10] # Only 10 samples atm!
         self.transform = transforms.Compose([
             transforms.Resize((size, size)),
             transforms.ToTensor()

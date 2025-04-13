@@ -48,7 +48,7 @@ class TimestepEmbedding(nn.Module):
         self.act = nn.SiLU()
         self.linear2 = nn.Linear(dim * 4, dim)
 
-    def forward(self, timesteps):
+    def forward(self, timesteps): #TODO: Use time embedding implementation form ldm: https://github.com/CompVis/latent-diffusion/blob/main/ldm/modules/diffusionmodules/model.py#L218
         half_dim = self.dim // 2
         emb = math.log(10000.0) / (half_dim - 1)
         emb = torch.exp(torch.arange(half_dim, dtype=torch.float32, device=timesteps.device) * -emb)
@@ -61,7 +61,9 @@ class TimestepEmbedding(nn.Module):
 class ResnetBlock(nn.Module):
     def __init__(self, in_channels, out_channels=None, time_emb_dim=None, dropout_rate=0.1):
         super().__init__()
-        out_channels = out_channels or in_channels
+        self.in_channels = in_channels
+        out_channels = in_channels if out_channels is None else out_channels
+        self.out_channels = out_channels
 
         self.norm1 = Normalize(in_channels)
         self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=1, padding=1)
@@ -69,19 +71,21 @@ class ResnetBlock(nn.Module):
         self.dropout = nn.Dropout(dropout_rate)
         self.conv2 = nn.Conv2d(out_channels, out_channels, kernel_size=3, stride=1, padding=1)
         self.temb_proj = nn.Linear(time_emb_dim, out_channels) if time_emb_dim else None
-        self.residual = nn.Conv2d(in_channels, out_channels, kernel_size=1) if in_channels != out_channels else nn.Identity()
+        self.residual = nn.Conv2d(in_channels, out_channels, kernel_size=1) if in_channels != out_channels else None
 
     def forward(self, x, temb=None):
         h = x
         h = self.norm1(h)
         h = nonlinearity(h)
         h = self.conv1(h)
-        if self.time_emb_proj is not None and temb is not None:
+        if self.temb_proj is not None and temb is not None:
             h = h + self.temb_proj(nonlinearity(temb))[:,:,None,None]
         h = self.norm2(h)
         h = nonlinearity(h)
         h = self.dropout(h)
         h = self.conv2(h)
+        if self.in_channels != self.out_channels:
+            x = self.residual(x)
         return x + h
     
 class AttentionBlock(nn.Module):
@@ -159,7 +163,7 @@ class MiddleBlock(nn.Module):
         h = self.attention1(h)
         h = self.res_block2(h, temb)
         return h
-
+    
 class PACALayer(nn.Module):
     def __init__(self, query_dim, kv_dim, num_heads=8, num_groups=32):
         super().__init__()
@@ -228,26 +232,26 @@ class PACALayer(nn.Module):
 
         # Final projection and residual connection
         return self.to_out(attn_output) + res
-        
+
 class ControlNet(nn.Module):
     def __init__(self,
                  in_channels=4, # Input channels for condition (e.g., CBCT)
-                 base_channels=128,
+                 base_channels=256,
                  num_heads=16,
                  dropout_rate=0.1,
-                 unet_channels=(128, 256, 512)): # ch1, ch2, ch3, ch4 from UNet
+                 unet_channels=(256, 512, 1024)): # ch1, ch2, ch3 from UNet
         super().__init__()
 
         unet_ch1, unet_ch2, unet_ch3 = unet_channels
 
         self.init_conv = nn.Conv2d(in_channels, base_channels, kernel_size=3, padding=1)
 
-        ctrl_ch1 = base_channels
+        ctrl_ch1 = base_channels * 1
         ctrl_ch2 = base_channels * 2
         ctrl_ch3 = base_channels * 4
         ctrl_ch4 = base_channels * 4
 
-        attn_level_0 = False
+        attn_level_0 = True
         attn_level_1 = True
         attn_level_2 = True
 
@@ -255,17 +259,11 @@ class ControlNet(nn.Module):
         self.down2 = DownBlock(ctrl_ch2, ctrl_ch3, time_emb_dim=None, has_attn=attn_level_1, num_heads=num_heads, dropout_rate=dropout_rate)
         self.down3 = DownBlock(ctrl_ch3, ctrl_ch4, time_emb_dim=None, has_attn=attn_level_2, num_heads=num_heads, dropout_rate=dropout_rate)
 
-        # self.bottleneck_res1 = ResBlock(ctrl_ch4, ctrl_ch4, time_emb_dim=None, dropout_rate=dropout_rate)
-        # self.bottleneck_attn = AttentionBlock(ctrl_ch4, num_heads=num_heads) if attn_level_2 else nn.Identity()
-        # self.bottleneck_res2 = ResBlock(ctrl_ch4, ctrl_ch4, time_emb_dim=None, dropout_rate=dropout_rate)
-
         # Projection layers to match UNet decoder output dimensions for SimplePACALayer
         self.proj_c1 = nn.Conv2d(ctrl_ch2, unet_ch1, kernel_size=1) # Project down1 output (ctrl_ch2) to unet_ch1
         self.proj_c2 = nn.Conv2d(ctrl_ch3, unet_ch2, kernel_size=1) # Project down2 output (ctrl_ch3) to unet_ch2
         self.proj_c3 = nn.Conv2d(ctrl_ch4, unet_ch3, kernel_size=1) # Project down3 output (ctrl_ch4) to unet_ch3
-        # Bottleneck projection might be needed if bottleneck PACA is used
-        # self.proj_cb = nn.Conv2d(ctrl_ch4, unet_ch4, kernel_size=1)
-
+      
     def forward(self, x_condition):
         x = self.init_conv(x_condition)
 
@@ -273,24 +271,18 @@ class ControlNet(nn.Module):
         x2, _ = self.down2(x1)
         x3, _ = self.down3(x2)
 
-        # xb_ctrl = self.bottleneck_res1(x3_ctrl_orig)
-        # xb_ctrl = self.bottleneck_attn(xb_ctrl)
-        # xb_ctrl = self.bottleneck_res2(xb_ctrl)
-
         # Project features to match UNet decoder dims for SimplePACALayer
         c1 = self.proj_c1(x1)
         c2 = self.proj_c2(x2)
         c3 = self.proj_c3(x3)
-        # cb = xb_ctrl # Bottleneck features often not projected unless used by PACA
-
         return c1, c2, c3
 
-class UNet(nn.Module): # Modified UNet for ControlNet
+class UNetPACA(nn.Module): # Modified UNet for ControlNet
     def __init__(self, 
                  in_channels=4, 
                  out_channels=4, 
-                 base_channels=128, 
-                 time_emb_dim=512, 
+                 base_channels=256, 
+                 time_emb_dim=1024, 
                  num_heads=16,
                  dropout_rate=0.1):
         super().__init__()
@@ -303,7 +295,7 @@ class UNet(nn.Module): # Modified UNet for ControlNet
         ch3 = base_channels * 4
         ch4 = base_channels * 4
 
-        attn_level_0 = False # Corresponds to ch2
+        attn_level_0 = True # Corresponds to ch2
         attn_level_1 = True  # Corresponds to ch3
         attn_level_2 = True  # Corresponds to ch4
 
@@ -313,18 +305,16 @@ class UNet(nn.Module): # Modified UNet for ControlNet
 
         self.middle = MiddleBlock(ch4, time_emb_dim, num_heads, dropout_rate)
 
-        self.up3 = UpBlock(ch4, ch4, ch3, time_emb_dim, attn_level_2, num_heads, dropout_rate)
-        self.up2 = UpBlock(ch3, ch3, ch2, time_emb_dim, attn_level_1, num_heads, dropout_rate)
-        self.up1 = UpBlock(ch2, ch2, ch1, time_emb_dim, attn_level_0, num_heads, dropout_rate)
-
-        self.final_norm = nn.GroupNorm(8, ch1) # Norm before final conv
-        self.final_act = nn.SiLU()
-        self.final_conv = nn.Conv2d(ch1, out_channels, kernel_size=1)
+        self.up3 = UpBlock(ch4, ch3, ch4, time_emb_dim, attn_level_2, num_heads, dropout_rate)
+        self.up2 = UpBlock(ch3, ch2, ch3, time_emb_dim, attn_level_1, num_heads, dropout_rate)
+        self.up1 = UpBlock(ch2, ch1, ch2, time_emb_dim, attn_level_0, num_heads, dropout_rate)
 
         self.paca1 = PACALayer(query_dim=ch1, kv_dim=ch1, num_heads=num_heads)
         self.paca2 = PACALayer(query_dim=ch2, kv_dim=ch2, num_heads=num_heads)
         self.paca3 = PACALayer(query_dim=ch3, kv_dim=ch3, num_heads=num_heads)
 
+        self.final_norm = Normalize(ch1)
+        self.final_conv = nn.Conv2d(ch1, out_channels, kernel_size=3, stride=1, padding=1)
 
     def forward(self, x, t, control_features):
         c1, c2, c3 = control_features
@@ -336,9 +326,7 @@ class UNet(nn.Module): # Modified UNet for ControlNet
         x, skip2 = self.down2(x, t_emb)  # -> [B, 256, H/4, W/4]
         x, skip3 = self.down3(x, t_emb)  # -> [B, 512, H/8, W/8]
 
-        x = self.bottleneck_res1(x, t_emb)
-        x = self.bottleneck_attn(x)
-        x = self.bottleneck_res2(x, t_emb) # -> [B, 512, H/8, W/8]
+        x = self.middle(x, t_emb)
 
         x = self.up3(x, skip3, t_emb)    # -> [B, 256, H/4, W/4]
 
@@ -359,6 +347,88 @@ class UNet(nn.Module): # Modified UNet for ControlNet
         x = self.paca1(q_features=q_features_paca1, kv_features=kv_features_paca1)     # -> [B, 64, H, W]
 
         x = self.final_norm(x)
-        x = self.final_act(x)
+        x = nonlinearity(x)
         x = self.final_conv(x) # -> [B, 4, H, W]
         return x
+    
+class DegradationRemovalModuleResnet(nn.Module): # TODO Copied from Gemini, need to refactor
+    def __init__(self, in_channels=1, base_channels=64, final_out_channels=4, dropout_rate=0.1):
+        """
+        Args:
+            in_channels (int): Input channels (1 for grayscale CBCT).
+            base_channels (int): Starting number of channels, will be multiplied.
+            final_out_channels (int): Output channels for the final 32x32 feature map (4 for your ControlNet).
+            dropout_rate (float): Dropout rate for ResnetBlocks.
+        """
+        super().__init__()
+
+        ch1 = base_channels # 64
+        ch2 = base_channels * 2 # 128
+        ch3 = base_channels * 4 # 256
+        ch4 = base_channels * 8 # 512 - used internally before final output
+
+        # Initial convolution to get to base_channels
+        self.init_conv = nn.Conv2d(in_channels, ch1, kernel_size=3, padding=1)
+
+        # --- Downsampling Path ---
+        # 256x256 -> 128x128
+        self.res1 = ResnetBlock(ch1, ch1, dropout_rate=dropout_rate)
+        self.downsample1 = nn.Conv2d(ch1, ch2, kernel_size=3, stride=2, padding=1) # Downsample conv
+        self.res2 = ResnetBlock(ch2, ch2, dropout_rate=dropout_rate)
+        self.to_grayscale_128 = nn.Conv2d(ch2, 1, kernel_size=1) # Prediction head for 128x128
+
+        # 128x128 -> 64x64
+        self.downsample2 = nn.Conv2d(ch2, ch3, kernel_size=3, stride=2, padding=1) # Downsample conv
+        self.res3 = ResnetBlock(ch3, ch3, dropout_rate=dropout_rate)
+        self.to_grayscale_64 = nn.Conv2d(ch3, 1, kernel_size=1) # Prediction head for 64x64
+
+        # 64x64 -> 32x32
+        self.downsample3 = nn.Conv2d(ch3, ch4, kernel_size=3, stride=2, padding=1) # Downsample conv
+        self.res4 = ResnetBlock(ch4, ch4, dropout_rate=dropout_rate)
+        self.to_grayscale_32 = nn.Conv2d(ch4, 1, kernel_size=1) # Prediction head for 32x32
+
+        # Final convolution to get the desired output channels (4) for ControlNet
+        # Apply after final ResnetBlock at 32x32
+        self.final_norm_act = nn.Sequential(
+             nn.GroupNorm(min(32, ch4) if ch4 >= 32 else ch4, ch4), # Use 32 groups or num_channels
+             nn.SiLU()
+        )
+        self.final_conv = nn.Conv2d(ch4, final_out_channels, kernel_size=3, padding=1)
+
+    def forward(self, x):
+        """
+        Args:
+            x (torch.Tensor): Input tensor of shape [B, 1, 256, 256]
+
+        Returns:
+            tuple: (final_output, intermediate_preds)
+                final_output (torch.Tensor): Features for ControlNet [B, 4, 32, 32]
+                intermediate_preds (tuple): (pred_128, pred_64, pred_32) for Loss_DR
+                                            each of shape [B, 1, H, W]
+        """
+        # Initial processing
+        f_init = self.init_conv(x) # -> [B, ch1, 256, 256]
+
+        # Block 1 (-> 128x128)
+        h1 = self.res1(f_init)
+        h_down1 = self.downsample1(h1) # -> [B, ch2, 128, 128]
+        f_128 = self.res2(h_down1)
+        pred_128 = self.to_grayscale_128(f_128) # Prediction for loss
+
+        # Block 2 (-> 64x64)
+        h_down2 = self.downsample2(f_128) # -> [B, ch3, 64, 64]
+        f_64 = self.res3(h_down2)
+        pred_64 = self.to_grayscale_64(f_64) # Prediction for loss
+
+        # Block 3 (-> 32x32)
+        h_down3 = self.downsample3(f_64) # -> [B, ch4, 32, 32]
+        f_32 = self.res4(h_down3)
+        pred_32 = self.to_grayscale_32(f_32) # Prediction for loss
+
+        # Final output projection for ControlNet
+        f_32_norm_act = self.final_norm_act(f_32)
+        final_output = self.final_conv(f_32_norm_act) # -> [B, 4, 32, 32]
+
+        intermediate_preds = (pred_128, pred_64, pred_32)
+
+        return final_output, intermediate_preds

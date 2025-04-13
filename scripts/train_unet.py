@@ -10,6 +10,13 @@ from models.unet import UNet
 from models.diffusion import Diffusion
 from utils.dataset import CTDataset
 
+subset_size = 20000
+batch_size = 8
+epochs = 200
+predict_epochs = 50
+pred_path = f"./predictions"
+save_path = 'best_unet_3.pth'
+
 def noise_loss(pred_noise, true_noise):
     return F.mse_loss(pred_noise, true_noise)
 
@@ -23,7 +30,6 @@ dataset = CTDataset('../training_data/CT', transform=transforms.Compose([
             transforms.Normalize(mean=[0.5], std=[0.5])
         ]))
 
-subset_size = 20000
 subset, _ = random_split(dataset, [subset_size, len(dataset) - subset_size])
 
 test_size = 10
@@ -31,9 +37,9 @@ train_size = int(0.8 * len(subset) - test_size)
 val_size = len(subset) - train_size - test_size
 train_dataset, val_dataset, test_dataset = random_split(subset, [train_size, val_size, test_size])
 
-train_loader = DataLoader(train_dataset, batch_size=8, shuffle=True, num_workers=8)
-val_loader = DataLoader(val_dataset, batch_size=8, shuffle=False, num_workers=8)
-test_loader = DataLoader(test_dataset, batch_size=2, shuffle=False, num_workers=2)
+train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=8)
+val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=8)
+test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=2)
 
 print(f"Train dataset size: {len(train_dataset)}")
 print(f"Validation dataset size: {len(val_dataset)}")
@@ -58,9 +64,7 @@ scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
     min_lr=1e-7
 )
 
-epochs = 200
 best_val_loss = float('inf')
-save_path = 'best_unet_3.pth'
 max_grad_norm = 1.0 # For gradient clipping, TODO: might need to tune this value
 
 for epoch in range(epochs):
@@ -75,7 +79,7 @@ for epoch in range(epochs):
             z_mu, z_logvar = vae.encode(x)
             z = vae.reparameterize(z_mu, z_logvar)
 
-        t = diffusion.sample_timesteps(x.size(0))
+        t = diffusion.sample_timesteps(z.size(0))
         noise = torch.randn_like(z)
         z_noisy = diffusion.add_noise(z, t, noise=noise)
 
@@ -124,9 +128,9 @@ for epoch in range(epochs):
         torch.save(unet.state_dict(), save_path)
         print(f"✅ Saved new best model at epoch {epoch+1} with val loss {val_loss:.4f}")
 
-    if (epoch) % 50 == 0:
+    if (epoch) % predict_epochs == 0:
         unet.eval()
-        pred_dir = f"./predictions_3/epoch_{epoch+1}/"
+        pred_dir = f"{pred_path}/epoch_{epoch+1}/"
         os.makedirs(pred_dir, exist_ok=True)
 
         print("Saving predictions")
@@ -172,7 +176,7 @@ for epoch in range(epochs):
 unet.load_state_dict(torch.load(save_path))
 unet.eval()
 
-pred_dir = f"./predictions_3/best_loss/"
+pred_dir = f"{pred_path}/best_loss/"
 os.makedirs(pred_dir, exist_ok=True)
 
 print("Saving predictions")

@@ -1,10 +1,9 @@
 import torch
 from models.vae import VAE 
-from models.unet import UNet
+from results.unet.v4.unet import UNet
 from utils.dataset import CTDataset
 from utils.config import get_device
 import matplotlib.pyplot as plt
-from utils.losses import PerceptualLoss, SsimLoss
 import torch.nn.functional as F
 import torchvision.transforms as transforms
 from torch.utils.data import random_split
@@ -34,7 +33,7 @@ unet = UNet().to(device)
 diffusion = Diffusion(device, timesteps=1000)
 
 vae_path = "/home/casper/Documents/Thesis/pretrained_models/vae.pth"
-unet_path = "/home/casper/Documents/Thesis/stable-diffusion/results/unet/v2/best_unet.pth"
+unet_path = "/home/casper/Documents/Thesis/stable-diffusion/results/unet/v4/best_unet.pth"
 
 try:
     vae.load_state_dict(torch.load(vae_path, map_location=device))
@@ -174,6 +173,6 @@ def generate_random_image(unet, vae, diffusion, device, latent_shape=(1, 4, 32, 
         return generated_image_batch[0].cpu()
 
 if __name__ == "__main__":
-    #denoise(loader)
+    # denoise(loader)
     generate_random_image(unet, vae, diffusion, device)
 

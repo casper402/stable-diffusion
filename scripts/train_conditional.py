@@ -38,6 +38,7 @@ cbct_dir = '../training_data/CBCT'
 vae_weights_path = '../pretrained_models/vae.pth'
 unet_weights_path = '../pretrained_models/unet.pth'
 controlnet_save_path = 'controlnet.pth'
+dr_module_save_path = 'dr_module.pth'
 unet_paca_save_path = 'unet_paca_layers.pth'
 pred_dir = f"./predictions/"
 

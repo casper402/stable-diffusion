@@ -106,8 +106,8 @@ def train():
         running_loss = 0.0
 
         for batch in dataloader:
-            cbct = batch["conditioning_image"].to(DEVICE)
-            sct = batch["target_image"].to(DEVICE)
+            cbct = batch["conditioning_image"].to(DEVICE, dtype=DTYPE) # ✅ match float16 if needed
+            sct = batch["target_image"].to(DEVICE, dtype=DTYPE)  # ✅ match float16 if needed
 
             batch_size = cbct.shape[0]
             encoder_hidden_states = torch.zeros((batch_size, 77, 768), device=DEVICE)

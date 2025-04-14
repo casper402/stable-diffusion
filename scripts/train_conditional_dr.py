@@ -36,10 +36,10 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 manifest_path = '../training_data/dataset_manifest.csv'
 vae_weights_path = '../pretrained_models/vae.pth'
 unet_weights_path = '../pretrained_models/unet.pth'
-save_dir = 'dr_results'
-pred_dir = 'dr_results/predictions'
+save_dir = 'dr_results_2'
+pred_dir = f'{save_dir}/predictions'
 
-subset_size = 5000
+subset_size = 2000
 batch_size = 4
 test_batch_size = 1
 learning_rate = 5.0e-5
@@ -97,7 +97,7 @@ for name, param in unet.named_parameters():
         trainable_unet_params += param.numel()
 print(f"UNet PACA parameters set to trainable ({trainable_unet_params} parameters).")
 if trainable_unet_params == 0:
-    print("Warning: No PACA parameters found or unfrozen in UNetI am using the original PACA layer!")
+    print("Warning: No PACA parameters found or unfrozen in UNet")
 
 controlnet = ControlNet().to(device)
 controlnet.train()

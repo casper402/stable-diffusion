@@ -137,9 +137,9 @@ class UpBlock(nn.Module):
 
         self.upsample = Upsample(in_channels, with_conv=True)
         self.res_block1 = ResnetBlock(in_channels + skip_in, out_channels, time_emb_dim, dropout_rate)
-        self.attention1 = AttentionBlock(out_channels, num_heads=num_heads) if has_attn else None
+        self.attention1 = AttentionBlock(out_channels, num_heads=num_heads) if has_attn else nn.Identity()
         self.res_block2 = ResnetBlock(out_channels, out_channels, time_emb_dim, dropout_rate)
-        self.attention2 = AttentionBlock(out_channels, num_heads=num_heads) if has_attn else None
+        self.attention2 = AttentionBlock(out_channels, num_heads=num_heads) if has_attn else nn.Identity()
 
     def forward(self, x, skip, temb=None):
         x = self.upsample(x)
@@ -164,85 +164,74 @@ class MiddleBlock(nn.Module):
         h = self.res_block2(h, temb)
         return h
     
-class PACALayer(nn.Module):
-    def __init__(self, query_dim, kv_dim, num_heads=8, num_groups=32):
-        super().__init__()
-        if query_dim <= 0 or kv_dim <= 0:
-             raise ValueError("Query and KV dimensions must be positive")
-        if query_dim % num_heads != 0:
-            raise ValueError(f"query_dim ({query_dim}) must be divisible by num_heads ({num_heads})")
-        # Ensure num_groups is valid for both dims, potentially choosing the smaller constraint
-        q_num_groups = num_groups
-        if query_dim % q_num_groups != 0:
-            q_num_groups = 8 if query_dim % 8 == 0 else (4 if query_dim % 4 == 0 else (2 if query_dim % 2 == 0 else 1))
-            if query_dim % q_num_groups != 0: q_num_groups = 1
-        kv_num_groups = num_groups
-        if kv_dim % kv_num_groups != 0:
-            kv_num_groups = 8 if kv_dim % 8 == 0 else (4 if kv_dim % 4 == 0 else (2 if kv_dim % 2 == 0 else 1))
-            if kv_dim % kv_num_groups != 0: kv_num_groups = 1
 
+class PACALayer(nn.Module):
+    def __init__(self, query_dim, kv_dim = None, num_heads=8):
+        super().__init__()
+        if kv_dim is None:
+            kv_dim = query_dim
         self.num_heads = num_heads
 
-        # Norm for query (UNet features) and key/value (ControlNet features)
-        self.norm_q = nn.GroupNorm(q_num_groups, query_dim)
-        self.norm_kv = nn.GroupNorm(kv_num_groups, kv_dim)
+        self.norm_q = Normalize(query_dim)
+        self.norm_k = Normalize(kv_dim)
 
-        # Projections: Q from query_dim, K and V from kv_dim
-        self.to_q = nn.Conv2d(query_dim, query_dim, kernel_size=1, bias=False)
-        self.to_k = nn.Conv2d(kv_dim, query_dim, kernel_size=1, bias=False) # Project K to query_dim
-        self.to_v = nn.Conv2d(kv_dim, query_dim, kernel_size=1, bias=False) # Project V to query_dim
+        self.to_q = nn.Conv2d(query_dim, query_dim, kernel_size=1)
+        self.to_k = nn.Conv2d(kv_dim, query_dim, kernel_size=1)
+        self.to_v = nn.Conv2d(kv_dim, query_dim, kernel_size=1)
 
-        # Use MultiheadAttention with separate K, V inputs (projected to query_dim)
         self.mha = nn.MultiheadAttention(
-            embed_dim=query_dim, # Attention operates in query dimension space
+            embed_dim=query_dim,
             num_heads=num_heads,
             batch_first=True
-            # kdim and vdim args are not needed as we project K, V manually first
         )
 
-        # Output projection
         self.to_out = nn.Conv2d(query_dim, query_dim, kernel_size=1)
 
     def forward(self, q_features, kv_features):
-        # q_features: from UNet decoder (Query)
-        # kv_features: from ControlNet encoder (Key, Value)
-        res = q_features # Residual connection starts from query features
+        residual = q_features
         b, c_q, h, w = q_features.shape
-        _, c_kv, _, _ = kv_features.shape # H, W assumed to match q_features
+        _, c_kv, hk, wk = kv_features.shape
+        if (hk, wk) != (h, w):
+            kv_features = F.interpolate(kv_features, size=(h, w), mode='nearest')
 
-        # Normalize features
-        q = self.norm_q(q_features)
-        kv = self.norm_kv(kv_features)
+        q_features = self.norm_q(q_features)
+        kv_features = self.norm_k(kv_features)
 
-        # Project to Q, K, V (K, V projected to query dimension c_q)
-        q = self.to_q(q)
-        k = self.to_k(kv)
-        v = self.to_v(kv)
+        q = self.to_q(q_features)
+        k = self.to_k(kv_features)
+        v = self.to_v(kv_features)
 
-        # Reshape for MultiheadAttention: (B, C, H, W) -> (B, L, C) where L=H*W
         q = q.view(b, c_q, h * w).transpose(1, 2)
-        k = k.view(b, c_q, h * w).transpose(1, 2) # K is now shape (B, L, C_q)
-        v = v.view(b, c_q, h * w).transpose(1, 2) # V is now shape (B, L, C_q)
+        k = k.view(b, c_q, h * w).transpose(1, 2)
+        v = v.view(b, c_q, h * w).transpose(1, 2)
 
-        # Apply cross-attention
-        attn_output, _ = self.mha(query=q, key=k, value=v) # Output shape (B, L, C_q)
+        attn_output, _ = self.mha(q, k, v)
+        attn_output = attn_output.transpose(1, 2).contiguous().view(b, c_q, h, w)
+        attn_output = self.to_out(attn_output)
 
-        # Reshape back: (B, L, C) -> (B, C, L) -> (B, C, H, W)
-        attn_output = attn_output.transpose(1, 2).view(b, c_q, h, w)
+        return attn_output + residual
+    
+class ZeroConv2d(nn.Module):
+    def __init__(self, in_channels, out_channels, kernel_size=1, padding=0):
+        super().__init__()
+        self.conv = nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, padding=padding)
+        self.conv.weight.data.zero_()
+        if self.conv.bias is not None:
+             self.conv.bias.data.zero_()
 
-        # Final projection and residual connection
-        return self.to_out(attn_output) + res
+    def forward(self, x):
+        return self.conv(x)
 
-class UNetPACA(nn.Module): # Modified UNet for ControlNet
+class UNetPACA(nn.Module):
     def __init__(self, 
                  in_channels=4, 
                  out_channels=4, 
-                 base_channels=256, 
+                 base_channels=256,
                  time_emb_dim=1024, # Commonly set to 4*base_channels
                  num_heads=16,
                  dropout_rate=0.1):
         super().__init__()
-        
+
         self.time_embedding = TimestepEmbedding(time_emb_dim)
         self.init_conv = nn.Conv2d(in_channels, base_channels, kernel_size=3, padding=1)
 
@@ -251,105 +240,126 @@ class UNetPACA(nn.Module): # Modified UNet for ControlNet
         ch3 = base_channels * 4
         ch4 = base_channels * 4
 
-        attn_level_0 = True # Corresponds to ch2
-        attn_level_1 = True  # Corresponds to ch3
-        attn_level_2 = True  # Corresponds to ch4
+        attn_level_0 = False
+        attn_level_1 = True
+        attn_level_2 = True
+        attn_level_3 = True
 
-        self.down1 = DownBlock(ch1, ch2, time_emb_dim, attn_level_0, num_heads, dropout_rate)
-        self.down2 = DownBlock(ch2, ch3, time_emb_dim, attn_level_1, num_heads, dropout_rate)
-        self.down3 = DownBlock(ch3, ch4, time_emb_dim, attn_level_2, num_heads, dropout_rate)
+        self.down1 = DownBlock(ch1, ch2, time_emb_dim, attn_level_1, num_heads, dropout_rate)
+        self.down2 = DownBlock(ch2, ch3, time_emb_dim, attn_level_2, num_heads, dropout_rate)
+        self.down3 = DownBlock(ch3, ch4, time_emb_dim, attn_level_3, num_heads, dropout_rate)
 
         self.middle = MiddleBlock(ch4, time_emb_dim, num_heads, dropout_rate)
 
-        self.up3 = UpBlock(ch4, ch3, ch4, time_emb_dim, attn_level_2, num_heads, dropout_rate)
-        self.up2 = UpBlock(ch3, ch2, ch3, time_emb_dim, attn_level_1, num_heads, dropout_rate)
+        self.up3 = UpBlock(ch4, ch3, ch4, time_emb_dim, attn_level_3, num_heads, dropout_rate)
+        self.up2 = UpBlock(ch3, ch2, ch3, time_emb_dim, attn_level_2, num_heads, dropout_rate)
         self.up1 = UpBlock(ch2, ch1, ch2, time_emb_dim, attn_level_0, num_heads, dropout_rate)
 
-        self.paca1 = PACALayer(query_dim=ch1, kv_dim=ch1, num_heads=num_heads)
-        self.paca2 = PACALayer(query_dim=ch2, kv_dim=ch2, num_heads=num_heads)
+        self.paca_middle = PACALayer(query_dim=ch4, kv_dim=ch4, num_heads=num_heads)
         self.paca3 = PACALayer(query_dim=ch3, kv_dim=ch3, num_heads=num_heads)
+        self.paca2 = PACALayer(query_dim=ch2, kv_dim=ch2, num_heads=num_heads)
+        self.paca1 = PACALayer(query_dim=ch1, kv_dim=ch1, num_heads=num_heads)
 
         self.final_norm = Normalize(ch1)
         self.final_conv = nn.Conv2d(ch1, out_channels, kernel_size=3, stride=1, padding=1)
 
     def forward(self, x, t, control_features):
-        c1, c2, c3 = control_features
+        projected_features, zero_conv_features = control_features
+        zconv_middle, zconv_skip3, zconv_skip2, zconv_skip1 = zero_conv_features
+        h_middle, c3, c2, c1 = projected_features
 
         t_emb = self.time_embedding(t)
-        x = self.init_conv(x)         # Initial convolution: [B, 4, H, W] -> [B, 64, H, W]
+        h = self.init_conv(x)         
 
-        x, skip1 = self.down1(x, t_emb)   # -> [B, 128, H/2, W/2]
-        x, skip2 = self.down2(x, t_emb)  # -> [B, 256, H/4, W/4]
-        x, skip3 = self.down3(x, t_emb)  # -> [B, 512, H/8, W/8]
+        h, skip1 = self.down1(h, t_emb)
+        h, skip2 = self.down2(h, t_emb)
+        h, skip3 = self.down3(h, t_emb)
 
-        x = self.middle(x, t_emb)
+        h_middle_in = h + zconv_middle
+        h_middle_out = self.middle(h_middle_in, t_emb)
+        h = self.paca_middle(q_features=h_middle_out, kv_features=h_middle)
 
-        x = self.up3(x, skip3, t_emb)    # -> [B, 256, H/4, W/4]
+        modified_skip3 = skip3 + zconv_skip3
+        h_up3_out = self.up3(h, modified_skip3, t_emb)
+        h = self.paca3(q_features=h_up3_out, kv_features=c3)
 
-        q_features_paca3 = x
-        kv_features_paca3 = F.interpolate(c3, size=q_features_paca3.shape[-2:], mode='nearest')
-        x = self.paca3(q_features=q_features_paca3, kv_features=kv_features_paca3)
+        modified_skip2 = skip2 + zconv_skip2
+        h_up2_out = self.up2(h, modified_skip2, t_emb)
+        h = self.paca2(q_features=h_up2_out, kv_features=c2)
 
-        x = self.up2(x, skip2, t_emb)     # -> [B, 128, H/2, W/2]
+        modified_skip1 = skip1 + zconv_skip1
+        h_up1_out = self.up1(h, modified_skip1, t_emb)
+        h = self.paca1(q_features=h_up1_out, kv_features=c1)
 
-        q_features_paca2 = x
-        kv_features_paca2 = F.interpolate(c2, size=q_features_paca2.shape[-2:], mode='nearest')
-        x = self.paca2(q_features=q_features_paca2, kv_features=kv_features_paca2)
-
-        x = self.up1(x, skip1, t_emb)
-
-        q_features_paca1 = x
-        kv_features_paca1 = F.interpolate(c1, size=q_features_paca1.shape[-2:], mode='nearest')
-        x = self.paca1(q_features=q_features_paca1, kv_features=kv_features_paca1)     # -> [B, 64, H, W]
-
-        x = self.final_norm(x)
-        x = nonlinearity(x)
-        x = self.final_conv(x) # -> [B, 4, H, W]
-        return x
+        h = self.final_norm(h)
+        h = nonlinearity(h)
+        h = self.final_conv(h)
+        return h
     
 class ControlNet(nn.Module):
     def __init__(self,
                  in_channels=4, # Input channels for condition (e.g., CBCT)
                  base_channels=256,
+                 unet_base_channels=256,
                  num_heads=16,
-                 dropout_rate=0.1,
-                 unet_channels=(256, 512, 1024)): # ch1, ch2, ch3 from UNet
+                 dropout_rate=0.1):
         super().__init__()
 
-        unet_ch1, unet_ch2, unet_ch3 = unet_channels
-
-        self.init_conv = nn.Conv2d(in_channels, base_channels, kernel_size=3, padding=1)
+        unet_ch1 = unet_base_channels * 1
+        unet_ch2 = unet_base_channels * 2
+        unet_ch3 = unet_base_channels * 4
+        unet_ch4 = unet_base_channels * 4
 
         ctrl_ch1 = base_channels * 1
         ctrl_ch2 = base_channels * 2
         ctrl_ch3 = base_channels * 4
         ctrl_ch4 = base_channels * 4
 
+        self.init_conv = nn.Conv2d(in_channels, ctrl_ch1, kernel_size=3, padding=1)
+
         attn_level_0 = True
         attn_level_1 = True
         attn_level_2 = True
 
-        self.down1 = DownBlock(ctrl_ch1, ctrl_ch2, time_emb_dim=None, has_attn=attn_level_0, num_heads=num_heads, dropout_rate=dropout_rate) #32x32x128 -> 16x16x256
+        self.down1 = DownBlock(ctrl_ch1, ctrl_ch2, time_emb_dim=None, has_attn=attn_level_0, num_heads=num_heads, dropout_rate=dropout_rate)
         self.down2 = DownBlock(ctrl_ch2, ctrl_ch3, time_emb_dim=None, has_attn=attn_level_1, num_heads=num_heads, dropout_rate=dropout_rate)
         self.down3 = DownBlock(ctrl_ch3, ctrl_ch4, time_emb_dim=None, has_attn=attn_level_2, num_heads=num_heads, dropout_rate=dropout_rate)
+        self.middle = MiddleBlock(ctrl_ch4, time_emb_dim=None, num_heads=num_heads, dropout=dropout_rate)
 
-        # Projection layers to match UNet decoder output dimensions for SimplePACALayer
-        self.proj_c1 = nn.Conv2d(ctrl_ch2, unet_ch1, kernel_size=1) # Project down1 output (ctrl_ch2) to unet_ch1
-        self.proj_c2 = nn.Conv2d(ctrl_ch3, unet_ch2, kernel_size=1) # Project down2 output (ctrl_ch3) to unet_ch2
-        self.proj_c3 = nn.Conv2d(ctrl_ch4, unet_ch3, kernel_size=1) # Project down3 output (ctrl_ch4) to unet_ch3
+        # Projections (for PACA K/V)
+        self.proj_middle = nn.Conv2d(ctrl_ch4, unet_ch4, kernel_size=1)
+        self.proj_c3 = nn.Conv2d(ctrl_ch4, unet_ch3, kernel_size=1)
+        self.proj_c2 = nn.Conv2d(ctrl_ch3, unet_ch2, kernel_size=1)
+        self.proj_c1 = nn.Conv2d(ctrl_ch2, unet_ch1, kernel_size=1)
+
+        # Zero Convolutions
+        self.zero_conv_middle = ZeroConv2d(ctrl_ch4, ctrl_ch4)
+        self.zero_conv_skip3 = ZeroConv2d(ctrl_ch4, ctrl_ch4)
+        self.zero_conv_skip2 = ZeroConv2d(ctrl_ch3, ctrl_ch3)
+        self.zero_conv_skip1 = ZeroConv2d(ctrl_ch2, ctrl_ch2)
       
     def forward(self, x_condition):
-        x = self.init_conv(x_condition)
+        h = self.init_conv(x_condition)
+        h, skip1 = self.down1(h)
+        h, skip2 = self.down2(h)
+        h, skip3 = self.down3(h)
+        h_middle = self.middle(h)
 
-        x1, _ = self.down1(x)
-        x2, _ = self.down2(x1)
-        x3, _ = self.down3(x2)
+        # --- Apply projections ---
+        h_middle = self.proj_middle(h_middle)
+        c3 = self.proj_c3(skip3)
+        c2 = self.proj_c2(skip2)
+        c1 = self.proj_c1(skip1)
+        projected_features = (h_middle, c3, c2, c1)
 
-        # Project features to match UNet decoder dims for SimplePACALayer
-        c1 = self.proj_c1(x1)
-        c2 = self.proj_c2(x2)
-        c3 = self.proj_c3(x3)
-        return c1, c2, c3
+        # --- Apply zero convolutions ---
+        zconv_middle = self.zero_conv_middle(h_middle)
+        zconv_skip3 = self.zero_conv_skip3(skip3)
+        zconv_skip2 = self.zero_conv_skip2(skip2)
+        zconv_skip1 = self.zero_conv_skip1(skip1)
+        zero_conv_features = (zconv_middle, zconv_skip3, zconv_skip2, zconv_skip1)
+
+        return projected_features, zero_conv_features
     
 class DegradationRemovalModuleResnet(nn.Module):
     def __init__(self, in_channels=1, base_channels=64, final_out_channels=4, dropout_rate=0.1):
@@ -377,19 +387,15 @@ class DegradationRemovalModuleResnet(nn.Module):
     def forward(self, x):
         x = self.init_conv(x)
 
-        # Block 1 (-> 128x128)
         x, _ = self.down1(x)
         pred_128 = self.to_grayscale_128(x) # Prediction for loss
 
-        # Block 2 (-> 64x64)
         x, _ = self.down2(x) # -> [B, ch3, 64, 64]
         pred_64 = self.to_grayscale_64(x) # Prediction for loss
 
-        # Block 3 (-> 32x32)
         x, _ = self.down3(x) # -> [B, ch4, 32, 32]
         pred_32 = self.to_grayscale_32(x) # Prediction for loss
 
-        # Final output projection for ControlNet
         x = self.final_norm(x)
         x = nonlinearity(x)
         x = self.final_conv(x) # -> [B, 4, 32, 32]

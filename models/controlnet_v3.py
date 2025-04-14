@@ -80,53 +80,50 @@ def train():
     dataset = CBCT2SCTDataset(CBCT_DIR, SCT_DIR, size=IMG_SIZE)
     dataloader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=True)
 
-    print("loading models")
-    vae = AutoencoderKL.from_pretrained("runwayml/stable-diffusion-v1-5", subfolder="vae").to(DEVICE, dtype=DTYPE)
-    unet = UNet2DConditionModel.from_pretrained("runwayml/stable-diffusion-v1-5", subfolder="unet").to(DEVICE, dtype=DTYPE)
-    controlnet = ControlNetModel.from_pretrained("lllyasviel/sd-controlnet-canny").to(DEVICE, dtype=DTYPE)
+    print("📦 Loading models...")
+    vae = AutoencoderKL.from_pretrained("runwayml/stable-diffusion-v1-5", subfolder="vae").to(DEVICE)
+    unet = UNet2DConditionModel.from_pretrained("runwayml/stable-diffusion-v1-5", subfolder="unet").to(DEVICE)
+    controlnet = ControlNetModel.from_pretrained("lllyasviel/sd-controlnet-canny").to(DEVICE)
     scheduler = DDPMScheduler(num_train_timesteps=1000)
 
-    print("eval")
     vae.eval()
-
-    print("train")
     unet.train()
     controlnet.train()
 
     optimizer = torch.optim.AdamW(list(unet.parameters()) + list(controlnet.parameters()), lr=LR)
-
-    scaler = GradScaler()  # TODO: testing — mixed precision loss scaler
-
     mse_loss = nn.MSELoss()
-    best_loss = float("inf")  # TODO: testing — track best model
+    scaler = GradScaler()
 
-    print(f"🔧 Training on device: {DEVICE}, dtype: {DTYPE}")
+    best_loss = float("inf")
+
+    print(f"🔧 Training on device: {DEVICE}")
 
     for epoch in range(NUM_EPOCHS):
         running_loss = 0.0
 
         for batch in dataloader:
-            cbct = batch["conditioning_image"].to(DEVICE, dtype=DTYPE) # ✅ match float16 if needed
-            sct = batch["target_image"].to(DEVICE, dtype=DTYPE)  # ✅ match float16 if needed
+            cbct = batch["conditioning_image"].to(DEVICE, dtype=torch.float16)
+            sct = batch["target_image"].to(DEVICE, dtype=torch.float16)
 
-            batch_size = cbct.shape[0]
-            encoder_hidden_states = torch.zeros((batch_size, 77, 768), device=DEVICE)
+            encoder_hidden_states = torch.zeros((cbct.size(0), 77, 768), device=DEVICE)
 
             with torch.no_grad():
                 latents = vae.encode(sct).latent_dist.sample() * 0.18215
 
             noise = torch.randn_like(latents)
-            timesteps = torch.randint(0, scheduler.config.num_train_timesteps, (batch_size,), device=DEVICE).long()
+            timesteps = torch.randint(
+                0, scheduler.config.num_train_timesteps, (cbct.size(0),), device=DEVICE
+            ).long()
             noisy_latents = scheduler.add_noise(latents, noise, timesteps)
 
             optimizer.zero_grad()
 
-            # TODO: testing — mixed precision forward & loss
             with autocast(dtype=torch.float16):
                 controlnet_output = controlnet(
-                    noisy_latents, timesteps,
+                    noisy_latents,
+                    timesteps,
                     encoder_hidden_states=encoder_hidden_states,
-                    controlnet_cond=cbct
+                    controlnet_cond=cbct,
                 )
 
                 pred = unet(
@@ -134,30 +131,24 @@ def train():
                     timesteps,
                     encoder_hidden_states=encoder_hidden_states,
                     down_block_additional_residuals=controlnet_output.down_block_res_samples,
-                    mid_block_additional_residual=controlnet_output.mid_block_res_sample
+                    mid_block_additional_residual=controlnet_output.mid_block_res_sample,
                 ).sample
 
                 loss = mse_loss(pred, noise)
 
-            if torch.isnan(loss):
-                print("❌ Loss is NaN — skipping step")
-                continue
-
-            # TODO: testing — backprop with scaling
-            scaler.scale(loss).backward()
-
-            torch.nn.utils.clip_grad_norm_(unet.parameters(), 1.0)
-            torch.nn.utils.clip_grad_norm_(controlnet.parameters(), 1.0)
-
-            scaler.step(optimizer)
-            scaler.update()
-
-            running_loss += loss.item()
+            if torch.isfinite(loss):
+                scaler.scale(loss).backward()
+                torch.nn.utils.clip_grad_norm_(unet.parameters(), 1.0)
+                torch.nn.utils.clip_grad_norm_(controlnet.parameters(), 1.0)
+                scaler.step(optimizer)
+                scaler.update()
+                running_loss += loss.item()
+            else:
+                print("⚠️ NaN or Inf in loss — skipped step.")
 
         avg_loss = running_loss / len(dataloader)
         print(f"✅ Epoch {epoch+1} | Avg Loss: {avg_loss:.6f}")
 
-        # TODO: testing — save best model based on validation or lowest loss
         if avg_loss < best_loss:
             best_loss = avg_loss
             unet.save_pretrained(os.path.join(SAVE_DIR, "unet_best"))
@@ -165,6 +156,7 @@ def train():
             print(f"💾 Best model updated! Loss: {best_loss:.6f}")
 
     print("🏁 Training complete.")
+
 
 def infer(cbct_path, save_path="generated_sct.png"):
     # 🔁 Load trained models

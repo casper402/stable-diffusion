@@ -100,15 +100,15 @@ def train():
         for param in block.parameters():
             param.requires_grad = True
 
-    # Make sure ControlNet is trainable
-    controlnet.requires_grad_(True)
+    controlnet.requires_grad_(False)
 
     vae.eval()
     unet.train()
     controlnet.train()
 
     # Optimizer: only trainable params
-    params_to_train = filter(lambda p: p.requires_grad, list(unet.parameters()) + list(controlnet.parameters()))
+    params_to_train = filter(lambda p: p.requires_grad, list(unet.parameters()))
+    # params_to_train = filter(lambda p: p.requires_grad, list(unet.parameters()) + list(controlnet.parameters()))
     optimizer = torch.optim.AdamW(params_to_train, lr=LR)
 
     mse_loss = nn.MSELoss()

@@ -88,14 +88,29 @@ def train():
     controlnet = ControlNetModel.from_pretrained("lllyasviel/sd-controlnet-canny").to(DEVICE)
     scheduler = DDPMScheduler(num_train_timesteps=1000)
 
-    unet.requires_grad_(False)         # ✅ Freeze entire UNet
-    controlnet.requires_grad_(True)    # ✅ Make sure ControlNet is trainable
+    # Freeze all UNet layers
+    unet.requires_grad_(False)
+
+    # Unfreeze mid block
+    for param in unet.mid_block.parameters():
+        param.requires_grad = True
+
+    # Unfreeze up_blocks (output)
+    for block in unet.up_blocks:
+        for param in block.parameters():
+            param.requires_grad = True
+
+    # Make sure ControlNet is trainable
+    controlnet.requires_grad_(True)
 
     vae.eval()
     unet.train()
     controlnet.train()
 
-    optimizer = torch.optim.AdamW(controlnet.parameters(), lr=LR)
+    # Optimizer: only trainable params
+    params_to_train = filter(lambda p: p.requires_grad, list(unet.parameters()) + list(controlnet.parameters()))
+    optimizer = torch.optim.AdamW(params_to_train, lr=LR)
+
     mse_loss = nn.MSELoss()
     scaler = GradScaler()
 

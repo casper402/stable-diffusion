@@ -233,50 +233,6 @@ class PACALayer(nn.Module):
         # Final projection and residual connection
         return self.to_out(attn_output) + res
 
-class ControlNet(nn.Module):
-    def __init__(self,
-                 in_channels=4, # Input channels for condition (e.g., CBCT)
-                 base_channels=256,
-                 num_heads=16,
-                 dropout_rate=0.1,
-                 unet_channels=(256, 512, 1024)): # ch1, ch2, ch3 from UNet
-        super().__init__()
-
-        unet_ch1, unet_ch2, unet_ch3 = unet_channels
-
-        self.init_conv = nn.Conv2d(in_channels, base_channels, kernel_size=3, padding=1)
-
-        ctrl_ch1 = base_channels * 1
-        ctrl_ch2 = base_channels * 2
-        ctrl_ch3 = base_channels * 4
-        ctrl_ch4 = base_channels * 4
-
-        attn_level_0 = True
-        attn_level_1 = True
-        attn_level_2 = True
-
-        self.down1 = DownBlock(ctrl_ch1, ctrl_ch2, time_emb_dim=None, has_attn=attn_level_0, num_heads=num_heads, dropout_rate=dropout_rate) #32x32x128 -> 16x16x256
-        self.down2 = DownBlock(ctrl_ch2, ctrl_ch3, time_emb_dim=None, has_attn=attn_level_1, num_heads=num_heads, dropout_rate=dropout_rate)
-        self.down3 = DownBlock(ctrl_ch3, ctrl_ch4, time_emb_dim=None, has_attn=attn_level_2, num_heads=num_heads, dropout_rate=dropout_rate)
-
-        # Projection layers to match UNet decoder output dimensions for SimplePACALayer
-        self.proj_c1 = nn.Conv2d(ctrl_ch2, unet_ch1, kernel_size=1) # Project down1 output (ctrl_ch2) to unet_ch1
-        self.proj_c2 = nn.Conv2d(ctrl_ch3, unet_ch2, kernel_size=1) # Project down2 output (ctrl_ch3) to unet_ch2
-        self.proj_c3 = nn.Conv2d(ctrl_ch4, unet_ch3, kernel_size=1) # Project down3 output (ctrl_ch4) to unet_ch3
-      
-    def forward(self, x_condition):
-        x = self.init_conv(x_condition)
-
-        x1, _ = self.down1(x)
-        x2, _ = self.down2(x1)
-        x3, _ = self.down3(x2)
-
-        # Project features to match UNet decoder dims for SimplePACALayer
-        c1 = self.proj_c1(x1)
-        c2 = self.proj_c2(x2)
-        c3 = self.proj_c3(x3)
-        return c1, c2, c3
-
 class UNetPACA(nn.Module): # Modified UNet for ControlNet
     def __init__(self, 
                  in_channels=4, 
@@ -350,6 +306,50 @@ class UNetPACA(nn.Module): # Modified UNet for ControlNet
         x = nonlinearity(x)
         x = self.final_conv(x) # -> [B, 4, H, W]
         return x
+    
+class ControlNet(nn.Module):
+    def __init__(self,
+                 in_channels=4, # Input channels for condition (e.g., CBCT)
+                 base_channels=256,
+                 num_heads=16,
+                 dropout_rate=0.1,
+                 unet_channels=(256, 512, 1024)): # ch1, ch2, ch3 from UNet
+        super().__init__()
+
+        unet_ch1, unet_ch2, unet_ch3 = unet_channels
+
+        self.init_conv = nn.Conv2d(in_channels, base_channels, kernel_size=3, padding=1)
+
+        ctrl_ch1 = base_channels * 1
+        ctrl_ch2 = base_channels * 2
+        ctrl_ch3 = base_channels * 4
+        ctrl_ch4 = base_channels * 4
+
+        attn_level_0 = True
+        attn_level_1 = True
+        attn_level_2 = True
+
+        self.down1 = DownBlock(ctrl_ch1, ctrl_ch2, time_emb_dim=None, has_attn=attn_level_0, num_heads=num_heads, dropout_rate=dropout_rate) #32x32x128 -> 16x16x256
+        self.down2 = DownBlock(ctrl_ch2, ctrl_ch3, time_emb_dim=None, has_attn=attn_level_1, num_heads=num_heads, dropout_rate=dropout_rate)
+        self.down3 = DownBlock(ctrl_ch3, ctrl_ch4, time_emb_dim=None, has_attn=attn_level_2, num_heads=num_heads, dropout_rate=dropout_rate)
+
+        # Projection layers to match UNet decoder output dimensions for SimplePACALayer
+        self.proj_c1 = nn.Conv2d(ctrl_ch2, unet_ch1, kernel_size=1) # Project down1 output (ctrl_ch2) to unet_ch1
+        self.proj_c2 = nn.Conv2d(ctrl_ch3, unet_ch2, kernel_size=1) # Project down2 output (ctrl_ch3) to unet_ch2
+        self.proj_c3 = nn.Conv2d(ctrl_ch4, unet_ch3, kernel_size=1) # Project down3 output (ctrl_ch4) to unet_ch3
+      
+    def forward(self, x_condition):
+        x = self.init_conv(x_condition)
+
+        x1, _ = self.down1(x)
+        x2, _ = self.down2(x1)
+        x3, _ = self.down3(x2)
+
+        # Project features to match UNet decoder dims for SimplePACALayer
+        c1 = self.proj_c1(x1)
+        c2 = self.proj_c2(x2)
+        c3 = self.proj_c3(x3)
+        return c1, c2, c3
     
 class DegradationRemovalModuleResnet(nn.Module):
     def __init__(self, in_channels=1, base_channels=64, final_out_channels=4, dropout_rate=0.1):

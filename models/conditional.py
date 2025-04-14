@@ -108,7 +108,7 @@ class AttentionBlock(nn.Module):
         return x + h_
     
 class DownBlock(nn.Module):
-    def __init__(self, in_channels, out_channels, time_emb_dim=None, has_attn=False, num_heads=8, dropout_rate=0.1):
+    def __init__(self, in_channels, out_channels, time_emb_dim=None, has_attn=False, num_heads=16, dropout_rate=0.1):
         super().__init__()
         self.has_attn = has_attn
 
@@ -131,7 +131,7 @@ class DownBlock(nn.Module):
         return h, skip
     
 class UpBlock(nn.Module):
-    def __init__(self, in_channels, out_channels, skip_in, time_emb_dim=None, has_attn=False, num_heads=8, dropout_rate=0.1):
+    def __init__(self, in_channels, out_channels, skip_in, time_emb_dim=None, has_attn=False, num_heads=16, dropout_rate=0.1):
         super().__init__()
         self.has_attn = has_attn
 
@@ -151,7 +151,7 @@ class UpBlock(nn.Module):
         return h
     
 class MiddleBlock(nn.Module):
-    def __init__(self, in_channels, time_emb_dim=None, num_heads=8, dropout=0.1):
+    def __init__(self, in_channels, time_emb_dim=None, num_heads=16, dropout=0.1):
         super().__init__()
         self.res_block1 = ResnetBlock(in_channels, in_channels, time_emb_dim, dropout)
         self.attention1 = AttentionBlock(in_channels, num_heads=num_heads)
@@ -351,84 +351,49 @@ class UNetPACA(nn.Module): # Modified UNet for ControlNet
         x = self.final_conv(x) # -> [B, 4, H, W]
         return x
     
-class DegradationRemovalModuleResnet(nn.Module): # TODO Copied from Gemini, need to refactor
+class DegradationRemovalModuleResnet(nn.Module):
     def __init__(self, in_channels=1, base_channels=64, final_out_channels=4, dropout_rate=0.1):
-        """
-        Args:
-            in_channels (int): Input channels (1 for grayscale CBCT).
-            base_channels (int): Starting number of channels, will be multiplied.
-            final_out_channels (int): Output channels for the final 32x32 feature map (4 for your ControlNet).
-            dropout_rate (float): Dropout rate for ResnetBlocks.
-        """
         super().__init__()
 
-        ch1 = base_channels # 64
-        ch2 = base_channels * 2 # 128
-        ch3 = base_channels * 4 # 256
-        ch4 = base_channels * 8 # 512 - used internally before final output
+        ch1 = base_channels
+        ch2 = base_channels * 2
+        ch3 = base_channels * 4
+        ch4 = base_channels * 8
 
-        # Initial convolution to get to base_channels
         self.init_conv = nn.Conv2d(in_channels, ch1, kernel_size=3, padding=1)
 
-        # --- Downsampling Path ---
-        # 256x256 -> 128x128
-        self.res1 = ResnetBlock(ch1, ch1, dropout_rate=dropout_rate)
-        self.downsample1 = nn.Conv2d(ch1, ch2, kernel_size=3, stride=2, padding=1) # Downsample conv
-        self.res2 = ResnetBlock(ch2, ch2, dropout_rate=dropout_rate)
+        self.down1 = DownBlock(ch1, ch2, time_emb_dim=None, has_attn=False, num_heads=None, dropout_rate=dropout_rate) # 256x256 -> 128x128
         self.to_grayscale_128 = nn.Conv2d(ch2, 1, kernel_size=1) # Prediction head for 128x128
 
-        # 128x128 -> 64x64
-        self.downsample2 = nn.Conv2d(ch2, ch3, kernel_size=3, stride=2, padding=1) # Downsample conv
-        self.res3 = ResnetBlock(ch3, ch3, dropout_rate=dropout_rate)
+        self.down2 = DownBlock(ch2, ch3, time_emb_dim=None, has_attn=False, num_heads=None, dropout_rate=dropout_rate) # 128x128 -> 64x64
         self.to_grayscale_64 = nn.Conv2d(ch3, 1, kernel_size=1) # Prediction head for 64x64
 
-        # 64x64 -> 32x32
-        self.downsample3 = nn.Conv2d(ch3, ch4, kernel_size=3, stride=2, padding=1) # Downsample conv
-        self.res4 = ResnetBlock(ch4, ch4, dropout_rate=dropout_rate)
+        self.down3 = DownBlock(ch3, ch4, time_emb_dim=None, has_attn=False, num_heads=None, dropout_rate=dropout_rate) # 64x64 -> 32x32
         self.to_grayscale_32 = nn.Conv2d(ch4, 1, kernel_size=1) # Prediction head for 32x32
 
-        # Final convolution to get the desired output channels (4) for ControlNet
-        # Apply after final ResnetBlock at 32x32
-        self.final_norm_act = nn.Sequential(
-             nn.GroupNorm(min(32, ch4) if ch4 >= 32 else ch4, ch4), # Use 32 groups or num_channels
-             nn.SiLU()
-        )
-        self.final_conv = nn.Conv2d(ch4, final_out_channels, kernel_size=3, padding=1)
+        self.final_norm = Normalize(ch4)
+        self.final_conv = nn.Conv2d(ch1, final_out_channels, kernel_size=3, stride=1, padding=1)
 
     def forward(self, x):
-        """
-        Args:
-            x (torch.Tensor): Input tensor of shape [B, 1, 256, 256]
-
-        Returns:
-            tuple: (final_output, intermediate_preds)
-                final_output (torch.Tensor): Features for ControlNet [B, 4, 32, 32]
-                intermediate_preds (tuple): (pred_128, pred_64, pred_32) for Loss_DR
-                                            each of shape [B, 1, H, W]
-        """
-        # Initial processing
-        f_init = self.init_conv(x) # -> [B, ch1, 256, 256]
+        x = self.init_conv(x)
 
         # Block 1 (-> 128x128)
-        h1 = self.res1(f_init)
-        h_down1 = self.downsample1(h1) # -> [B, ch2, 128, 128]
-        f_128 = self.res2(h_down1)
-        pred_128 = self.to_grayscale_128(f_128) # Prediction for loss
+        x = self.down1(x)
+        pred_128 = self.to_grayscale_128(x) # Prediction for loss
 
         # Block 2 (-> 64x64)
-        h_down2 = self.downsample2(f_128) # -> [B, ch3, 64, 64]
-        f_64 = self.res3(h_down2)
-        pred_64 = self.to_grayscale_64(f_64) # Prediction for loss
+        x = self.down2(x) # -> [B, ch3, 64, 64]
+        pred_64 = self.to_grayscale_64(x) # Prediction for loss
 
         # Block 3 (-> 32x32)
-        h_down3 = self.downsample3(f_64) # -> [B, ch4, 32, 32]
-        f_32 = self.res4(h_down3)
-        pred_32 = self.to_grayscale_32(f_32) # Prediction for loss
+        x = self.down3(x) # -> [B, ch4, 32, 32]
+        pred_32 = self.to_grayscale_32(x) # Prediction for loss
 
         # Final output projection for ControlNet
-        f_32_norm_act = self.final_norm_act(f_32)
-        final_output = self.final_conv(f_32_norm_act) # -> [B, 4, 32, 32]
+        x = self.final_norm(x)
+        x = nonlinearity(x)
+        x = self.final_conv(x) # -> [B, 4, 32, 32]
 
         intermediate_preds = (pred_128, pred_64, pred_32)
 
-        return final_output, intermediate_preds
+        return x, intermediate_preds

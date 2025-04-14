@@ -9,7 +9,7 @@ from models.vae import VAE
 from models.conditional import UNetPACA, ControlNet, DegradationRemovalModuleResnet
 from models.diffusion import Diffusion
 
-from utils.dataset import CBCTtoCTDataset
+from utils.dataset import PreprocessedCBCTtoCTDataset, CBCTtoCTDataset
 
 def noise_loss(pred_noise, true_noise):
     return F.mse_loss(pred_noise, true_noise)
@@ -33,8 +33,7 @@ def degradation_loss(intermediate_preds, gt_ct_img):
     return total_dr_loss
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-ct_dir = '../training_data/CT'
-cbct_dir = '../training_data/CBCT'
+manifest_path = '../training_data/dataset_manifest.csv'
 vae_weights_path = '../pretrained_models/vae.pth'
 unet_weights_path = '../pretrained_models/unet.pth'
 controlnet_save_path = 'controlnet.pth'
@@ -60,7 +59,11 @@ transform = transforms.Compose([
             transforms.Normalize(mean=[0.5], std=[0.5])
         ])
 
-dataset = CBCTtoCTDataset(cbct_dir, ct_dir, transform=transform)
+# CBCT_path = '../training_data/CBCT'
+# CT_path = '../training_data/CT'
+# dataset = CBCTtoCTDataset(CBCT_path=CBCT_path, CT_path=CT_path, transform=transform)
+
+dataset = PreprocessedCBCTtoCTDataset(manifest_path=manifest_path, transform=transform)
 subset, _ = random_split(dataset, [subset_size, len(dataset) - subset_size])
 train_size = int(0.8 * len(subset))
 val_size = len(subset) - train_size - test_image_count

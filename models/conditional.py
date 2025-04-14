@@ -372,21 +372,21 @@ class DegradationRemovalModuleResnet(nn.Module):
         self.to_grayscale_32 = nn.Conv2d(ch4, 1, kernel_size=1) # Prediction head for 32x32
 
         self.final_norm = Normalize(ch4)
-        self.final_conv = nn.Conv2d(ch1, final_out_channels, kernel_size=3, stride=1, padding=1)
+        self.final_conv = nn.Conv2d(ch4, final_out_channels, kernel_size=3, stride=1, padding=1)
 
     def forward(self, x):
         x = self.init_conv(x)
 
         # Block 1 (-> 128x128)
-        x = self.down1(x)
+        x, _ = self.down1(x)
         pred_128 = self.to_grayscale_128(x) # Prediction for loss
 
         # Block 2 (-> 64x64)
-        x = self.down2(x) # -> [B, ch3, 64, 64]
+        x, _ = self.down2(x) # -> [B, ch3, 64, 64]
         pred_64 = self.to_grayscale_64(x) # Prediction for loss
 
         # Block 3 (-> 32x32)
-        x = self.down3(x) # -> [B, ch4, 32, 32]
+        x, _ = self.down3(x) # -> [B, ch4, 32, 32]
         pred_32 = self.to_grayscale_32(x) # Prediction for loss
 
         # Final output projection for ControlNet

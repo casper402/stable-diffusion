@@ -20,10 +20,10 @@ from diffusers import (
 SAVE_DIR = 'trained_model'
 # CBCT_DIR = '/Volumes/Lenovo PS8/Casper/kaggle_dataset/TRAINCBCTSimulated2D/256/REC-1' # full local
 # SCT_DIR = '/Volumes/Lenovo PS8/Casper/kaggle_dataset/TRAINCTAlignedToCBCT2D/volume-1' # full local
-CBCT_DIR = '../training_data/CBCT' # grendel
-SCT_DIR = '../training_data/CT/volume-1' # grendel
-# CBCT_DIR = '../../training_data/CBCT' # limited local
-# SCT_DIR = '../../training_data/CT' # limited local
+# CBCT_DIR = '../training_data/CBCT' # grendel
+# SCT_DIR = '../training_data/CT/volume-1' # grendel
+CBCT_DIR = '../../training_data/CBCT' # limited local
+SCT_DIR = '../../training_data/CT' # limited local
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 DTYPE = torch.float16 if DEVICE == "cuda" else torch.float32
 IMG_SIZE = 256
@@ -32,7 +32,7 @@ NUM_EPOCHS = 50
 LR = 1e-5
 # ------------------------------------------------------
 
-def preprocess_image_pil(path, size):
+def preprocess_image_pil(path, size=None):
     """Unified CBCT/sCT image loader: grayscale → resized → [0,1] → 3-channel tensor"""
     if size is None:
         size = IMG_SIZE
@@ -49,8 +49,8 @@ class CBCT2SCTDataset(Dataset):
     def __init__(self, cbct_dir, sct_dir, size=512):
         self.cbct_dir = cbct_dir
         self.sct_dir = sct_dir
-        self.filenames = sorted(os.listdir(cbct_dir))[:10] # Only 10 samples atm!
-        # self.filenames = sorted(os.listdir(cbct_dir))
+        # self.filenames = sorted(os.listdir(cbct_dir))[:10] # Only 10 samples atm!
+        self.filenames = sorted(os.listdir(cbct_dir))
         self.transform = transforms.Compose([
             transforms.Resize((size, size)),
             transforms.ToTensor()

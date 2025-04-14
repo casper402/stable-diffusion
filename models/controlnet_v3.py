@@ -102,13 +102,14 @@ def train():
         running_loss = 0.0
 
         for batch in dataloader:
-            cbct = batch["conditioning_image"].to(DEVICE, dtype=torch.float16)
-            sct = batch["target_image"].to(DEVICE, dtype=torch.float16)
+            cbct = batch["conditioning_image"].to(DEVICE, dtype=DTYPE)
+            sct = batch["target_image"].to(DEVICE, dtype=DTYPE)
 
             encoder_hidden_states = torch.zeros((cbct.size(0), 77, 768), device=DEVICE)
 
             with torch.no_grad():
-                latents = vae.encode(sct).latent_dist.sample() * 0.18215
+                with autocast(dtype=DTYPE):  # ✅ ensure input & model match
+                    latents = vae.encode(sct).latent_dist.sample() * 0.18215
 
             noise = torch.randn_like(latents)
             timesteps = torch.randint(

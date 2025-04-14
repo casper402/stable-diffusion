@@ -40,7 +40,7 @@ save_dir = 'dr_results'
 pred_dir = 'dr_results/predictions'
 
 subset_size = 5000
-batch_size = 8
+batch_size = 4
 test_batch_size = 1
 learning_rate = 5.0e-5
 epochs = 200

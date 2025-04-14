@@ -42,14 +42,14 @@ dr_module_save_path = 'dr_module.pth'
 unet_paca_save_path = 'unet_paca_layers.pth'
 pred_dir = f"./predictions/"
 
-subset_size = 20
-batch_size = 1
+subset_size = 20000
+batch_size = 8
 test_batch_size = 1
 learning_rate = 5.0e-5
 epochs = 200
 num_workers = 8
 max_grad_norm = 1.0
-test_image_count = 2
+test_image_count = 3
 gamma = 1 # Weight for the degradation loss (as used in PASD paper)
 
 transform = transforms.Compose([

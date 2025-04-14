@@ -27,8 +27,8 @@ SCT_DIR = '../training_data/CT/volume-1' # grendel
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 DTYPE = torch.float16 if DEVICE == "cuda" else torch.float32
 IMG_SIZE = 256
-BATCH_SIZE = 2
-NUM_EPOCHS = 50
+BATCH_SIZE = 4
+NUM_EPOCHS = 500
 LR = 1e-5
 # ------------------------------------------------------
 
@@ -49,8 +49,8 @@ class CBCT2SCTDataset(Dataset):
     def __init__(self, cbct_dir, sct_dir, size=512):
         self.cbct_dir = cbct_dir
         self.sct_dir = sct_dir
-        self.filenames = sorted(os.listdir(cbct_dir))[:10] # Only 10 samples atm!
-        # self.filenames = sorted(os.listdir(cbct_dir))
+        # self.filenames = sorted(os.listdir(cbct_dir))[:10] # Only 10 samples atm!
+        self.filenames = sorted(os.listdir(cbct_dir))
         self.transform = transforms.Compose([
             transforms.Resize((size, size)),
             transforms.ToTensor()
@@ -88,27 +88,14 @@ def train():
     controlnet = ControlNetModel.from_pretrained("lllyasviel/sd-controlnet-canny").to(DEVICE)
     scheduler = DDPMScheduler(num_train_timesteps=1000)
 
-    # Freeze all UNet layers
     unet.requires_grad_(False)
-
-    # Unfreeze mid block
-    for param in unet.mid_block.parameters():
-        param.requires_grad = True
-
-    # Unfreeze up_blocks (output)
-    for block in unet.up_blocks:
-        for param in block.parameters():
-            param.requires_grad = True
-
-    controlnet.requires_grad_(False)
+    controlnet.requires_grad_(True)
 
     vae.eval()
     unet.train()
     controlnet.train()
 
-    # Optimizer: only trainable params
-    params_to_train = filter(lambda p: p.requires_grad, list(unet.parameters()))
-    # params_to_train = filter(lambda p: p.requires_grad, list(unet.parameters()) + list(controlnet.parameters()))
+    params_to_train = list(controlnet.parameters())
     optimizer = torch.optim.AdamW(params_to_train, lr=LR)
 
     mse_loss = nn.MSELoss()

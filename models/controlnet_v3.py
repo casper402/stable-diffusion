@@ -6,6 +6,7 @@ import cv2
 import torch
 from torch import nn
 from torch.utils.data import Dataset, DataLoader
+from torch.cuda.amp import autocast, GradScaler
 from torchvision import transforms
 from diffusers import (
     AutoencoderKL,
@@ -47,6 +48,7 @@ class CBCT2SCTDataset(Dataset):
         self.cbct_dir = cbct_dir
         self.sct_dir = sct_dir
         self.filenames = sorted(os.listdir(cbct_dir))[:10] # Only 10 samples atm!
+        # self.filenames = sorted(os.listdir(cbct_dir))
         self.transform = transforms.Compose([
             transforms.Resize((size, size)),
             transforms.ToTensor()
@@ -93,6 +95,8 @@ def train():
 
     optimizer = torch.optim.AdamW(list(unet.parameters()) + list(controlnet.parameters()), lr=LR)
 
+    scaler = GradScaler()  # TODO: testing — mixed precision loss scaler
+
     mse_loss = nn.MSELoss()
     best_loss = float("inf")  # TODO: testing — track best model
 
@@ -102,19 +106,11 @@ def train():
         running_loss = 0.0
 
         for batch in dataloader:
-            cbct = batch["conditioning_image"].to(DEVICE, dtype=DTYPE)
-            sct = batch["target_image"].to(DEVICE, dtype=DTYPE)
-
-            # TODO: testing — check for bad input values
-            if torch.isnan(cbct).any() or torch.isinf(cbct).any():
-                print("⚠️ CBCT input contains NaNs or Infs — skipping batch")
-                continue
-            if torch.isnan(sct).any() or torch.isinf(sct).any():
-                print("⚠️ SCT input contains NaNs or Infs — skipping batch")
-                continue
+            cbct = batch["conditioning_image"].to(DEVICE)
+            sct = batch["target_image"].to(DEVICE)
 
             batch_size = cbct.shape[0]
-            encoder_hidden_states = torch.zeros((batch_size, 77, 768), device=DEVICE, dtype=DTYPE)
+            encoder_hidden_states = torch.zeros((batch_size, 77, 768), device=DEVICE)
 
             with torch.no_grad():
                 latents = vae.encode(sct).latent_dist.sample() * 0.18215
@@ -123,44 +119,39 @@ def train():
             timesteps = torch.randint(0, scheduler.config.num_train_timesteps, (batch_size,), device=DEVICE).long()
             noisy_latents = scheduler.add_noise(latents, noise, timesteps)
 
-            # TODO: testing — check latent tensor before forward
-            if torch.isnan(noisy_latents).any():
-                print("⚠️ Noisy latents contain NaNs — skipping batch")
-                continue
+            optimizer.zero_grad()
 
-            controlnet_output = controlnet(
-                noisy_latents, timesteps,
-                encoder_hidden_states=encoder_hidden_states,
-                controlnet_cond=cbct
-            )
+            # TODO: testing — mixed precision forward & loss
+            with autocast(dtype=torch.float16):
+                controlnet_output = controlnet(
+                    noisy_latents, timesteps,
+                    encoder_hidden_states=encoder_hidden_states,
+                    controlnet_cond=cbct
+                )
 
-            pred = unet(
-                noisy_latents,
-                timesteps,
-                encoder_hidden_states=encoder_hidden_states,
-                down_block_additional_residuals=controlnet_output.down_block_res_samples,
-                mid_block_additional_residual=controlnet_output.mid_block_res_sample
-            ).sample
+                pred = unet(
+                    noisy_latents,
+                    timesteps,
+                    encoder_hidden_states=encoder_hidden_states,
+                    down_block_additional_residuals=controlnet_output.down_block_res_samples,
+                    mid_block_additional_residual=controlnet_output.mid_block_res_sample
+                ).sample
 
-            loss = mse_loss(pred, noise)
+                loss = mse_loss(pred, noise)
 
-            # TODO: testing — handle NaN loss
             if torch.isnan(loss):
                 print("❌ Loss is NaN — skipping step")
                 continue
 
-            loss.backward()
+            # TODO: testing — backprop with scaling
+            scaler.scale(loss).backward()
 
-            # TODO: testing — gradient clipping to stabilize training
             torch.nn.utils.clip_grad_norm_(unet.parameters(), 1.0)
             torch.nn.utils.clip_grad_norm_(controlnet.parameters(), 1.0)
 
-            print("stepping")
-            optimizer.step()
-            optimizer.zero_grad()
+            scaler.step(optimizer)
+            scaler.update()
 
-
-            print("loss added")
             running_loss += loss.item()
 
         avg_loss = running_loss / len(dataloader)

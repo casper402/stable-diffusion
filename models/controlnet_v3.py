@@ -26,14 +26,16 @@ SCT_DIR = '../training_data/CT/volume-1' # grendel
 # SCT_DIR = '../../training_data/CT' # limited local
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 DTYPE = torch.float16 if DEVICE == "cuda" else torch.float32
-IMG_SIZE = 512
-BATCH_SIZE = 4
+IMG_SIZE = 256
+BATCH_SIZE = 2
 NUM_EPOCHS = 50
 LR = 1e-5
 # ------------------------------------------------------
 
-def preprocess_image_pil(path, size=512):
+def preprocess_image_pil(path, size):
     """Unified CBCT/sCT image loader: grayscale → resized → [0,1] → 3-channel tensor"""
+    if size is None:
+        size = IMG_SIZE
     image = Image.open(path).convert("L")
     transform = transforms.Compose([
         transforms.Resize((size, size)),
@@ -96,7 +98,7 @@ def train():
 
     best_loss = float("inf")
 
-    print(f"🔧 Training on device: {DEVICE}")
+    print(f"🔧 Training on device: {DEVICE}, with image size {IMG_SIZE}")
 
     for epoch in range(NUM_EPOCHS):
         running_loss = 0.0
@@ -108,7 +110,7 @@ def train():
             encoder_hidden_states = torch.zeros((cbct.size(0), 77, 768), device=DEVICE)
 
             with torch.no_grad():
-                with autocast(dtype=DTYPE):  # ✅ ensure input & model match
+                with autocast(dtype=DTYPE):  # ✅ ensure dtype safety in VAE
                     latents = vae.encode(sct).latent_dist.sample() * 0.18215
 
             noise = torch.randn_like(latents)
@@ -145,7 +147,7 @@ def train():
                 scaler.update()
                 running_loss += loss.item()
             else:
-                print("⚠️ NaN or Inf in loss — skipped step.")
+                print("⚠️ Skipping step due to NaN or Inf loss.")
 
         avg_loss = running_loss / len(dataloader)
         print(f"✅ Epoch {epoch+1} | Avg Loss: {avg_loss:.6f}")

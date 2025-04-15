@@ -104,14 +104,13 @@ for epoch in range(epochs):
         with torch.no_grad():
             ct_mu, ct_logvar = vae.encode(ct_img)
             z_ct = vae.reparameterize(ct_mu, ct_logvar)
-            cbct_mu, cbct_logvar = vae.encode(cbct_img)
-            z_cbct = vae.reparameterize(cbct_mu, cbct_logvar)
+            cbct_mu, _ = vae.encode(cbct_img)
 
         t = diffusion.sample_timesteps(z_ct.size(0))
         noise = torch.randn_like(z_ct)
         z_noisy_ct = diffusion.add_noise(z_ct, t, noise=noise)
 
-        pred_noise = unet(z_noisy_ct, z_cbct, t)
+        pred_noise = unet(z_noisy_ct, cbct_mu, t)
 
         loss = noise_loss(pred_noise, noise)
 
@@ -171,8 +170,7 @@ for epoch in range(epochs):
                 cbct = cbct.to(device)
                 ct = ct.to(device)
 
-                cbct_mu, cbct_logvar = vae.encode(cbct)
-                z_cbct = vae.reparameterize(cbct_mu, cbct_logvar)
+                cbct_mu, _ = vae.encode(cbct)
 
                 z_t = torch.randn_like(vae.encode(ct)[0])
                 T = diffusion.timesteps
@@ -185,7 +183,7 @@ for epoch in range(epochs):
                     alpha_cumprod_t = diffusion.alpha_cumprod[t_int].view(-1, 1, 1, 1)
                     sqrt_one_minus_alpha_cumprod_t = torch.sqrt(1.0 - alpha_cumprod_t)
                     sqrt_reciprocal_alpha_t = torch.sqrt(1.0 / alpha_t)
-                    pred_noise = unet(z_t, z_cbct, t)
+                    pred_noise = unet(z_t, cbct_mu, t)
                     model_mean_coef2 = beta_t / sqrt_one_minus_alpha_cumprod_t
                     model_mean = sqrt_reciprocal_alpha_t * (z_t - model_mean_coef2 * pred_noise)
 

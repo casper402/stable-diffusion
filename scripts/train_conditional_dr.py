@@ -39,7 +39,7 @@ unet_weights_path = '../pretrained_models/unet.pth'
 save_dir = 'dr_results_2'
 pred_dir = f'{save_dir}/predictions'
 
-subset_size = 2000
+subset_size = 5000
 batch_size = 4
 test_batch_size = 1
 learning_rate = 5.0e-5
@@ -100,6 +100,7 @@ if trainable_unet_params == 0:
     print("Warning: No PACA parameters found or unfrozen in UNet")
 
 controlnet = ControlNet().to(device)
+controlnet.load_state_dict(torch.load(unet_weights_path, map_location=device), strict=False)
 controlnet.train()
 trainable_controlnet_params = sum(p.numel() for p in controlnet.parameters())
 print(f"ControlNet instantiated ({trainable_controlnet_params} trainable parameters).")
@@ -125,7 +126,7 @@ scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
     optimizer,
     mode='min',
     factor=0.5,
-    patience=50,
+    patience=20,
     threshold=1e-4,
     verbose=True,
     min_lr=1e-7

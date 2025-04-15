@@ -48,7 +48,7 @@ class TimestepEmbedding(nn.Module):
         self.act = nn.SiLU()
         self.linear2 = nn.Linear(dim * 4, dim)
 
-    def forward(self, timesteps): #TODO: Use time embedding implementation form ldm: https://github.com/CompVis/latent-diffusion/blob/main/ldm/modules/diffusionmodules/model.py#L218
+    def forward(self, timesteps):
         half_dim = self.dim // 2
         emb = math.log(10000.0) / (half_dim - 1)
         emb = torch.exp(torch.arange(half_dim, dtype=torch.float32, device=timesteps.device) * -emb)
@@ -107,6 +107,27 @@ class AttentionBlock(nn.Module):
         h_ = h_.transpose(1, 2).view(b, c, h, w)
         return x + h_
     
+class CrossAttentionBlock(nn.Module):
+    def __init__(self, dim, num_heads=8):
+        super().__init__()
+        self.heads = num_heads
+        self.scale = dim ** -0.5
+        self.to_q = nn.Conv2d(dim, dim, 1)
+        self.to_k = nn.Conv2d(dim, dim, 1)
+        self.to_v = nn.Conv2d(dim, dim, 1)
+        self.to_out = nn.Conv2d(dim, dim, 1)
+
+    def forward(self, x, context):
+        b, c, h, w = x.shape
+        q = self.to_q(x).reshape(b, self.heads, c // self.heads, h * w)
+        k = self.to_k(context).reshape(b, self.heads, c // self.heads, -1)
+        v = self.to_v(context).reshape(b, self.heads, c // self.heads, -1)
+        attn = torch.einsum('bhcn,bhcm->bhnm', q, k) * self.scale
+        attn = attn.softmax(dim=-1)
+        out = torch.einsum('bhnm,bhcm->bhcn', attn, v)
+        out = out.reshape(b, c, h, w)
+        return self.to_out(out + x)
+    
 class DownBlock(nn.Module):
     def __init__(self, in_channels, out_channels, time_emb_dim=None, has_attn=False, num_heads=8, dropout_rate=0.1):
         super().__init__()
@@ -154,13 +175,13 @@ class MiddleBlock(nn.Module):
     def __init__(self, in_channels, time_emb_dim=None, num_heads=8, dropout=0.1):
         super().__init__()
         self.res_block1 = ResnetBlock(in_channels, in_channels, time_emb_dim, dropout)
-        self.attention1 = AttentionBlock(in_channels, num_heads=num_heads)
+        self.attention1 = CrossAttentionBlock(in_channels, num_heads=num_heads)
         self.res_block2 = ResnetBlock(in_channels, in_channels, time_emb_dim, dropout)
 
-    def forward(self, x, temb=None):
+    def forward(self, x, context, temb=None):
         h = x
         h = self.res_block1(h, temb)
-        h = self.attention1(h)
+        h = self.attention1(h, context)
         h = self.res_block2(h, temb)
         return h
 
@@ -190,6 +211,7 @@ class UNet(nn.Module): # Modified UNet for ControlNet
         self.down2 = DownBlock(ch2, ch3, time_emb_dim, attn_level_1, num_heads, dropout_rate)
         self.down3 = DownBlock(ch3, ch4, time_emb_dim, attn_level_2, num_heads, dropout_rate)
 
+        self.context_proj = nn.Conv2d(in_channels, ch4, kernel_size=1)
         self.middle = MiddleBlock(ch4, time_emb_dim, num_heads, dropout_rate)
 
         self.up3 = UpBlock(ch4, ch3, ch4, time_emb_dim, attn_level_2, num_heads, dropout_rate)
@@ -199,15 +221,15 @@ class UNet(nn.Module): # Modified UNet for ControlNet
         self.final_norm = Normalize(ch1) # Norm before final conv
         self.final_conv = nn.Conv2d(ch1, out_channels, kernel_size=3, stride=1, padding=1)
 
-    def forward(self, x, t):
+    def forward(self, x, context, t):
         t_emb = self.time_embedding(t)
         x = self.init_conv(x)         # Initial convolution: [B, 4, H, W] -> [B, 64, H, W]
-
         x, skip1 = self.down1(x, t_emb)   # -> [B, 128, H/2, W/2]
         x, skip2 = self.down2(x, t_emb)  # -> [B, 256, H/4, W/4]
         x, skip3 = self.down3(x, t_emb)  # -> [B, 512, H/8, W/8]
 
-        x = self.middle(x, t_emb) # -> [B, 512, H/8, W/8]
+        context = self.context_proj(context)
+        x = self.middle(x, context, t_emb) # -> [B, 512, H/8, W/8]
 
         x = self.up3(x, skip3, t_emb)    # -> [B, 256, H/4, W/4]
         x = self.up2(x, skip2, t_emb)     # -> [B, 128, H/2, W/2]

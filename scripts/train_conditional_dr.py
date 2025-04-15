@@ -9,7 +9,7 @@ from models.vae import VAE
 from models.conditional import UNetPACA, ControlNet, DegradationRemovalModuleResnet
 from models.diffusion import Diffusion
 
-from utils.dataset import PreprocessedCBCTtoCTDataset, CBCTtoCTDataset
+from utils.dataset import PreprocessedCBCTtoCTDataset
 
 def noise_loss(pred_noise, true_noise):
     return F.mse_loss(pred_noise, true_noise)

@@ -36,6 +36,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 manifest_path = '../training_data/dataset_manifest.csv'
 vae_weights_path = '../pretrained_models/vae.pth'
 unet_weights_path = '../pretrained_models/unet.pth'
+dr_weights_path = '../pretrained_models/dr_module.pth'
 save_dir = 'dr_results_2'
 pred_dir = f'{save_dir}/predictions'
 
@@ -106,6 +107,7 @@ trainable_controlnet_params = sum(p.numel() for p in controlnet.parameters())
 print(f"ControlNet instantiated ({trainable_controlnet_params} trainable parameters).")
 
 dr_module = DegradationRemovalModuleResnet(in_channels=1, final_out_channels=4).to(device) # Matches ControlNet input
+dr_module.load_state_dict(torch.load(dr_weights_path, map_location=device), strict=False)
 dr_module.train()
 trainable_dr_params = sum(p.numel() for p in dr_module.parameters() if p.requires_grad)
 print(f"DR Module instantiated ({trainable_dr_params} trainable parameters).")

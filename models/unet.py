@@ -108,27 +108,25 @@ class AttentionBlock(nn.Module):
         return x + h_
     
 class CrossAttentionBlock(nn.Module):
-    def __init__(self, channels, num_heads=8):
+    def __init__(self, dim, num_heads=8):
         super().__init__()
-        self.num_heads = num_heads
-        self.norm = Normalize(channels)
-        self.mha = nn.MultiheadAttention(
-            embed_dim=channels,
-            num_heads=num_heads,
-            batch_first=True # Crucial for our reshaping (B, L, E)
-        )
+        self.heads = num_heads
+        self.scale = dim ** -0.5
+        self.to_q = nn.Conv2d(dim, dim, 1)
+        self.to_k = nn.Conv2d(dim, dim, 1)
+        self.to_v = nn.Conv2d(dim, dim, 1)
+        self.to_out = nn.Conv2d(dim, dim, 1)
+
     def forward(self, x, context):
-        h_ = x
-        h_ = self.norm(h_)
-        b, c, h, w = h_.shape
-        h_ = h_.view(b, c, h * w).transpose(1, 2)
-
-        context = self.norm(context)
-        context = context.view(b, c, h * w).transpose(1, 2)
-
-        h_, _ = self.mha(h_, context, context)
-        h_ = h_.transpose(1, 2).view(b, c, h, w)
-        return x + h_
+        b, c, h, w = x.shape
+        q = self.to_q(x).reshape(b, self.heads, c // self.heads, h * w)
+        k = self.to_k(context).reshape(b, self.heads, c // self.heads, -1)
+        v = self.to_v(context).reshape(b, self.heads, c // self.heads, -1)
+        attn = torch.einsum('bhcn,bhcm->bhnm', q, k) * self.scale
+        attn = attn.softmax(dim=-1)
+        out = torch.einsum('bhnm,bhcm->bhcn', attn, v)
+        out = out.reshape(b, c, h, w)
+        return self.to_out(out + x)
     
 class DownBlock(nn.Module):
     def __init__(self, in_channels, out_channels, time_emb_dim=None, has_attn=False, num_heads=8, dropout_rate=0.1):
@@ -213,6 +211,7 @@ class UNet(nn.Module): # Modified UNet for ControlNet
         self.down2 = DownBlock(ch2, ch3, time_emb_dim, attn_level_1, num_heads, dropout_rate)
         self.down3 = DownBlock(ch3, ch4, time_emb_dim, attn_level_2, num_heads, dropout_rate)
 
+        self.context_proj = nn.Conv2d(in_channels, ch4, kernel_size=1)
         self.middle = MiddleBlock(ch4, time_emb_dim, num_heads, dropout_rate)
 
         self.up3 = UpBlock(ch4, ch3, ch4, time_emb_dim, attn_level_2, num_heads, dropout_rate)
@@ -229,11 +228,7 @@ class UNet(nn.Module): # Modified UNet for ControlNet
         x, skip2 = self.down2(x, t_emb)  # -> [B, 256, H/4, W/4]
         x, skip3 = self.down3(x, t_emb)  # -> [B, 512, H/8, W/8]
 
-        context = self.init_conv(context)
-        context, _ = self.down1(context)
-        context, _ = self.down2(context)
-        context, _ = self.down3(context)
-
+        context = self.context_proj(context)
         x = self.middle(x, context, t_emb) # -> [B, 512, H/8, W/8]
 
         x = self.up3(x, skip3, t_emb)    # -> [B, 256, H/4, W/4]

@@ -66,7 +66,7 @@ for param in vae.parameters():
     param.requires_grad = False
 
 unet = UNet().to(device)
-unet.load_state_dict(torch.load(unet_weights_path, map_location=device), strict=True)
+unet.load_state_dict(torch.load(unet_weights_path, map_location=device), strict=False) # Added key(s): "context_proj.weight", "context_proj.bias". 
 
 diffusion = Diffusion(device, timesteps=1000)
 

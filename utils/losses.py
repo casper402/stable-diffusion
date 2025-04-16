@@ -49,6 +49,15 @@ class SsimLoss(torch.nn.Module):
         return (x + 1) / 2.0
 
     def forward(self, recon, x):
-        recon = self.normalize(recon)
-        x = self.normalize(x)
-        return 1 - ssim(recon, x)
+    recon = self.normalize(recon)
+    x = self.normalize(x)
+    
+    if torch.isnan(recon).any():
+        print("Found NaNs in recon after normalization")
+    if torch.isnan(x).any():
+        print("Found NaNs in x after normalization")
+
+    print("recon min", recon.min().item(), "max", recon.max().item())
+    print("x min", x.min().item(), "max", x.max().item())
+
+    return 1 - ssim(recon, x, data_range=1.0)

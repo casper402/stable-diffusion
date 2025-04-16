@@ -33,6 +33,7 @@ class CTDataset(Dataset):
 
 class CTDatasetNPY(Dataset):
     def __init__(self, CT_path, transform=None):
+        self.path = CT_path
         self.CT_slices = self._collect_slices(CT_path)
         self.transform = transform
 
@@ -54,7 +55,7 @@ class CTDatasetNPY(Dataset):
     def __getitem__(self, idx):
         CT_path = self.CT_slices[idx]
         # Load the slice from .npy file and ensure it's a float32 array
-        CT_slice = np.load(CT_path).astype(np.float32)
+        CT_slice = np.load(self.path + '/' + CT_path).astype(np.float32)
         
         # Normalize the values assuming the data range is [-1000, 1000]
         CT_slice = CT_slice / 1000.0

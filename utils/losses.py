@@ -54,10 +54,9 @@ class SsimLoss(torch.nn.Module):
         
         if torch.isnan(recon).any():
             print("Found NaNs in recon after normalization")
+            raise Exception("oh shit, recon is nan")
         if torch.isnan(x).any():
             print("Found NaNs in x after normalization")
-
-        print("recon min", recon.min().item(), "max", recon.max().item())
-        print("x min", x.min().item(), "max", x.max().item())
+            raise Exception("oh shit, x is nan")
 
         return 1 - ssim(recon, x, data_range=1.0)

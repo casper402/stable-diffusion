@@ -7,7 +7,7 @@ import torch
 import torch.nn.functional as F
 import os
 from models.vae import VAE
-from utils.dataset import CTDataset
+from utils.dataset import CTDatasetNPY
 from utils.losses import PerceptualLoss, SsimLoss
 
 def vae_loss(recon, x, mu, logvar, perceptual_weight=0.1, ssim_weight=0.8, mse_weight=0.5, kl_weight=0.00001, l1_weight=0.5):

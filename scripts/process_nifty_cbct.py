@@ -3,9 +3,10 @@ import os
 import numpy as np
 import nibabel as nib
 import concurrent.futures
+from PIL import Image, ImageOps
 
-DEBUG = False
-SCALING_METHOD = "percentile"  # Options: "simple", "zscore", "percentile"
+DEBUG = True
+SCALING_METHOD = "simple"  # Options: "simple", "zscore", "percentile"
 PERCENTILE = 0.01
 
 def scale_simple(data):
@@ -36,16 +37,29 @@ def scale_percentile(data, target_min=-1000, target_max=1000):
     
     Returns the scaled data. (For debugging you can also return lo and hi.)
     """
-    lower_percentile, upper_percentile = PERCENTILE, 100-PERCENTILE
     lo = np.percentile(data, lower_percentile)
     hi = np.percentile(data, upper_percentile)
     data_clipped = np.clip(data, lo, hi)
-    # Normalize to [0,1], then map to [target_min, target_max].
     scaled = (data_clipped - lo) / (hi - lo)
     scaled = scaled * (target_max - target_min) + target_min
     if DEBUG:
         print(f"Percentile thresholds: {lower_percentile}th = {lo:.2f}, {upper_percentile}th = {hi:.2f}")
     return scaled
+
+def transform_slice(slice_array):
+    """
+    Transforms a 2D numpy array so that the output becomes a 256x256 image.
+    The transformation is:
+      - Convert to a PIL image (floating point mode).
+      - Pad the image (e.g., pad (left, top, right, bottom) as needed).
+      - Resize to 256x256 using bilinear interpolation.
+    Returns a 256x256 numpy array.
+    """
+    img = Image.fromarray(slice_array).convert("F")
+    padded_img = ImageOps.expand(img, border=(0, 64, 0, 64), fill=0)
+    resized_img = padded_img.resize((256, 256), resample=Image.BILINEAR)
+    out_array = np.array(resized_img)
+    return out_array
 
 def process_cbct_nifti_file(folder_path, nifty_file_name, output_dir, scaling_method="simple"):
     """
@@ -53,34 +67,32 @@ def process_cbct_nifti_file(folder_path, nifty_file_name, output_dir, scaling_me
       - Loads the volume.
       - Scales the data using one of the following methods:
             * "simple": scales from [0, 65535] to [-1000, 1000]
-            * "zscore": computes z = (x-μ)/σ, reports per‐slice statistics on the raw z values,
-                        clips them to [-1, 1], and then maps to [-1000, 1000] (by multiplying by 1000)
-            * "percentile": clips the data at the 2nd and 98th percentiles (by default) and linearly maps
-                           the resulting range to [-1000, 1000]
-      - For each slice, computes statistics (min, max, gap) on the scaled data.
-      - Rotates each slice 90° clockwise and saves it as a .npy file.
+            * "zscore": computes z = (x-μ)/σ, reports per-slice statistics on the raw z values,
+                        clips them to [-1, 1], and then maps to [-1000,1000] (multiplying by 1000)
+            * "percentile": clips the data at the 2nd and 98th percentiles and linearly maps to [-1000,1000]
+      - For each slice, computes statistics on the scaled data.
+      - Rotates each slice 90° clockwise, applies the transformation (padding+resize to 256x256),
+        and saves it as a compressed file (.npz).
     
     For naming consistency, if the input file is named "REC-<num>.nii",
-    the base name is altered to "volume-<num>".
-
+    the base name is changed to "volume-<num>".
+    
     Returns:
       base_name, max_gap, max_gap_idx, global_min, global_min_idx, global_max, global_max_idx
-      (statistics are computed on the scaled data – for "zscore", on the raw z values prior to clipping).
     """
     nifty_path = os.path.join(folder_path, nifty_file_name)
     print("Loading", nifty_path, "...")
     
-    # Load the NIfTI file (assumed to be 3D)
+    # Load the NIfTI file (assumed to be 3D).
     img = nib.load(nifty_path)
-    data = img.get_fdata()  # Original data assumed in [0, 65535]
+    data = img.get_fdata()  # Original data in [0, 65535]
     
     if scaling_method == "simple":
         data_scaled = scale_simple(data)
     elif scaling_method == "zscore":
-        # Compute raw z-score values; these will be used for computing per-slice stats.
         data_z = scale_zscore(data)
     elif scaling_method == "percentile":
-        data_scaled = scale_percentile(data)  # Uses default 2nd and 98th percentiles.
+        data_scaled = scale_percentile(data)
     else:
         raise ValueError("Unknown scaling method: " + scaling_method)
     
@@ -106,10 +118,8 @@ def process_cbct_nifti_file(folder_path, nifty_file_name, output_dir, scaling_me
 
     num_slices = data.shape[2]
     for i in range(num_slices):
-        if scaling_method == "simple" or scaling_method == "percentile":
-            # For simple and percentile scaling, data_scaled is ready.
+        if scaling_method in ["simple", "percentile"]:
             slice_scaled = data_scaled[:, :, i]
-            # Update statistics using slice_scaled.
             smin = slice_scaled.min()
             smax = slice_scaled.max()
             gap = smax - smin
@@ -123,9 +133,7 @@ def process_cbct_nifti_file(folder_path, nifty_file_name, output_dir, scaling_me
                 global_max = smax
                 global_max_idx = i
         elif scaling_method == "zscore":
-            # For zscore scaling, get the raw z-value for the slice.
             slice_z = data_z[:, :, i]
-            # Compute statistics on the raw z-values.
             slice_min = slice_z.min()
             slice_max = slice_z.max()
             slice_gap = slice_max - slice_min
@@ -138,17 +146,20 @@ def process_cbct_nifti_file(folder_path, nifty_file_name, output_dir, scaling_me
             if slice_max > global_max:
                 global_max = slice_max
                 global_max_idx = i
-            # Now clip the raw z-values to [-1,1] and scale to [-1000,1000].
             slice_scaled = np.clip(slice_z, -1, 1) * 1000
         else:
-            slice_scaled = None  # Should never happen
+            slice_scaled = None
         
-        # Rotate 90° clockwise and save the slice.
+        # Rotate 90° clockwise.
         rotated_slice = np.rot90(slice_scaled, k=-1)
-        slice_file = os.path.join(output_dir, f"{base_name}_slice_{i:03d}.npy")
-        np.save(slice_file, rotated_slice)
+        # Transform to a 256x256 image.
+        transformed_slice = transform_slice(rotated_slice)
+        # Save as a compressed .npz file.
+        # Use a .npz extension and store the array with key "slice".
+        slice_file = os.path.join(output_dir, f"{base_name}_slice_{i:03d}.npz")
+        np.savez_compressed(slice_file, slice=transformed_slice)
         if DEBUG:
-            print(f"Saved rotated slice {i} as: {slice_file}")
+            print(f"Saved transformed slice {i} as: {slice_file}")
     
     if DEBUG:
         print(f"\nVolume {base_name}:")
@@ -223,7 +234,7 @@ if __name__ == "__main__":
     # process_batch(scaling_method="zscore")
 
     # For robust percentile based scaling:
-    process_batch(scaling_method="percentile")
+    # process_batch(scaling_method="percentile")
 
     # To process single batch:
-    # process(0)
+    process(0)

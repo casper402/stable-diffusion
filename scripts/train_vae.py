@@ -1,4 +1,5 @@
 import torchvision.utils as vutils
+import torchvision.transforms as transforms
 from torch.utils.data import random_split
 from torch.utils.data import DataLoader
 import torchvision.transforms as transforms
@@ -23,21 +24,15 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 perceptual_loss = PerceptualLoss(device=device)
 ssim_loss = SsimLoss(device=device)
 
-dataset = CTDataset('../training_data/CT', transform=transforms.Compose([
-            transforms.Grayscale(),
-            transforms.Pad((0, 64, 0, 64)),
-            transforms.Resize((256, 256)),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.5], std=[0.5])
-        ]))
 
-subset_size = 5000
-subset, _ = random_split(dataset, [subset_size, len(dataset) - subset_size])
+tensor_transform = transforms.Compose([
+    transforms.Lambda(lambda x: torch.nn.functional.pad(x, (0, 0, 64, 64))),
+    transforms.Lambda(lambda x: torch.nn.functional.interpolate(x.unsqueeze(0), size=(256, 256), mode='bilinear', align_corners=False).squeeze(0)),
+])
 
-train_size = int(0.8 * len(subset))
-val_size = len(subset) - train_size - 10
-test_size = 10
-train_dataset, val_dataset, test_dataset = random_split(subset, [train_size, val_size, test_size])
+train_dataset = CTDatasetNPY('../data/CT/training', transform=tensor_transform)
+val_dataset = CTDatasetNPY('../data/CT/validation', transform=tensor_transform)
+test_dataset = CTDatasetNPY('../data/CT/test', transform=tensor_transform)
 
 train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True, num_workers=4)
 val_loader = DataLoader(val_dataset, batch_size=16, shuffle=False, num_workers=4)

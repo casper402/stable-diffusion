@@ -1,5 +1,8 @@
 import os
+import numpy as np
 import csv
+import cv2
+import torch
 from torch.utils.data import Dataset
 from PIL import Image
 
@@ -26,6 +29,48 @@ class CTDataset(Dataset):
         CT_slice = Image.open(CT_path).convert("L")
         if self.transform:
             CT_slice = self.transform(CT_slice)
+        return CT_slice
+
+class CTDatasetNPY(Dataset):
+    def __init__(self, CT_path, transform=None):
+        self.CT_slices = self._collect_slices(CT_path)
+        self.transform = transform
+        
+    def _collect_slices(self, dataset_path, limit=None):
+        slice_paths = []
+        count = 0
+        for subdir in os.listdir(dataset_path):
+            subdir_path = os.path.join(dataset_path, subdir)
+            if os.path.isdir(subdir_path):
+                for slice_name in os.listdir(subdir_path):
+                    if limit is not None and count > limit:
+                        break
+                    # Only consider .npy files
+                    if slice_name.endswith('.npy'):
+                        slice_path = os.path.join(subdir_path, slice_name)
+                        slice_paths.append(slice_path)
+                        count += 1
+        return slice_paths
+    
+    def __len__(self):
+        return len(self.CT_slices)
+    
+    def __getitem__(self, idx):
+        CT_path = self.CT_slices[idx]
+        # Load the slice from .npy file and ensure it's a float32 array
+        CT_slice = np.load(CT_path).astype(np.float32)
+        
+        # Normalize the values assuming the data range is [-1000, 1000]
+        CT_slice = CT_slice / 1000.0
+        
+        # Convert the NumPy array to a PyTorch tensor.
+        # We add an extra dimension for the channel (i.e. [C, H, W])
+        CT_slice = torch.from_numpy(CT_slice).unsqueeze(0)
+        
+        # Apply further transforms if provided (make sure they work on tensors)
+        if self.transform:
+            CT_slice = self.transform(CT_slice)
+        
         return CT_slice
     
 class CBCTtoCTDataset(Dataset):

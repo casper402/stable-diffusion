@@ -34,6 +34,13 @@ train_dataset = CTDatasetNPY('../data/CT/training', transform=tensor_transform)
 val_dataset = CTDatasetNPY('../data/CT/validation', transform=tensor_transform)
 test_dataset = CTDatasetNPY('../data/CT/test', transform=tensor_transform)
 
+print("len train:", len(train_dataset))
+print("len val:", len(val_dataset))
+print("len test:", len(test_dataset))
+
+if len(train_dataset) == 0 or len(val_dataset) == 0 or len(test_dataset) == 0:
+    raise Exception("Had empty dataset...")
+
 train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True, num_workers=4)
 val_loader = DataLoader(val_dataset, batch_size=16, shuffle=False, num_workers=4)
 test_loader = DataLoader(test_dataset, batch_size=2, shuffle=False, num_workers=4)

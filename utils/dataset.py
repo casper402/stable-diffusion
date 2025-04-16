@@ -37,6 +37,7 @@ class CTDatasetNPY(Dataset):
         self.transform = transform
 
     def _collect_slices(self, dataset_path, limit=None):
+        print("collecting slices")
         slice_paths = []
         count = 0
         for slice_name in os.listdir(dataset_path):
@@ -46,22 +47,6 @@ class CTDatasetNPY(Dataset):
                 slice_path = os.path.join(subdir_path, slice_name)
                 slice_paths.append(slice_path)
                 count += 1
-        return slice_paths
-        
-    def _collect_slices(self, dataset_path, limit=None):
-        slice_paths = []
-        count = 0
-        for subdir in os.listdir(dataset_path):
-            subdir_path = os.path.join(dataset_path, subdir)
-            if os.path.isdir(subdir_path):
-                for slice_name in os.listdir(subdir_path):
-                    if limit is not None and count > limit:
-                        break
-                    # Only consider .npy files
-                    if slice_name.endswith('.npy'):
-                        slice_path = os.path.join(subdir_path, slice_name)
-                        slice_paths.append(slice_path)
-                        count += 1
         return slice_paths
     
     def __len__(self):

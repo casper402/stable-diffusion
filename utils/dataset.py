@@ -44,8 +44,7 @@ class CTDatasetNPY(Dataset):
             if limit is not None and count > limit:
                 break
             if slice_name.endswith('.npy'):
-                slice_path = os.path.join(subdir_path, slice_name)
-                slice_paths.append(slice_path)
+                slice_paths.append(slice_name)
                 count += 1
         return slice_paths
     

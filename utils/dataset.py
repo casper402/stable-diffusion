@@ -32,17 +32,18 @@ class CTDataset(Dataset):
         return CT_slice
 
 class CTDatasetNPY(Dataset):
-    def __init__(self, CT_path, transform=None):
+    def __init__(self, CT_path, transform=None, limit=None):
         self.path = CT_path
         self.CT_slices = self._collect_slices(CT_path)
         self.transform = transform
+        self.limit = limit
 
-    def _collect_slices(self, dataset_path, limit=None):
+    def _collect_slices(self, dataset_path):
         print("collecting slices")
         slice_paths = []
         count = 0
         for slice_name in os.listdir(dataset_path):
-            if limit is not None and count > limit:
+            if self.limit is not None and count > self.limit:
                 break
             if slice_name.endswith('.npy'):
                 slice_paths.append(slice_name)

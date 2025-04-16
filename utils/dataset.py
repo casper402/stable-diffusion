@@ -34,11 +34,10 @@ class CTDataset(Dataset):
 class CTDatasetNPY(Dataset):
     def __init__(self, CT_path, transform=None, limit=None):
         self.path = CT_path
-        self.CT_slices = self._collect_slices(CT_path)
+        self.CT_slices = self._collect_slices(CT_path, limit)
         self.transform = transform
-        self.limit = limit
 
-    def _collect_slices(self, dataset_path):
+    def _collect_slices(self, dataset_path, limit):
         print("collecting slices")
         slice_paths = []
         count = 0

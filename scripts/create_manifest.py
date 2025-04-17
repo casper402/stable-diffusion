@@ -32,5 +32,5 @@ def create_manifest(data_root: str, output_csv: str):
     print(f"Manifest written to {output_csv} ({len(df)} entries)")
 
 if __name__ == '__main__':
-    root = '../../training_data/data_quick_loop'
+    root = '../data_quick_loop'
     create_manifest(root, root + '/manifest.csv')

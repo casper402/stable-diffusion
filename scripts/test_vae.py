@@ -1,60 +1,49 @@
 import torch
 from models.vae import VAE 
-from utils.dataset import CBCTtoCTDataset
+from utils.dataset import CTDatasetNPY
 from utils.config import load_config, get_device
 import matplotlib.pyplot as plt
 from utils.losses import PerceptualLoss, SsimLoss
 import torch.nn.functional as F
-import torchvision.transforms as transforms
 from torch.utils.data import random_split
 from torch.utils.data import DataLoader
 from models.diffusion import Diffusion
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+from torchvision import transforms
+from torchvision.transforms import InterpolationMode
 
-dataset = CBCTtoCTDataset('../training_data/CBCT','../training_data/CT', transform=transforms.Compose([
-            transforms.Grayscale(),
-            transforms.Pad((0, 64, 0, 64)),
-            transforms.Resize((256, 256)),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.5], std=[0.5])
-        ]))
+def main():
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-subset_size = 10
-subset, _ = random_split(dataset, [subset_size, len(dataset) - subset_size])
-loader = DataLoader(subset, batch_size=1, shuffle=False, num_workers=4)
+    tensor_transform = transforms.Compose([
+        transforms.Pad((0, 64, 0, 64)),                               # picklable
+        transforms.Resize((256, 256), interpolation=InterpolationMode.BILINEAR),  # picklable
+    ])
 
-vae = VAE().to(device)
-checkpoint_path = "../pretrained_models/vae.pth"
-vae.load_state_dict(torch.load(checkpoint_path, map_location=device))
-vae.eval()
+    dataset = CTDatasetNPY('../../training_data/CT', transform=tensor_transform, limit=10)
+    loader = DataLoader(dataset, batch_size=1, shuffle=False, num_workers=1)
 
-with torch.no_grad():
-    for CBCT, CT in loader:
-        CBCT = CBCT.to(device)
-        CT = CT.to(device)
-        
-        z_cbct, mu_cbct, logvar_cbct, recon_cbct = vae(CBCT)
-        z_ct, mu_ct, logvar_ct, recon_ct = vae(CT)
+    vae = VAE().to(device)
+    checkpoint_path = "../best_vae_ct_2.pth"
+    vae.load_state_dict(torch.load(checkpoint_path, map_location=device))
+    vae.eval()
 
-        ct_img = CT[0].cpu().squeeze()
-        cbct_img = CBCT[0].cpu().squeeze()
-        cbct_recon_img = recon_cbct[0].cpu().squeeze()
-        ct_recon_img = recon_ct[0].cpu().squeeze()
-        fig, axs = plt.subplots(1, 4, figsize=(20, 10))
+    with torch.no_grad():
+        for CT in loader:
+            CT = CT.to(device)
+            
+            z_ct, mu_ct, logvar_ct, recon_ct = vae(CT)
 
-        axs[0].imshow(ct_img, cmap='gray')
+            ct_img = CT[0].cpu().squeeze()
+            ct_recon_img = recon_ct[0].cpu().squeeze()
+            fig, axs = plt.subplots(1, 4, figsize=(20, 10))
 
-        axs[1].imshow(ct_recon_img, cmap='gray')
+            axs[0].imshow(ct_img, cmap='gray')
 
-        axs[2].imshow(cbct_img, cmap='gray')
+            axs[1].imshow(ct_recon_img, cmap='gray')
 
-        axs[3].imshow(cbct_recon_img, cmap='gray')
+            plt.tight_layout()
+            plt.show()
 
-
-        plt.tight_layout()
-        plt.show()
-
-
-
-
+if __name__ == "__main__":
+    main()

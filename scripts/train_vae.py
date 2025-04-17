@@ -26,7 +26,7 @@ ssim_loss = SsimLoss(device=device)
 
 
 tensor_transform = transforms.Compose([
-    transforms.Lambda(lambda x: torch.nn.functional.pad(x, (0, 0, 64, 64))),
+    transforms.Lambda(lambda x: torch.nn.functional.pad(x, (0, 64, 0, 64))),
     transforms.Lambda(lambda x: torch.nn.functional.interpolate(x.unsqueeze(0), size=(256, 256), mode='bilinear', align_corners=False).squeeze(0)),
 ])
 

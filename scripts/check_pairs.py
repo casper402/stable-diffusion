@@ -5,12 +5,10 @@ from torch.utils.data import DataLoader
 from torchvision.utils import make_grid, save_image
 from utils.dataset import PairedCTCBCTDatasetNPY
 
-def check_pairs(manifest_path, split='train', transform=None, out_dir='pair_checks', n_samples=4):
+def check_pairs(manifest_path, split='train', out_dir='pair_checks', n_samples=4):
     # 1) load dataset & sampler
 
-    ds = PairedCTCBCTDatasetNPY(manifest_csv=manifest_path,
-                                     split=split,
-                                     transform=transform)
+    ds = PairedCTCBCTDatasetNPY(manifest_csv=manifest_path, split=split)
     loader = DataLoader(ds,
                         batch_size=n_samples,
                         shuffle=True,
@@ -36,21 +34,11 @@ def check_pairs(manifest_path, split='train', transform=None, out_dir='pair_chec
     print(f"\nWrote {cbct_imgs.size(0)} CBCT↔CT comparison images → {out_dir}/")
 
 if __name__ == '__main__':
-    import torchvision.transforms as transforms
-    
-    # match whatever you’ll use downstream
-    transform = transforms.Compose([
-        transforms.Pad((0, 64, 0, 64)),
-        transforms.Resize((256, 256)),
-    ])
-    
     manifest_path = '../data_quick_loop/manifest.csv'
     check_pairs(manifest_path,
                 split='train',
-                transform=transform,
                 out_dir='pair_checks/train',
                 n_samples=4)
     
-    # You can repeat for val/test:
-    check_pairs(manifest_path, split='validation', out_dir='pair_checks/val', transform=transform)
-    check_pairs(manifest_path, split='test',       out_dir='pair_checks/test', transform=transform)
+    check_pairs(manifest_path, split='validation', out_dir='pair_checks/val')
+    check_pairs(manifest_path, split='test',       out_dir='pair_checks/test')

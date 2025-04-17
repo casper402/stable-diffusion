@@ -24,15 +24,9 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 perceptual_loss = PerceptualLoss(device=device)
 ssim_loss = SsimLoss(device=device)
 
-
-tensor_transform = transforms.Compose([
-    transforms.Lambda(lambda x: torch.nn.functional.pad(x, (0, 64, 0, 64))),
-    transforms.Lambda(lambda x: torch.nn.functional.interpolate(x.unsqueeze(0), size=(256, 256), mode='bilinear', align_corners=False).squeeze(0)),
-])
-
-train_dataset = CTDatasetNPY('../data/CT/training', transform=tensor_transform, limit=5000)
-val_dataset = CTDatasetNPY('../data/CT/validation', transform=tensor_transform, limit=1000)
-test_dataset = CTDatasetNPY('../data/CT/test', transform=tensor_transform, limit=1000)
+train_dataset = CTDatasetNPY('../data/CT/training', limit=5000)
+val_dataset = CTDatasetNPY('../data/CT/validation', limit=1000)
+test_dataset = CTDatasetNPY('../data/CT/test', limit=1000)
 
 print("len train:", len(train_dataset))
 print("len val:", len(val_dataset))

@@ -23,11 +23,11 @@ dataset = PreprocessedCBCTtoCTDataset('../training_data/dataset_manifest.csv', t
             transforms.Normalize(mean=[0.5], std=[0.5])
         ]))
 
-loader = DataLoader(dataset, batch_size=1, shuffle=False, num_workers=4)
+loader = DataLoader(dataset, batch_size=1, shuffle=True, num_workers=4)
 
 vae_path = "../pretrained_models/vae.pth"
 unet_path = "unet_results/unet_cond.pth"
-output_dir = "unet_results/inference"
+output_dir = "unet_results/inference_2"
 os.makedirs(output_dir, exist_ok=True)
 
 
@@ -48,7 +48,7 @@ for param in unet.parameters():
 diffusion = Diffusion(device)
 
 num_test_images = 10
-guidance_scales = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+guidance_scales = [0, 1, 5, 9, 15, 30, 999]
 
 with torch.no_grad():
     for i, (CT, CBCT) in enumerate(loader):
@@ -76,8 +76,8 @@ with torch.no_grad():
             t = torch.full((z_t.size(0),), t_int, device=device, dtype=torch.long)
 
             # --- CFG: Predict noise twice ---
-            pred_noise_cond = unet(z_t, mu_cbct,t)
-            pred_noise_uncond = unet(z_t, z_t, t)
+            pred_noise_cond = unet(z_t, mu_cbct, t)
+            pred_noise_uncond = unet(z_t, None, t)
             pred_noise = pred_noise_uncond + guidance_scale * (pred_noise_cond - pred_noise_uncond)
             # --- End CFG ---
 

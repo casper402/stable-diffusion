@@ -51,7 +51,7 @@ num_test_images = 10
 guidance_scales = [0, 1, 5, 9, 15, 30, 999]
 
 with torch.no_grad():
-    for i, (CT, CBCT) in enumerate(loader):
+    for i, (CBCT, CT) in enumerate(loader):
         if i >= num_test_images:
             break
 

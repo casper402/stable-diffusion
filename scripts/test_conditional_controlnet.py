@@ -14,8 +14,8 @@ from models.diffusion import Diffusion
 from utils.dataset import PreprocessedCBCTtoCTDataset
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-cbct_slice_path = "../training_data/CBCT/REC-1/slice_28.png"
-ct_slice_path = "../training_data/CT/volume-1/slice_28.png"
+cbct_slice_path = "../training_data/CBCT/REC-100/slice_28.png"
+ct_slice_path = "../training_data/CT/volume-100/slice_28.png"
 cbct_slice = Image.open(cbct_slice_path).convert('L')
 ct_slice = Image.open(ct_slice_path).convert('L')
 
@@ -37,7 +37,7 @@ unet_path = "../pretrained_models/unet.pth"
 dr_path = "dr_results_2/dr_module.pth"
 controlnet_path = "dr_results_2/controlnet.pth"
 paca_path = "dr_results_2/unet_paca_layers.pth"
-output_dir = "dr_results_2/inference"
+output_dir = "inference"
 os.makedirs(output_dir, exist_ok=True)
 
 vae = VAE().to(device) # Use your actual VAE init args if different
@@ -71,7 +71,7 @@ for param in unet.parameters():
 
 diffusion = Diffusion(device)
 
-guidance_scales = [0, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.25, 2.5, 2.75, 3]
+guidance_scales = [0.8, 1, 1.25, 1.5, 1.75, 2]
 
 with torch.no_grad():
     for guidance_scale in guidance_scales:

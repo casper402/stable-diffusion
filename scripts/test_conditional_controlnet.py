@@ -14,8 +14,8 @@ from models.diffusion import Diffusion
 from utils.dataset import PreprocessedCBCTtoCTDataset
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-cbct_slice_path = "../training_data/CBCT/REC-100/slice_28.png"
-ct_slice_path = "../training_data/CT/volume-100/slice_28.png"
+cbct_slice_path = "../training_data/CBCT/REC-91/slice_276.png"
+ct_slice_path = "../training_data/CT/volume-91/slice_276.png"
 cbct_slice = Image.open(cbct_slice_path).convert('L')
 ct_slice = Image.open(ct_slice_path).convert('L')
 

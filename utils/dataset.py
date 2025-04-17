@@ -6,6 +6,7 @@ import torch
 from torch.utils.data import Dataset
 from PIL import Image
 import pandas as pd
+from torchvision import transforms
 
 class CTDataset(Dataset):
     def __init__(self, CT_path, transform):

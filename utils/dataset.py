@@ -5,6 +5,8 @@ import cv2
 import torch
 from torch.utils.data import Dataset
 from PIL import Image
+import pandas as pd
+from torchvision import transforms
 
 class CTDataset(Dataset):
     def __init__(self, CT_path, transform):
@@ -31,45 +33,6 @@ class CTDataset(Dataset):
             CT_slice = self.transform(CT_slice)
         return CT_slice
 
-class CTDatasetNPY(Dataset):
-    def __init__(self, CT_path, transform=None, limit=None):
-        self.path = CT_path
-        self.CT_slices = self._collect_slices(CT_path, limit)
-        self.transform = transform
-
-    def _collect_slices(self, dataset_path, limit):
-        print("collecting slices")
-        slice_paths = []
-        count = 0
-        for slice_name in os.listdir(dataset_path):
-            if limit is not None and count >= limit:
-                break
-            if slice_name.endswith('.npy'):
-                slice_paths.append(slice_name)
-                count += 1
-        return slice_paths
-    
-    def __len__(self):
-        return len(self.CT_slices)
-    
-    def __getitem__(self, idx):
-        CT_path = self.CT_slices[idx]
-        # Load the slice from .npy file and ensure it's a float32 array
-        CT_slice = np.load(self.path + '/' + CT_path).astype(np.float32)
-        
-        # Normalize the values assuming the data range is [-1000, 1000]
-        CT_slice = CT_slice / 1000.0
-        
-        # Convert the NumPy array to a PyTorch tensor.
-        # We add an extra dimension for the channel (i.e. [C, H, W])
-        CT_slice = torch.from_numpy(CT_slice).unsqueeze(0)
-        
-        # Apply further transforms if provided (make sure they work on tensors)
-        if self.transform:
-            CT_slice = self.transform(CT_slice)
-        
-        return CT_slice
-    
 class CBCTtoCTDataset(Dataset):
     def __init__(self, CBCT_path, CT_path, transform):
         self.CBCT_path = CBCT_path
@@ -191,3 +154,74 @@ class PreprocessedCBCTtoCTDataset(Dataset):
         except Exception as e:
             print.error(f"Error loading or processing index {idx} ({cbct_slice_path}, {ct_slice_path}): {e}")
             return None
+
+class CTDatasetNPY(Dataset):
+    def __init__(self, CT_path, limit=None):
+        self.path = CT_path
+        self.CT_slices = self._collect_slices(CT_path, limit)
+        self.transform = transforms.Compose([
+            transforms.Pad((0, 64, 0, 64), fill=-1),
+            transforms.Resize((256, 256)),
+        ])
+
+    def _collect_slices(self, dataset_path, limit):
+        print("collecting slices")
+        slice_paths = []
+        count = 0
+        for slice_name in os.listdir(dataset_path):
+            if limit is not None and count >= limit:
+                break
+            if slice_name.endswith('.npy'):
+                slice_paths.append(slice_name)
+                count += 1
+        return slice_paths
+    
+    def __len__(self):
+        return len(self.CT_slices)
+    
+    def __getitem__(self, idx):
+        CT_path = self.CT_slices[idx]
+        # Load the slice from .npy file and ensure it's a float32 array
+        CT_slice = np.load(self.path + '/' + CT_path).astype(np.float32)
+        
+        # Normalize the values assuming the data range is [-1000, 1000]
+        CT_slice = CT_slice / 1000.0
+        
+        # Convert the NumPy array to a PyTorch tensor.
+        # We add an extra dimension for the channel (i.e. [C, H, W])
+        CT_slice = torch.from_numpy(CT_slice).unsqueeze(0)
+        
+        # Apply further transforms if provided (make sure they work on tensors)
+        if self.transform:
+            CT_slice = self.transform(CT_slice)
+        
+        return CT_slice
+    
+
+class PairedCTCBCTDatasetNPY(Dataset):
+    def __init__(self, manifest_csv: str, split: str):
+        self.df = pd.read_csv(manifest_csv)
+        # filter to only this split
+        self.df = self.df[self.df['split'] == split].reset_index(drop=True)
+        self.transform = transforms.Compose([
+            transforms.Pad((0, 64, 0, 64), fill=-1),
+            transforms.Resize((256, 256)),
+        ])
+
+    def __len__(self):
+        return len(self.df)
+
+    def __getitem__(self, idx):
+        row = self.df.iloc[idx]
+        ct   = np.load(row['ct_path']).astype(np.float32)  / 1000.0
+        cbct = np.load(row['cbct_path']).astype(np.float32)/ 1000.0
+
+        # add channel dim
+        ct   = torch.from_numpy(ct).unsqueeze(0)
+        cbct = torch.from_numpy(cbct).unsqueeze(0)
+
+        if self.transform:
+            ct   = self.transform(ct)
+            cbct = self.transform(cbct)
+
+        return ct, cbct

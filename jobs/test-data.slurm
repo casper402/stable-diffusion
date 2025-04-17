@@ -1,0 +1,28 @@
+#!/bin/bash
+#SBATCH --job-name=model_train
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=202008561@post.au.dk
+#SBATCH --partition=qgpu
+#SBATCH --gres=gpu:v100:1
+#SBATCH --mem=32G
+#SBATCH --cpus-per-task=8
+#SBATCH --time=01:00:00
+#SBATCH --export=NONE
+
+cd $SLURM_SUBMIT_DIR
+
+echo "========= Job started at $(date) =========="
+
+echo "Job ID: $SLURM_JOB_ID"
+
+module purge
+module load anaconda3/2021.05 
+module load gcc/9.3.0
+module load cuda/11.2.0
+
+source activate sd-gpu
+
+export PYTHONPATH=$PYTHONPATH:$(pwd)
+python scripts/check_pairs.py
+
+echo "========= Job finished at $(date) =========="

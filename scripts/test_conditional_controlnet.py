@@ -1,17 +1,13 @@
 import torch
-import torch.nn.functional as F
 import os
 import torchvision
 import torchvision.transforms as transforms
 from tqdm import tqdm
 from PIL import Image
-from torch.utils.data import random_split
-from torch.utils.data import DataLoader
 
 from models.vae import VAE
 from models.conditional import UNetPACA, ControlNet, DegradationRemovalModuleResnet
 from models.diffusion import Diffusion
-from utils.dataset import PreprocessedCBCTtoCTDataset
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 

@@ -91,9 +91,6 @@ for i in range(0, 200):
         null_control_features = (projected_null, zero_conv_null)
         print("Conditioning features calculated.")
         print(f"Starting sampling with Guidance Scale (w={guidance_scale})...")
-    _
-        # Initialize latent noise (shape based on VAE output)
-        # Determine latent shape (e.g., [1, 4, 32, 32]) - run VAE once if needed
         latent_shape = vae.encode(torch.zeros(1, 1, 256, 256, device=device))[0].shape # Get shape from dummy encode
         z_t = torch.randn(latent_shape, device=device)
         T = diffusion.timesteps

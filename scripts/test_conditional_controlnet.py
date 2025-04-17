@@ -14,16 +14,23 @@ from models.diffusion import Diffusion
 from utils.dataset import PreprocessedCBCTtoCTDataset
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+cbct_slice_path = "../training_data/CBCT/REC-1/slice_28.png"
+ct_slice_path = "../training_data/CT/volume-1/slice_28.png"
+cbct_slice = Image.open(cbct_slice_path).convert('L')
+ct_slice = Image.open(ct_slice_path).convert('L')
 
-dataset = PreprocessedCBCTtoCTDataset('../training_data/dataset_manifest.csv', transform=transforms.Compose([
-            transforms.Grayscale(),
-            transforms.Pad((0, 64, 0, 64)),
-            transforms.Resize((256, 256)),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.5], std=[0.5])
-        ]))
+# Transform to match training
+transform = transforms.Compose([
+    transforms.Grayscale(),
+    transforms.Pad((0, 64, 0, 64)),
+    transforms.Resize((256, 256)),
+    transforms.ToTensor(),
+    transforms.Normalize(mean=[0.5], std=[0.5])
 
-loader = DataLoader(dataset, batch_size=1, shuffle=False, num_workers=4)
+])
+
+CBCT = transform(cbct_slice).unsqueeze(0).to(device)
+CT = transform(ct_slice).unsqueeze(0).to(device)
 
 vae_path = "../pretrained_models/vae.pth"
 unet_path = "../pretrained_models/unet.pth"
@@ -64,15 +71,10 @@ for param in unet.parameters():
 
 diffusion = Diffusion(device)
 
-num_test_images = 10
-guidance_scales = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+guidance_scales = [0, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.25, 2.5, 2.75, 3]
 
 with torch.no_grad():
-    for i, (CT, CBCT) in enumerate(loader):
-        if i >= num_test_images:
-            break
-
-        guidance_scale = guidance_scales[i]
+    for guidance_scale in guidance_scales:
 
         CBCT = CBCT.to(device)
         CT = CT.to(device)
@@ -136,11 +138,11 @@ with torch.no_grad():
         ct_image_vis = (CT / 2 + 0.5).clamp(0, 1).squeeze(0)
 
         images_to_save = [cbct_image_vis, generated_image_vis, ct_image_vis]
-        output_filename = os.path.join(output_dir, f"output_cfg_{guidance_scale:.1f}_img_{i+1}.png")
+        output_filename = os.path.join(output_dir, f"output_cfg_{guidance_scale:.1f}.png")
         torchvision.utils.save_image(
             images_to_save,
             output_filename,
             nrow=len(images_to_save), # Arrange images horizontally
         )
-        print(f"Saved comparison image {i+1} to {output_filename}")
+        print(f"Saved comparison image to {output_filename}")
         print("Done.")

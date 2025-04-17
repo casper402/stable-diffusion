@@ -14,23 +14,6 @@ from models.diffusion import Diffusion
 from utils.dataset import PreprocessedCBCTtoCTDataset
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-cbct_slice_path = "../training_data/CBCT/REC-91/slice_276.png"
-ct_slice_path = "../training_data/CT/volume-91/slice_276.png"
-cbct_slice = Image.open(cbct_slice_path).convert('L')
-ct_slice = Image.open(ct_slice_path).convert('L')
-
-# Transform to match training
-transform = transforms.Compose([
-    transforms.Grayscale(),
-    transforms.Pad((0, 64, 0, 64)),
-    transforms.Resize((256, 256)),
-    transforms.ToTensor(),
-    transforms.Normalize(mean=[0.5], std=[0.5])
-
-])
-
-CBCT = transform(cbct_slice).unsqueeze(0).to(device)
-CT = transform(ct_slice).unsqueeze(0).to(device)
 
 vae_path = "../pretrained_models/vae.pth"
 unet_path = "../pretrained_models/unet.pth"
@@ -71,11 +54,28 @@ for param in unet.parameters():
 
 diffusion = Diffusion(device)
 
-guidance_scales = [0.8, 1, 1.25, 1.5, 1.75, 2]
+for i in range(0, 200): 
+    cbct_slice_path = f"../training_data/CBCT/REC-111/slice_{i}.png"
+    ct_slice_path = f"../training_data/CT/volume-111/slice_{i}.png"
+    cbct_slice = Image.open(cbct_slice_path).convert('L')
+    ct_slice = Image.open(ct_slice_path).convert('L')
 
-with torch.no_grad():
-    for guidance_scale in guidance_scales:
+    # Transform to match training
+    transform = transforms.Compose([
+        transforms.Grayscale(),
+        transforms.Pad((0, 64, 0, 64)),
+        transforms.Resize((256, 256)),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.5], std=[0.5])
 
+    ])
+
+    CBCT = transform(cbct_slice).unsqueeze(0).to(device)
+    CT = transform(ct_slice).unsqueeze(0).to(device)
+
+    guidance_scale = 1.0
+
+    with torch.no_grad():
         CBCT = CBCT.to(device)
         CT = CT.to(device)
 
@@ -91,7 +91,7 @@ with torch.no_grad():
         null_control_features = (projected_null, zero_conv_null)
         print("Conditioning features calculated.")
         print(f"Starting sampling with Guidance Scale (w={guidance_scale})...")
-    
+    _
         # Initialize latent noise (shape based on VAE output)
         # Determine latent shape (e.g., [1, 4, 32, 32]) - run VAE once if needed
         latent_shape = vae.encode(torch.zeros(1, 1, 256, 256, device=device))[0].shape # Get shape from dummy encode
@@ -138,7 +138,7 @@ with torch.no_grad():
         ct_image_vis = (CT / 2 + 0.5).clamp(0, 1).squeeze(0)
 
         images_to_save = [cbct_image_vis, generated_image_vis, ct_image_vis]
-        output_filename = os.path.join(output_dir, f"output_cfg_{guidance_scale:.1f}.png")
+        output_filename = os.path.join(output_dir, f"slice_{i}_prediction.png")
         torchvision.utils.save_image(
             images_to_save,
             output_filename,

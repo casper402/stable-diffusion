@@ -37,7 +37,7 @@ manifest_path = '../training_data/dataset_manifest.csv'
 vae_weights_path = '../pretrained_models/vae.pth'
 unet_weights_path = '../pretrained_models/unet.pth'
 dr_weights_path = '../pretrained_models/dr_module.pth'
-save_dir = 'dr_results_2'
+save_dir = 'controlnet_results'
 pred_dir = f'{save_dir}/predictions'
 
 subset_size = 5000

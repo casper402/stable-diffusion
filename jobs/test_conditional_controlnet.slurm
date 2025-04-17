@@ -23,6 +23,6 @@ module load cuda/11.2.0
 source activate cuda_env
 
 export PYTHONPATH=$PYTHONPATH:$(pwd)
-python scripts/test_conditional_unet.py
+python scripts/test_conditional_controlnet.py
 
 echo "========= Job finished at $(date) =========="

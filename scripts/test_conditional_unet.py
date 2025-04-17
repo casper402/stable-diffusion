@@ -62,7 +62,6 @@ with torch.no_grad():
         # We need a tuple in the same structure as actual_control_features
         # For simplicity, using zero tensors with the same shape.
         # Run once to get shapes if needed (or use known shapes)
-        print("Conditioning features calculated.")
         guidance_scale = guidance_scales[i]
         print(f"Starting sampling with Guidance Scale (w={guidance_scale})...")
     

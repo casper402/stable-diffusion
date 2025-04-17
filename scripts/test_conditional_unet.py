@@ -28,6 +28,8 @@ loader = DataLoader(dataset, batch_size=1, shuffle=False, num_workers=4)
 vae_path = "../pretrained_models/vae.pth"
 unet_path = "unet_results/unet_cond.pth"
 output_dir = "unet_results/inference"
+os.makedirs(output_dir, exist_ok=True)
+
 
 vae = VAE().to(device) # Use your actual VAE init args if different
 vae.load_state_dict(torch.load(vae_path, map_location=device), strict=True)

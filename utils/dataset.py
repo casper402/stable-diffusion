@@ -5,6 +5,7 @@ import cv2
 import torch
 from torch.utils.data import Dataset
 from PIL import Image
+import pandas as pd
 
 class CTDataset(Dataset):
     def __init__(self, CT_path, transform):
@@ -191,3 +192,28 @@ class PreprocessedCBCTtoCTDataset(Dataset):
         except Exception as e:
             print.error(f"Error loading or processing index {idx} ({cbct_slice_path}, {ct_slice_path}): {e}")
             return None
+
+class PairedCTCBCTDatasetNPY(Dataset):
+    def __init__(self, manifest_csv: str, split: str, transform=None):
+        self.df = pd.read_csv(manifest_csv)
+        # filter to only this split
+        self.df = self.df[self.df['split'] == split].reset_index(drop=True)
+        self.transform = transform
+
+    def __len__(self):
+        return len(self.df)
+
+    def __getitem__(self, idx):
+        row = self.df.iloc[idx]
+        ct   = np.load(row['ct_path']).astype(np.float32)  / 1000.0
+        cbct = np.load(row['cbct_path']).astype(np.float32)/ 1000.0
+
+        # add channel dim
+        ct   = torch.from_numpy(ct).unsqueeze(0)
+        cbct = torch.from_numpy(cbct).unsqueeze(0)
+
+        if self.transform:
+            ct   = self.transform(ct)
+            cbct = self.transform(cbct)
+
+        return ct, cbct

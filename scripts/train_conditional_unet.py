@@ -104,7 +104,7 @@ for epoch in range(epochs):
         with torch.no_grad():
             ct_mu, ct_logvar = vae.encode(ct_img)
             z_ct = vae.reparameterize(ct_mu, ct_logvar)
-            cbct_mu, _ = vae.encode(cbct_img)
+            cbct_mu, cbct_logvar = vae.encode(cbct_img)
 
         t = diffusion.sample_timesteps(z_ct.size(0))
         noise = torch.randn_like(z_ct)
@@ -133,13 +133,12 @@ for epoch in range(epochs):
             ct_mu, ct_logvar = vae.encode(ct_img)
             z_ct = vae.reparameterize(ct_mu, ct_logvar)
             cbct_mu, cbct_logvar = vae.encode(cbct_img)
-            z_cbct = vae.reparameterize(cbct_mu, cbct_logvar)
 
             t = diffusion.sample_timesteps(z_ct.size(0))
             noise = torch.randn_like(z_ct)
             z_noisy_ct = diffusion.add_noise(z_ct, t, noise=noise)
 
-            pred_noise = unet(z_noisy_ct, z_cbct, t)
+            pred_noise = unet(z_noisy_ct, cbct_mu, t)
 
             loss = noise_loss(pred_noise, noise)
 
@@ -154,6 +153,7 @@ for epoch in range(epochs):
     if avg_val_loss < best_val_loss:
         best_val_loss = avg_val_loss
         torch.save(unet.state_dict(), os.path.join(save_dir, "unet_cond.pth"))
+        print(f"✅ Saved new best Unet Conditional model at epoch {epoch+1} with val loss {avg_val_loss:.4f}")
         
     # --- Inference/Saving Test Images ---
     if ((epoch + 1) % 10 == 0): # Save every 10 epochs

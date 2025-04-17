@@ -221,14 +221,18 @@ class UNet(nn.Module): # Modified UNet for ControlNet
         self.final_norm = Normalize(ch1) # Norm before final conv
         self.final_conv = nn.Conv2d(ch1, out_channels, kernel_size=3, stride=1, padding=1)
 
-    def forward(self, x, context, t):
+    def forward(self, x, context=None, t=None):
         t_emb = self.time_embedding(t)
         x = self.init_conv(x)         # Initial convolution: [B, 4, H, W] -> [B, 64, H, W]
         x, skip1 = self.down1(x, t_emb)   # -> [B, 128, H/2, W/2]
         x, skip2 = self.down2(x, t_emb)  # -> [B, 256, H/4, W/4]
         x, skip3 = self.down3(x, t_emb)  # -> [B, 512, H/8, W/8]
 
-        context = self.context_proj(context)
+        if context is None:
+            context = x
+        else:
+            context = self.context_proj(context)
+            
         x = self.middle(x, context, t_emb) # -> [B, 512, H/8, W/8]
 
         x = self.up3(x, skip3, t_emb)    # -> [B, 256, H/4, W/4]

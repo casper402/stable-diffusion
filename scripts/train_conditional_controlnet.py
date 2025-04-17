@@ -9,7 +9,7 @@ from models.vae import VAE
 from models.conditional import UNetPACA, ControlNet, DegradationRemovalModuleResnet
 from models.diffusion import Diffusion
 
-from utils.dataset import PreprocessedCBCTtoCTDataset, CBCTtoCTDataset
+from utils.dataset import PreprocessedCBCTtoCTDataset
 
 def noise_loss(pred_noise, true_noise):
     return F.mse_loss(pred_noise, true_noise)
@@ -37,7 +37,7 @@ manifest_path = '../training_data/dataset_manifest.csv'
 vae_weights_path = '../pretrained_models/vae.pth'
 unet_weights_path = '../pretrained_models/unet.pth'
 dr_weights_path = '../pretrained_models/dr_module.pth'
-save_dir = 'dr_results_2'
+save_dir = 'controlnet_results'
 pred_dir = f'{save_dir}/predictions'
 
 subset_size = 5000

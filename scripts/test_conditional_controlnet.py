@@ -98,7 +98,7 @@ with torch.no_grad():
         z_t = torch.randn(latent_shape, device=device)
         T = diffusion.timesteps
 
-        for t_int in tqdm(range(T - 1, -1, -1), desc=f"Sampling image {i+1}", leave=False):
+        for t_int in tqdm(range(T - 1, -1, -1), desc=f"Sampling image", leave=False):
             t = torch.full((z_t.size(0),), t_int, device=device, dtype=torch.long)
 
             # --- CFG: Predict noise twice ---

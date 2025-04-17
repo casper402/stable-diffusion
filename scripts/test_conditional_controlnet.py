@@ -64,13 +64,15 @@ for param in unet.parameters():
 
 diffusion = Diffusion(device)
 
-num_test_images = 1
-guidance_scale = 7.5
+num_test_images = 10
+guidance_scales = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
 
 with torch.no_grad():
     for i, (CT, CBCT) in enumerate(loader):
         if i >= num_test_images:
             break
+
+        guidance_scale = guidance_scales[i]
 
         CBCT = CBCT.to(device)
         CT = CT.to(device)

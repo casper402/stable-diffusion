@@ -68,8 +68,8 @@ best_val_loss = float('inf')
 max_grad_norm = 1.0 # For gradient clipping, TODO: might need to tune this value
 
 for epoch in range(epochs):
-    unet.train()
     train_loss = 0
+    unet.train()
     
     # Training
     for x in train_loader:

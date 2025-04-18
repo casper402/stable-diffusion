@@ -112,13 +112,13 @@ def plot_multi_side_by_side(test_dirs, gt_dir, volume_idx, slice_num):
 def main():
     test_dirs = [
         os.path.expanduser("/Users/Niklas/thesis/training_data/CBCT/simple"),
-        os.path.expanduser("/Users/Niklas/thesis/training_data/CBCT/percentile/0.01"),
-        os.path.expanduser("/Users/Niklas/thesis/training_data/CBCT/percentile/0.05"),
+        os.path.expanduser("/Users/Niklas/thesis/training_data/CBCT/scaledV2"),
+        os.path.expanduser("/Users/Niklas/thesis/training_data/CBCT/scaled-490"),
     ]
     gt_dir = os.path.expanduser("/Users/Niklas/thesis/training_data/CT")
     
-    volume_idx = 91
-    slice_num = 276
+    volume_idx = 0
+    slice_num = 21
     plot_multi_side_by_side(test_dirs, gt_dir, volume_idx, slice_num)
 
 if __name__ == "__main__":

@@ -66,7 +66,7 @@ def compare_batch(volume_idx, test_folder, gt_folder):
 
     return avg_mae, avg_rmse
 
-def compare_all_volumes(num_volumes, test_folder, gt_folder):
+def compare_all_volumes(volumes, test_folder, gt_folder):
     """
     Evaluates each volume (from index 0 to num_volumes-1) concurrently.
     After all threads are finished, prints the individual results in the correct order,
@@ -77,7 +77,7 @@ def compare_all_volumes(num_volumes, test_folder, gt_folder):
     with concurrent.futures.ThreadPoolExecutor() as executor:
         # Submit all volume tasks.
         future_to_vol = {executor.submit(compare_batch, vol_idx, test_folder, gt_folder): vol_idx
-                         for vol_idx in range(num_volumes)}
+                         for vol_idx in volumes}
         
         # Wait for all futures to complete and store the results.
         for future in concurrent.futures.as_completed(future_to_vol):
@@ -107,10 +107,13 @@ def compare_all_volumes(num_volumes, test_folder, gt_folder):
 
 if __name__ == "__main__":
     # Set your test and ground truth directories (adjust these paths as needed)
-    test_folder = os.path.expanduser("/Users/Niklas/thesis/training_data/CBCT/percentile/0.01")
+    test_folder = os.path.expanduser("/Users/Niklas/thesis/training_data/CBCT/scaledV2")
     gt_folder   = os.path.expanduser("/Users/Niklas/thesis/training_data/CT")
     
     # Set the number of volumes to process.
-    num_volumes = 131
+    # num_volumes = 131
+
+    # Evaluate these volumes:
+    volumes = [68, 27, 52, 104, 130, 16, 24, 75, 124, 26, 64, 90, 50, 86, 122, 106, 65, 62, 128, 69, 15, 117, 96, 3, 76, 109, 18, 120, 73, 79, 83, 14, 58, 17, 112, 13, 110, 125, 1, 126, 93, 51, 107, 91, 85, 82, 67, 102, 94, 56, 84, 53, 100, 11, 48, 101, 57, 55, 80, 39, 5, 49, 78, 129, 123, 7, 10, 88, 121, 95, 127, 92, 105, 116, 6, 19, 115, 97, 2, 118, 66, 54, 25, 63, 108, 22, 113, 8, 111, 114, 9, 74, 21, 77, 20, 103, 70, 87, 119, 4]
     
-    compare_all_volumes(num_volumes, test_folder, gt_folder)
+    compare_all_volumes(volumes, test_folder, gt_folder)

@@ -1,103 +1,92 @@
 import os
-import itertools
-import nibabel as nib
+import random
 import numpy as np
 import matplotlib.pyplot as plt
 
-
-def load_and_split_mask(mask_path, ct_shape):
+def show_random_slice(ct_dir, mask1_dir, mask2_dir, max_volume, max_slice,
+                      vmin_ct=-1000, vmax_ct=1000, overlay_alpha=0.3):
     """
-    Loads a NIfTI mask with shape (X, Y, C=2, 1, Z), drops the dummy axis,
-    and returns two 3D boolean arrays: liver and tumor masks aligned to ct_shape.
+    Pick a random existing CT slice and its liver/tumor masks, then display in a 4-panel figure.
     """
-    data = nib.load(mask_path).get_fdata()
-    data = np.squeeze(data)
+    # pick a random valid pair of files
+    while True:
+        vol_idx   = random.randint(0, max_volume)
+        slice_idx = random.randint(0, max_slice)
+        fname     = f"volume-{vol_idx}_slice_{slice_idx:03d}.npy"
 
-    if data.ndim == 4:
-        liver = data[:, :, 0, :] > 0
-        tumor = data[:, :, 1, :] > 0
-    else:
-        raise ValueError(f"Expected a 4D mask of shape (X,Y,2,Z), got {data.shape}")
+        ct_path    = os.path.join(ct_dir,    fname)
+        liver_path = os.path.join(mask1_dir, fname)
+        tumor_path = os.path.join(mask2_dir, fname)
 
-    # Align to CT shape if needed
-    for name, arr in (('liver', liver), ('tumor', tumor)):
-        if arr.shape != ct_shape:
-            for perm in itertools.permutations(range(3)):
-                if arr.transpose(perm).shape == ct_shape:
-                    if name == 'liver':
-                        liver = arr.transpose(perm)
-                    else:
-                        tumor = arr.transpose(perm)
-                    break
-            else:
-                raise ValueError(f"Could not align {name} mask shape {arr.shape} to CT shape {ct_shape}")
+        if os.path.isfile(ct_path) and os.path.isfile(liver_path) and os.path.isfile(tumor_path):
+            break
 
-    return liver.astype(bool), tumor.astype(bool)
+    print(f"Random pick → volume {vol_idx}, slice {slice_idx:03d}")
 
-# ─── CONFIG ────────────────────────────────────────────────────────────────────
-ct_dir     = "/Volumes/Lenovo PS8/Casper/kaggle_dataset/TRAINCTAlignedToCBCT/"
-mask_dir   = "/Volumes/Lenovo PS8/Casper/kaggle_dataset/TRAINMasksAlignedToCBCT/masks01/"
-min_vol    = 0          # first volume index
-max_vol    = 130        # last volume index
-# ────────────────────────────────────────────────────────────────────────────────
+    # load the data
+    ct = np.load(ct_path)
+    lv = np.load(liver_path).astype(bool)
+    tu = np.load(tumor_path).astype(bool)
 
-# Display settings
-vmin_ct, vmax_ct     = -1000, 1000        # CT intensity range
-overlay_alpha        = 0.2               # transparency for overlays
+    # count tumor pixels
+    n_tumor = int(tu.sum())
+    print(f"Tumor pixel count on this slice: {n_tumor}")
 
-for volume_idx in range(min_vol, max_vol + 1):
-    t_ct   = os.path.join(ct_dir,   f"volume-{volume_idx}.nii")
-    t_mask = os.path.join(mask_dir, f"{volume_idx}.nii")
-    if not os.path.exists(t_ct) or not os.path.exists(t_mask):
-        continue
+    # create the 4-panel figure
+    fig, (ax0, ax1, ax2, ax3) = plt.subplots(1, 4, figsize=(16, 4))
 
-    # Load CT and clip
-    ct_vol   = nib.load(t_ct).get_fdata(dtype=float)
-    ct_vol   = np.clip(ct_vol, vmin_ct, vmax_ct)
-    ct_shape = ct_vol.shape
+    # 1) Liver mask
+    ax0.imshow(lv, cmap="Reds", origin="lower", vmin=0, vmax=1,
+               interpolation="none", aspect="equal")
+    ax0.set_title(f"Liver Mask\n(v{vol_idx}, z={slice_idx:03d})")
+    ax0.axis("off")
 
-    # Load masks
-    liver_mask, tumor_mask = load_and_split_mask(t_mask, ct_shape)
+    # 2) Tumor mask
+    ax1.imshow(tu, cmap="Blues", origin="lower", vmin=0, vmax=1,
+               interpolation="none", aspect="equal")
+    ax1.set_title(f"Tumor Mask (n={n_tumor})\n(v{vol_idx}, z={slice_idx:03d})")
+    ax1.axis("off")
 
-    # Compute slice-wise tumor area
-    z_dim        = ct_shape[2]
-    tumor_counts = [int(np.sum(tumor_mask[:, :, z])) for z in range(z_dim)]
+    # 3) CT only
+    ax2.imshow(ct, cmap="gray", origin="lower", vmin=vmin_ct, vmax=vmax_ct,
+               interpolation="none", aspect="equal")
+    ax2.set_title(f"CT Only\n(v{vol_idx}, z={slice_idx:03d})")
+    ax2.axis("off")
 
-    # Identify slice with maximum tumor pixels
-    if sum(tumor_counts) == 0:
-        print(f"Volume {volume_idx}: no tumor slices.")
-        continue
-    best_z = int(np.argmax(tumor_counts))  # index of slice with most tumor
-
-    # Count liver & tumor slices
-    slices_l   = sum(1 for z in range(z_dim) if tumor_counts[z] >= 0 and np.any(liver_mask[:, :, z]))
-    slices_t   = sum(1 for z in range(z_dim) if tumor_counts[z] > 0)
-    print(f"Volume {volume_idx}: liver slices = {slices_l}, tumor slices = {slices_t}, showing slice {best_z} (tumor pixels = {tumor_counts[best_z]})")
-
-    # Prepare slice data
-    ct_slice    = ct_vol[:, :, best_z].T
-    lv          = liver_mask[:, :, best_z].T
-    tu          = tumor_mask[:, :, best_z].T
-    count       = tumor_counts[best_z]
-
-    # Plot single row of panels
-    fig, axes = plt.subplots(1, 4, figsize=(16, 4))
-    ax0, ax1, ax2, ax3 = axes
-
-    ax0.imshow(lv,  cmap="Reds",   origin="lower", vmin=0, vmax=1)
-    ax0.set_title(f"Liver Mask\n(vol {volume_idx}, z={best_z})"); ax0.axis("off")
-
-    ax1.imshow(tu,  cmap="Blues",  origin="lower", vmin=0, vmax=1)
-    ax1.set_title(f"Tumor Mask (n={count})\n(vol {volume_idx}, z={best_z})"); ax1.axis("off")
-
-    ax2.imshow(ct_slice, cmap="gray", origin="lower", vmin=vmin_ct, vmax=vmax_ct)
-    ax2.set_title(f"CT Only\n(vol {volume_idx}, z={best_z})"); ax2.axis("off")
-
-    # Overlay only on mask regions
-    ax3.imshow(ct_slice, cmap="gray", origin="lower", vmin=vmin_ct, vmax=vmax_ct)
-    ax3.imshow(np.ma.masked_where(~lv, lv),   cmap="Reds",   alpha=overlay_alpha, origin="lower", vmin=0, vmax=1)
-    ax3.imshow(np.ma.masked_where(~tu, tu),   cmap="Blues",  alpha=overlay_alpha, origin="lower", vmin=0, vmax=1)
-    ax3.set_title(f"CT + Overlay (n={count})\n(vol {volume_idx}, z={best_z})"); ax3.axis("off")
+    # 4) CT + overlay
+    ax3.imshow(ct, cmap="gray", origin="lower", vmin=vmin_ct, vmax=vmax_ct,
+               interpolation="none", aspect="equal")
+    ax3.imshow(np.ma.masked_where(~lv, lv), cmap="Reds", alpha=overlay_alpha,
+               origin="lower", interpolation="none", aspect="equal", vmin=0, vmax=1)
+    ax3.imshow(np.ma.masked_where(~tu, tu), cmap="Blues", alpha=overlay_alpha,
+               origin="lower", interpolation="none", aspect="equal", vmin=0, vmax=1)
+    ax3.set_title(f"CT + Overlay (n={n_tumor})\n(v{vol_idx}, z={slice_idx:03d})")
+    ax3.axis("off")
 
     plt.tight_layout()
     plt.show()
+    plt.close(fig)
+
+
+def main():
+    # ─── CONFIG ─────────────────────────────────────────────────────
+    ct_dir      = "/Users/Niklas/thesis/training_data/CT"
+    mask1_dir   = "/Users/Niklas/thesis/training_data/masks/liver"
+    mask2_dir   = "/Users/Niklas/thesis/training_data/masks/tumor"
+
+    max_volume = 130  # volumes 0..130 inclusive
+    max_slice  = 365  # slices 0..365 inclusive
+    vmin_ct, vmax_ct = -1000, 1000
+    overlay_alpha   = 0.3
+    # ──────────────────────────────────────────────────────────────────
+
+    try:
+        while True:
+            show_random_slice(ct_dir, mask1_dir, mask2_dir,
+                              max_volume, max_slice,
+                              vmin_ct, vmax_ct, overlay_alpha)
+    except KeyboardInterrupt:
+        print("\nExiting viewer.")
+
+if __name__ == "__main__":
+    main()

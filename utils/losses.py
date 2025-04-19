@@ -41,7 +41,7 @@ class PerceptualLoss(torch.nn.Module):
         return F.mse_loss(feat_recon, feat_real)
     
 class SsimLoss(torch.nn.Module):
-    def __init__(self, device='cuda'):
+    def __init__(self):
         super().__init__()
 
     def normalize(self, x):
@@ -51,6 +51,9 @@ class SsimLoss(torch.nn.Module):
     def forward(self, recon, x):
         recon = self.normalize(recon)
         x = self.normalize(x)
+
+        recon = torch.clamp(recon, 0, 1)
+        x = torch.clamp(x, 0, 1)
         
         if torch.isnan(recon).any():
             print("Found NaNs in recon after normalization")

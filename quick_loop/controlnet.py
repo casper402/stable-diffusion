@@ -6,7 +6,7 @@ from quick_loop.blocks import nonlinearity, Normalize, TimestepEmbedding, DownBl
 class ControlNet(nn.Module):
     def __init__(self,
                  in_channels=3,
-                 base_channels=124,
+                 base_channels=128,
                  dropout_rate=0.1):
         super().__init__()
         time_emb_dim = base_channels * 4
@@ -32,43 +32,71 @@ class ControlNet(nn.Module):
         self.middle = MiddleBlock(ch4, time_emb_dim, dropout_rate)
 
         self.controlnet_down_blocks = nn.ModuleList()
-        num_skips_per_block = 3
-        for _ in range(num_skips_per_block):
-            self.controlnet_down_blocks.append(ZeroConv2d(ch2, ch2))
-        for _ in range(num_skips_per_block):
-            self.controlnet_down_blocks.append(ZeroConv2d(ch3, ch3))
-        for _ in range(num_skips_per_block):
-            self.controlnet_down_blocks.append(ZeroConv2d(ch4, ch4))
-        for _ in range(num_skips_per_block):
-            self.controlnet_down_blocks.append(ZeroConv2d(ch_mid, ch_mid))
 
-        self.controlnet_middle_block = ZeroConv2d(ch_mid, ch_mid)      
+        self.controlnet_down_block_1_1 = ZeroConv2d(ch2, ch2)
+        self.controlnet_down_block_1_2 = ZeroConv2d(ch2, ch2)
+        self.controlnet_down_block_1_3 = ZeroConv2d(ch2, ch2)
+        self.controlnet_down_block_2_1 = ZeroConv2d(ch3, ch3)
+        self.controlnet_down_block_2_2 = ZeroConv2d(ch3, ch3)
+        self.controlnet_down_block_2_3 = ZeroConv2d(ch3, ch3)
+        self.controlnet_down_block_3_1 = ZeroConv2d(ch4, ch4)
+        self.controlnet_down_block_3_2 = ZeroConv2d(ch4, ch4)
+        self.controlnet_down_block_3_3 = ZeroConv2d(ch4, ch4)
+        self.controlnet_down_block_4_1 = ZeroConv2d(ch_mid, ch_mid)
+        self.controlnet_down_block_4_2 = ZeroConv2d(ch_mid, ch_mid)
+        self.controlnet_down_block_4_3 = ZeroConv2d(ch_mid, ch_mid)
+        self.controlnet_middle_block = ZeroConv2d(ch_mid, ch_mid)
     
     def forward(self, x, cond, t=None):
         h = self.time_embedding(t)
         h = self.init_conv(x)
         h = h + cond
 
-        all_intermediate_outputs = ()
-
         h, intermediates1 = self.down1(h)
-        all_intermediate_outputs += intermediates1
         h, intermediates2 = self.down2(h)
-        all_intermediate_outputs += intermediates2
         h, intermediates3 = self.down3(h)
-        all_intermediate_outputs += intermediates3
         h, intermediates4 = self.down4(h)
-        all_intermediate_outputs += intermediates4
 
         h_middle = self.middle(h)
 
-        controlnet_processed_down_samples = []
-        if len(all_intermediate_outputs) != len(self.controlnet_down_blocks):
-            raise ValueError(f"Expected {len(self.controlnet_down_blocks)} down blocks, but got {len(all_intermediate_outputs)}")
-        
-        for res_sample, controlnet_block in zip(all_intermediate_outputs, self.controlnet_down_blocks):
-            controlnet_processed_down_samples.append(controlnet_block(res_sample))
+        down_res_1_1 = self.controlnet_down_block_1_1(intermediates1[0])
+        down_res_1_2 = self.controlnet_down_block_1_2(intermediates1[1])
+        down_res_1_3 = self.controlnet_down_block_1_3(intermediates1[2])
+        down_res_2_1 = self.controlnet_down_block_2_1(intermediates2[0])
+        down_res_2_2 = self.controlnet_down_block_2_2(intermediates2[1])
+        down_res_2_3 = self.controlnet_down_block_2_3(intermediates2[2])
+        down_res_3_1 = self.controlnet_down_block_3_1(intermediates3[0])
+        down_res_3_2 = self.controlnet_down_block_3_2(intermediates3[1])
+        down_res_3_3 = self.controlnet_down_block_3_3(intermediates3[2])
+        down_res_4_1 = self.controlnet_down_block_4_1(intermediates4[0])
+        down_res_4_2 = self.controlnet_down_block_4_2(intermediates4[1])
+        down_res_4_3 = self.controlnet_down_block_4_3(intermediates4[2])
+        middle_res_sample = self.controlnet_middle_block(h_middle)
 
-        controlnet_processed_middle_sample = self.controlnet_middle_block(h_middle)
+        down_res_samples = (
+            down_res_1_1, down_res_1_2, down_res_1_3,
+            down_res_2_1, down_res_2_2, down_res_2_3,
+            down_res_3_1, down_res_3_2, down_res_3_3,
+            down_res_4_1, down_res_4_2, down_res_4_3
+        )
 
-        return controlnet_processed_down_samples, controlnet_processed_middle_sample
+        return down_res_samples, middle_res_sample
+
+def load_controlnet(save_path=None, trainable=False):
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    controlnet = ControlNet().to(device)
+    if save_path is None:
+        print("ControlNet initialized with random weights.")
+        return controlnet
+    if os.path.exists(save_path):
+        controlnet.load_state_dict(torch.load(save_path, map_location=device), strict=False)
+        print(f"ControlNet loaded from {save_path}")
+        # TODO: Make some checks to see which weights are loaded
+    else:
+        print(f"ControlNet not found at {save_path}.")
+    if not trainable:
+        for param in controlnet.parameters():
+            param.requires_grad = False
+    controlnet.eval()
+    return controlnet
+

@@ -3,7 +3,7 @@ import numpy as np
 import csv
 import cv2
 import torch
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, DataLoader, random_split
 from PIL import Image
 import pandas as pd
 from torchvision import transforms
@@ -156,47 +156,24 @@ class PreprocessedCBCTtoCTDataset(Dataset):
             return None
 
 class CTDatasetNPY(Dataset):
-    def __init__(self, CT_path, limit=None):
-        self.path = CT_path
-        self.CT_slices = self._collect_slices(CT_path, limit)
+    def __init__(self, manifest_csv: str, split: str):
+        self.df = pd.read_csv(manifest_csv)
+        self.df = self.df[self.df['split'] == split].reset_index(drop=True)
         self.transform = transforms.Compose([
             transforms.Pad((0, 64, 0, 64), fill=-1),
             transforms.Resize((256, 256)),
         ])
 
-    def _collect_slices(self, dataset_path, limit):
-        print("collecting slices")
-        slice_paths = []
-        count = 0
-        for slice_name in os.listdir(dataset_path):
-            if limit is not None and count >= limit:
-                break
-            if slice_name.endswith('.npy'):
-                slice_paths.append(slice_name)
-                count += 1
-        return slice_paths
-    
     def __len__(self):
-        return len(self.CT_slices)
-    
+        return len(self.df)
+
     def __getitem__(self, idx):
-        CT_path = self.CT_slices[idx]
-        # Load the slice from .npy file and ensure it's a float32 array
-        CT_slice = np.load(self.path + '/' + CT_path).astype(np.float32)
-        
-        # Normalize the values assuming the data range is [-1000, 1000]
-        CT_slice = CT_slice / 1000.0
-        
-        # Convert the NumPy array to a PyTorch tensor.
-        # We add an extra dimension for the channel (i.e. [C, H, W])
-        CT_slice = torch.from_numpy(CT_slice).unsqueeze(0)
-        
-        # Apply further transforms if provided (make sure they work on tensors)
+        row = self.df.iloc[idx]
+        ct = np.load(row['ct_path']).astype(np.float32) / 1000.0
+        ct = torch.from_numpy(ct).unsqueeze(0)
         if self.transform:
-            CT_slice = self.transform(CT_slice)
-        
-        return CT_slice
-    
+            ct = self.transform(ct)
+        return ct
 
 class PairedCTCBCTDatasetNPY(Dataset):
     def __init__(self, manifest_csv: str, split: str):
@@ -225,3 +202,42 @@ class PairedCTCBCTDatasetNPY(Dataset):
             cbct = self.transform(cbct)
 
         return ct, cbct
+    
+def get_dataloaders(manifest_csv, batch_size, num_workers, dataset_class=PairedCTCBCTDatasetNPY, shuffle_train=True, drop_last=True):
+    train_dataset = dataset_class(manifest_csv=manifest_csv, split='train')
+    val_dataset = dataset_class(manifest_csv=manifest_csv, split='val')
+    test_dataset = dataset_class(manifest_csv=manifest_csv, split='test')
+    print(f"Dataset sizes - Train: {len(train_dataset)}, Validation: {len(val_dataset)}, Test: {len(test_dataset)}")
+
+    # Train loader
+    train_loader = DataLoader(
+        dataset=train_dataset,
+        batch_size=batch_size,
+        shuffle=shuffle_train,
+        num_workers=num_workers,
+        pin_memory=True,
+        drop_last=drop_last
+    )
+
+    # Validation loader
+    val_loader = DataLoader(
+        dataset=val_dataset,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=num_workers,
+        pin_memory=True,
+        drop_last=drop_last
+    )
+
+    # Test loader
+    test_loader = DataLoader(
+        dataset=test_dataset,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=num_workers,
+        pin_memory=True,
+        drop_last=drop_last
+    )
+
+    print("DataLoaders created successfully.")
+    return train_loader, val_loader, test_loader

@@ -132,15 +132,14 @@ class DownBlock(nn.Module):
         self.attention2 = AttentionBlock(out_channels) if has_attn else None
         self.downsample = Downsample(out_channels, with_conv=True) if downsample else None
 
-    def forward(self, x, temb=None):
+    def forward(self, x, temb=None): # TODO: Return 2 or 3 residuals? If 3 then how to consume the third?
         res_samples = ()
         h = x
         h = self.res_block1(h, temb)
-        res_samples += (h,)
         if self.has_attn:
             h = self.attention1(h)
-        h = self.res_block2(h, temb)
         res_samples += (h,)
+        h = self.res_block2(h, temb)
         if self.has_attn:
             h = self.attention2(h)
         res_samples += (h,)
@@ -154,21 +153,23 @@ class UpBlock(nn.Module):
         self.has_attn = has_attn
         self.upsample = upsample
 
-        self.res_block1 = ResnetBlock(in_channels + skip_in, out_channels, time_emb_dim, dropout_rate)
+        res1_in_channels = in_channels + skip_in if skip_in is not None else in_channels
+
+        self.res_block1 = ResnetBlock(res1_in_channels, out_channels, time_emb_dim, dropout_rate)
         self.attention1 = AttentionBlock(out_channels) if has_attn else nn.Identity()
         self.res_block2 = ResnetBlock(out_channels, out_channels, time_emb_dim, dropout_rate)
         self.attention2 = AttentionBlock(out_channels) if has_attn else nn.Identity()
-        self.upsample = Upsample(in_channels, with_conv=True) if upsample else None
+        self.upsample = Upsample(out_channels, with_conv=True) if upsample else None
 
     def forward(self, x, skip=None, temb=None):
         if skip is not None:
             x = torch.cat([x, skip], dim=1)
-        h = self.res_block1(h, temb)
+        h = self.res_block1(x, temb)
         h = self.attention1(h)
         h = self.res_block2(h, temb)
         h = self.attention2(h)
         if self.upsample:
-            h = self.upsample(x)
+            h = self.upsample(h)
         return h
     
 class MiddleBlock(nn.Module):
@@ -186,39 +187,34 @@ class MiddleBlock(nn.Module):
         return h
     
 class ControlNetPACAUpBlock(nn.Module):
-    def __init__(self, in_channels, out_channels, skip_channels=None, time_emb_dim=None, has_attn=False, dropout_rate=0.1, upsample=True):
+    def __init__(self, in_channels, out_channels, skip_channels, time_emb_dim=None, has_attn=False, dropout_rate=0.1, upsample=True):
         super().__init__()
         self.has_attn = has_attn
         self.upsample = upsample
         res1_in_channels = in_channels + skip_channels
+        res2_in_channels = out_channels + skip_channels
         
         self.res_block1 = ResnetBlock(res1_in_channels, out_channels, time_emb_dim, dropout_rate)
         self.attention1 = AttentionBlock(out_channels) if has_attn else nn.Identity()
         self.paca1 = PACALayer(out_channels, out_channels, num_heads=8)
-        self.res_block2 = ResnetBlock(out_channels, out_channels, time_emb_dim, dropout_rate)
+        self.res_block2 = ResnetBlock(res2_in_channels, out_channels, time_emb_dim, dropout_rate)
         self.attention2 = AttentionBlock(out_channels) if has_attn else nn.Identity()
         self.paca2 = PACALayer(out_channels, out_channels, num_heads=8)
         self.upsample = Upsample(in_channels, with_conv=True) if upsample else None
 
-    def forward(self, x, unet_skips, controlnet_skips, temb=None):
-        unet_skip1 = unet_skips[0]
-        unet_skip2 = unet_skips[1]
-
-        controlnet_skip1 = controlnet_skips[0]
-        controlnet_skip2 = controlnet_skips[1]
-
-        x = torch.cat([x, unet_skip1], dim=1)
+    def forward(self, x, skips, pacas, temb=None):
+        h = torch.cat([x, skips[0]], dim=1)
         h = self.res_block1(h, temb)
         h = self.attention1(h)
-        h = self.paca1(h, controlnet_skip1)
+        h = self.paca1(h, pacas[0])
 
-        h = torch.cat([h, unet_skip2], dim=1)
+        h = torch.cat([h, skips[1]], dim=1)
         h = self.res_block2(h, temb)
         h = self.attention2(h)
-        h = self.paca2(h, controlnet_skip2)
+        h = self.paca2(h, pacas[1])
         
         if self.upsample:
-            h = self.upsample(x)
+            h = self.upsample(h)
         return h
 
 class PACALayer(nn.Module): # TODO: Use transformer cross attention instead of nn.multihead
@@ -306,17 +302,17 @@ class Encoder(nn.Module):
         return h
 
 class Decoder(nn.Module):
-    def __init__(self, in_channels=3, out_channels=1, base_channels=64, time_emb_dim=None, dropout_rate=0.0, has_attn=False, tahn_out=False):
+    def __init__(self, in_channels=3, out_channels=1, base_channels=64, dropout_rate=0.0, has_attn=False, tahn_out=True):
         super().__init__()
         self.tahn_out = tahn_out
 
         self.conv_in = nn.Conv2d(in_channels, base_channels * 4, kernel_size=3, padding=1)
 
-        self.middle = MiddleBlock(base_channels * 4, time_emb_dim, dropout_rate)
+        self.middle = MiddleBlock(base_channels * 4, None, dropout_rate)
 
-        self.up3 = UpBlock(base_channels*4, base_channels*2, None, time_emb_dim, has_attn, dropout_rate)
-        self.up2 = UpBlock(base_channels*2, base_channels, None, time_emb_dim, has_attn, dropout_rate)
-        self.up1 = UpBlock(base_channels, base_channels, None, time_emb_dim, has_attn, dropout_rate, upsample=False)
+        self.up3 = UpBlock(base_channels*4, base_channels*2, None, None, has_attn, dropout_rate)
+        self.up2 = UpBlock(base_channels*2, base_channels, None, None, has_attn, dropout_rate)
+        self.up1 = UpBlock(base_channels, base_channels, None, None, has_attn, dropout_rate, upsample=False)
 
         self.norm_out = Normalize(base_channels)
         self.conv_out = nn.Conv2d(base_channels, out_channels, kernel_size=3, padding=1)

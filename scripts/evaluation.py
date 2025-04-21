@@ -2,7 +2,12 @@
 import os
 import glob
 import numpy as np
+from skimage.metrics import structural_similarity as ssim
+from skimage.metrics import peak_signal_noise_ratio as psnr
 import concurrent.futures
+
+# Fixed full data range for CT Hounsfield units
+DATA_RANGE = 2000.0  # from -1000 to 1000
 
 DEBUG = False
 
@@ -11,55 +16,71 @@ def compute_mae(test, gt):
     assert test.shape == gt.shape, "Shapes must match"
     return np.mean(np.abs(test - gt))
 
+
 def compute_rmse(test, gt):
     """RMSE over all pixels."""
     assert test.shape == gt.shape, "Shapes must match"
     return np.sqrt(np.mean((test - gt)**2))
 
-def compute_mae_masked(test, gt, mask):
-    """MAE over pixels where mask==1; returns NaN if mask empty."""
-    assert test.shape == gt.shape == mask.shape, "Shapes must match"
-    m = mask.astype(bool)
-    if not m.any():
-        return np.nan
-    return np.mean(np.abs(test[m] - gt[m]))
 
-def compute_rmse_masked(test, gt, mask):
-    """RMSE over pixels where mask==1; returns NaN if mask empty."""
-    assert test.shape == gt.shape == mask.shape, "Shapes must match"
-    m = mask.astype(bool)
-    if not m.any():
-        return np.nan
-    return np.sqrt(np.mean((test[m] - gt[m])**2))
+def compute_psnr(test, gt, data_range):
+    """PSNR over all pixels with fixed data range."""
+    assert test.shape == gt.shape, "Shapes must match"
+    return psnr(gt, test, data_range=data_range)
+
 
 def compare_single(fname, test_folder, gt_folder, liver_mask_folder, tumor_mask_folder):
     """
     Load test, GT, liver mask, tumor mask, compute:
-      - global MAE, global RMSE
-      - liver MAE, liver RMSE
-      - tumor MAE, tumor RMSE
-    Returns tuple of six floats.
+      - global MAE, RMSE, PSNR, SSIM
+      - liver MAE, RMSE, PSNR, SSIM
+      - tumor MAE, RMSE, PSNR, SSIM
+    Returns tuple of twelve floats.
     """
+    # load data
     test = np.load(os.path.join(test_folder,    fname))
     gt   = np.load(os.path.join(gt_folder,      fname))
     lm   = np.load(os.path.join(liver_mask_folder, fname)).astype(bool)
     tm   = np.load(os.path.join(tumor_mask_folder, fname)).astype(bool)
 
+    # global metrics
     g_mae  = compute_mae(test, gt)
     g_rmse = compute_rmse(test, gt)
+    g_psnr = compute_psnr(test, gt, data_range=DATA_RANGE)
+    g_ssim, ssim_map = ssim(gt, test, data_range=DATA_RANGE, full=True)
 
-    l_mae  = compute_mae_masked(test, gt, lm)
-    l_rmse = compute_rmse_masked(test, gt, lm)
+    # masked MAE/RMSE
+    def masked(fn, arr1, arr2, mask):
+        if not mask.any():
+            return np.nan
+        return fn(arr1[mask], arr2[mask])
 
-    t_mae  = compute_mae_masked(test, gt, tm)
-    t_rmse = compute_rmse_masked(test, gt, tm)
+    l_mae  = masked(compute_mae, test, gt, lm)
+    l_rmse = masked(compute_rmse, test, gt, lm)
+    t_mae  = masked(compute_mae, test, gt, tm)
+    t_rmse = masked(compute_rmse, test, gt, tm)
 
-    return g_mae, g_rmse, l_mae, l_rmse, t_mae, t_rmse
+    # masked PSNR using full image range
+    l_psnr = masked(lambda t, g: compute_psnr(t, g, data_range=DATA_RANGE), test, gt, lm)
+    t_psnr = masked(lambda t, g: compute_psnr(t, g, data_range=DATA_RANGE), test, gt, tm)
+
+    # masked SSIM: average of the full SSIM map
+    l_ssim = np.nan if not lm.any() else np.mean(ssim_map[lm])
+    t_ssim = np.nan if not tm.any() else np.mean(ssim_map[tm])
+
+    return (
+        g_mae, g_rmse, g_psnr, g_ssim,
+        l_mae, l_rmse, l_psnr, l_ssim,
+        t_mae, t_rmse, t_psnr, t_ssim
+    )
+
 
 def compare_batch(vol_idx, test_folder, gt_folder, liver_mask_folder, tumor_mask_folder):
     """
     For a given volume, run compare_single on all its slices.
-    Returns averages: (g_mae, g_rmse, l_mae, l_rmse, t_mae, t_rmse)
+    Returns averages: (g_mae, g_rmse, g_psnr, g_ssim,
+                       l_mae, l_rmse, l_psnr, l_ssim,
+                       t_mae, t_rmse, t_psnr, t_ssim)
     """
     pattern = os.path.join(test_folder, f"volume-{vol_idx}_slice_*.npy")
     files   = sorted(glob.glob(pattern))
@@ -67,24 +88,24 @@ def compare_batch(vol_idx, test_folder, gt_folder, liver_mask_folder, tumor_mask
         print(f"No files for volume {vol_idx}")
         return None
 
-    lists = {k: [] for k in ("g_mae","g_rmse","l_mae","l_rmse","t_mae","t_rmse")}
+    keys = [
+        "g_mae","g_rmse","g_psnr","g_ssim",
+        "l_mae","l_rmse","l_psnr","l_ssim",
+        "t_mae","t_rmse","t_psnr","t_ssim"
+    ]
+    lists = {k: [] for k in keys}
 
     for path in files:
         fname = os.path.basename(path)
         vals  = compare_single(fname, test_folder, gt_folder,
                                liver_mask_folder, tumor_mask_folder)
-        for key, val in zip(lists, vals):
+        for key, val in zip(keys, vals):
             lists[key].append(val)
 
-    # compute means, ignoring NaNs for masked
-    return (
-        np.mean(lists["g_mae"]),
-        np.mean(lists["g_rmse"]),
-        np.nanmean(lists["l_mae"]),
-        np.nanmean(lists["l_rmse"]),
-        np.nanmean(lists["t_mae"]),
-        np.nanmean(lists["t_rmse"]),
-    )
+    # compute means, ignoring NaNs
+    agg = tuple(np.nanmean(lists[k]) for k in keys)
+    return agg
+
 
 def compare_all_volumes(volumes, test_folder, gt_folder, liver_mask_folder, tumor_mask_folder):
     all_res = {}
@@ -105,35 +126,39 @@ def compare_all_volumes(volumes, test_folder, gt_folder, liver_mask_folder, tumo
                 print(f"Volume {v} error: {e}")
 
     # Per-volume report
+    labels = [
+        "Global →", "", "", "",
+        "Liver  →", "", "", "",
+        "Tumor  →", "", "", ""
+    ]
+    names = ["MAE","RMSE","PSNR(dB)","SSIM"]
+
     for v in sorted(all_res):
-        g_mae, g_rmse, l_mae, l_rmse, t_mae, t_rmse = all_res[v]
-        print(
-            f"Volume {v}:\n"
-            f"  Global → MAE {g_mae:.3f}, RMSE {g_rmse:.3f}\n"
-            f"  Liver  → MAE {l_mae:.3f}, RMSE {l_rmse:.3f}\n"
-            f"  Tumor  → MAE {t_mae:.3f}, RMSE {t_rmse:.3f}"
-        )
+        vals = all_res[v]
+        print(f"Volume {v}:")
+        for i, region in enumerate(("Global","Liver","Tumor")):
+            offs = i*4
+            region_vals = vals[offs:offs+4]
+            print(f"  {region:6} → " + ", ".join(f"{n} {region_vals[j]:.3f}" for j, n in enumerate(names)))
 
     # Overall averages
     if all_res:
-        keys = list(all_res.values())
-        agg = np.array(keys)  # shape: (n_volumes, 6)
+        arr = np.array(list(all_res.values()))  # (n_vols, 12)
+        overall = np.nanmean(arr, axis=0)
         print("\nOverall average across volumes:")
-        print(f"  Global MAE  = {np.mean(agg[:,0]):.3f}")
-        print(f"  Global RMSE = {np.mean(agg[:,1]):.3f}")
-        print(f"  Liver  MAE  = {np.nanmean(agg[:,2]):.3f}")
-        print(f"  Liver  RMSE = {np.nanmean(agg[:,3]):.3f}")
-        print(f"  Tumor  MAE  = {np.nanmean(agg[:,4]):.3f}")
-        print(f"  Tumor  RMSE = {np.nanmean(agg[:,5]):.3f}")
+        for i, region in enumerate(("Global","Liver","Tumor")):
+            offs = i*4
+            region_vals = overall[offs:offs+4]
+            print(f"  {region:6} → " + ", ".join(f"{n} {region_vals[j]:.3f}" for j, n in enumerate(names)))
     else:
         print("No volumes to summarize.")
 
 if __name__ == "__main__":
     # ─── CONFIG ────────────────────────────────────────────────
-    test_folder        = os.path.expanduser("/Users/Niklas/thesis/training_data/CBCT/scaledV2")
-    gt_folder          = os.path.expanduser("/Users/Niklas/thesis/training_data/CT")
-    liver_mask_folder  = os.path.expanduser("/Users/Niklas/thesis/training_data/masks/liver")
-    tumor_mask_folder  = os.path.expanduser("/Users/Niklas/thesis/training_data/masks/tumor")
+    test_folder        = os.path.expanduser("~/thesis/training_data/CBCT/scaledV2")
+    gt_folder          = os.path.expanduser("~/thesis/training_data/CT")
+    liver_mask_folder  = os.path.expanduser("~/thesis/training_data/masks/liver")
+    tumor_mask_folder  = os.path.expanduser("~/thesis/training_data/masks/tumor")
 
     volumes = [
         68, 27, 52, 104, 130, 16, 24, 75, 124, 26, 64, 90, 50, 86, 122,
@@ -144,8 +169,6 @@ if __name__ == "__main__":
         19, 115, 97, 2, 118, 66, 54, 25, 63, 108, 22, 113, 8, 111, 114,
         9, 74, 21, 77, 20, 103, 70, 87, 119, 4
     ]
-
-    # ──────────────────────────────────────────────────────────
 
     compare_all_volumes(volumes,
                         test_folder, gt_folder,

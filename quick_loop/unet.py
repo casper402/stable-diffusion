@@ -199,5 +199,5 @@ def train_unet(unet, vae, train_loader, val_loader, epochs=1000, save_path='unet
         if predict_dir and (epoch + 1) % 50 == 0:
             for x in val_loader:
                 predict_dir = os.path.join(os.path.dirname(predict_dir), f"epoch_{epoch+1}")
-                predict_unet(vae, x, save_path=predict_dir)
+                predict_unet(unet, vae, x, save_path=predict_dir)
                 break # Only predict on the first batch

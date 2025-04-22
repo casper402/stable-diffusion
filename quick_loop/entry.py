@@ -39,8 +39,8 @@ os.makedirs(save_dir, exist_ok=True)
 manifest_path = "../data_quick_loop/manifest.csv"
 train_loader, val_loader, _ = get_dataloaders(manifest_path, batch_size=batch_size, num_workers=num_workers, dataset_class=CTDatasetNPY, train_size=train_size, val_size=val_size, test_size=test_size)
 
-vae = load_vae(trainable=True)
-train_vae(vae=vae, train_loader=train_loader, val_loader=val_loader, epochs=epochs, early_stopping=early_stopping, patience=patience, save_path=os.path.join(save_dir, "vae.pth"), predict_dir=vae_predict_dir)
+vae = load_vae(vae_save_path, trainable=False)
+# train_vae(vae=vae, train_loader=train_loader, val_loader=val_loader, epochs=epochs, early_stopping=early_stopping, patience=patience, save_path=os.path.join(save_dir, "vae.pth"), predict_dir=vae_predict_dir)
 
 unet = load_unet(trainable=True)
 train_unet(unet=unet, vae=vae, train_loader=train_loader, val_loader=val_loader, epochs=epochs, early_stopping=early_stopping, patience=patience, save_path=os.path.join(save_dir, "unet.pth"), predict_dir=unet_predict_dir)

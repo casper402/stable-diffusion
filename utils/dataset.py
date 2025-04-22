@@ -1,7 +1,6 @@
 import os
 import numpy as np
 import csv
-import cv2
 import torch
 from torch.utils.data import Dataset, DataLoader, random_split
 from PIL import Image

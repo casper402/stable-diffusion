@@ -16,11 +16,11 @@ class DegradationRemoval(nn.Module):
 
         self.conv1 = nn.Conv2d(ch1, ch1, kernel_size=3, padding=1)
         self.down1 = nn.Conv2d(ch1, ch2, kernel_size=3, padding=1, stride=2)
-        self.to_grayscale_128 = nn.Conv2d(ch1, 1, kernel_size=3, padding=1)
+        self.to_grayscale_128 = nn.Conv2d(ch2, 1, kernel_size=3, padding=1)
 
         self.conv2 = nn.Conv2d(ch2, ch2, kernel_size=3, padding=1)
         self.down2 = nn.Conv2d(ch2, ch3, kernel_size=3, padding=1, stride=2)
-        self.to_grayscale_64 = nn.Conv2d(ch2, 1, kernel_size=3, padding=1)
+        self.to_grayscale_64 = nn.Conv2d(ch3, 1, kernel_size=3, padding=1)
 
         self.conv_out = ZeroConv2d(ch3, final_embedding_channels, kernel_size=3, padding=1)
 

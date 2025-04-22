@@ -19,10 +19,9 @@ class UNet(nn.Module):
         time_emb_dim = base_channels * 4
 
         ch1 = base_channels * 1
-        ch2 = base_channels * 1
-        ch3 = base_channels * 2
+        ch2 = base_channels * 2
+        ch3 = base_channels * 4
         ch4 = base_channels * 4
-        ch_mid = base_channels * 4
 
         attn_res_64 = False
         attn_res_32 = True
@@ -32,39 +31,35 @@ class UNet(nn.Module):
         self.time_embedding = TimestepEmbedding(time_emb_dim)
         self.init_conv = nn.Conv2d(in_channels, ch1, kernel_size=3, padding=1)
 
-        self.down1 = DownBlock(ch1, ch2, time_emb_dim, attn_res_64, dropout_rate)
-        self.down2 = DownBlock(ch2, ch3, time_emb_dim, attn_res_32, dropout_rate)
-        self.down3 = DownBlock(ch3, ch4, time_emb_dim, attn_res_16, dropout_rate)
-        self.down4 = DownBlock(ch4, ch_mid, time_emb_dim, attn_res_8, dropout_rate, downsample=False)
+        self.down1 = DownBlock(ch1, ch1, time_emb_dim, attn_res_64, dropout_rate)
+        self.down2 = DownBlock(ch1, ch2, time_emb_dim, attn_res_32, dropout_rate)
+        self.down3 = DownBlock(ch2, ch3, time_emb_dim, attn_res_16, dropout_rate)
+        self.down4 = DownBlock(ch3, ch4, time_emb_dim, attn_res_8, dropout_rate, downsample=False)
 
         self.middle = MiddleBlock(ch4, time_emb_dim, dropout_rate)
 
-        self.up4 = UpBlock(ch_mid, ch4, ch_mid, time_emb_dim, attn_res_8, dropout_rate)
-        self.up3 = UpBlock(ch4, ch3, ch4, time_emb_dim, attn_res_16, dropout_rate)
-        self.up2 = UpBlock(ch3, ch2, ch3, time_emb_dim, attn_res_32, dropout_rate)
-        self.up1 = UpBlock(ch2, ch1, ch2, time_emb_dim, attn_res_64, dropout_rate, upsample=False)
+        self.up4 = UpBlock(ch4, ch3, ch4, time_emb_dim, attn_res_8, dropout_rate)
+        self.up3 = UpBlock(ch3, ch2, ch3, time_emb_dim, attn_res_16, dropout_rate)
+        self.up2 = UpBlock(ch2, ch1, ch2, time_emb_dim, attn_res_32, dropout_rate)
+        self.up1 = UpBlock(ch1, ch1, ch1, time_emb_dim, attn_res_64, dropout_rate, upsample=False)
 
         self.final_norm = Normalize(ch1)
         self.final_conv = nn.Conv2d(ch1, out_channels, kernel_size=3, stride=1, padding=1)
 
-    def forward(self, x, t=None):
+    def forward(self, x, t):
         t_emb = self.time_embedding(t)
         x = self.init_conv(x)         
         x, intermediates1 = self.down1(x, t_emb)
-        skip1 = intermediates1[-1]
         x, intermediates2 = self.down2(x, t_emb)
-        skip2 = intermediates2[-1]
         x, intermediates3 = self.down3(x, t_emb)
-        skip3 = intermediates3[-1]
         x, intermediates4 = self.down4(x, t_emb)
-        skip4 = intermediates4[-1]
 
         x = self.middle(x, t_emb)
 
-        x = self.up4(x, skip4, t_emb)
-        x = self.up3(x, skip3, t_emb)
-        x = self.up2(x, skip2, t_emb)
-        x = self.up1(x, skip1, t_emb)
+        x = self.up4(x, intermediates4, t_emb)
+        x = self.up3(x, intermediates3, t_emb)
+        x = self.up2(x, intermediates2, t_emb)
+        x = self.up1(x, intermediates1, t_emb)
 
         x = self.final_norm(x)
         x = nonlinearity(x)
@@ -140,15 +135,17 @@ def predict_unet(unet, vae, x_batch, save_path=None):
                 ax[2].set_title("VAE Reconstructed Image")
                 plt.show()
 
-def train_unet(unet, vae, train_loader, val_loader, epochs=1000, save_path='unet.pth', predict_dir=None, early_stopping=None):
+def train_unet(unet, vae, train_loader, val_loader, epochs=1000, save_path='unet.pth', predict_dir=None, early_stopping=None, patience=None):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     diffusion = Diffusion(device)
     optimizer = torch.optim.AdamW(vae.parameters(), lr=5.0e-5)
+    if patience is None:
+        patience = epochs
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer,
         mode='min',            
         factor=0.5,            
-        patience=50,           
+        patience=patience,           
         threshold=1e-4,        
         verbose=True,          
         min_lr=1e-6            

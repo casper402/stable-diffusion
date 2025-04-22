@@ -148,24 +148,27 @@ class DownBlock(nn.Module):
         return h, res_samples
     
 class UpBlock(nn.Module):
-    def __init__(self, in_channels, out_channels, skip_in=None, time_emb_dim=None, has_attn=False, dropout_rate=0.1, upsample=True):
+    def __init__(self, in_channels, out_channels, skip_channels=None, time_emb_dim=None, has_attn=False, dropout_rate=0.1, upsample=True):
         super().__init__()
         self.has_attn = has_attn
         self.upsample = upsample
 
-        res1_in_channels = in_channels + skip_in if skip_in is not None else in_channels
+        res1_in_channels = in_channels + skip_channels if skip_channels is not None else in_channels
+        res2_in_channels = out_channels + skip_channels if skip_channels is not None else out_channels
 
         self.res_block1 = ResnetBlock(res1_in_channels, out_channels, time_emb_dim, dropout_rate)
         self.attention1 = AttentionBlock(out_channels) if has_attn else nn.Identity()
-        self.res_block2 = ResnetBlock(out_channels, out_channels, time_emb_dim, dropout_rate)
+        self.res_block2 = ResnetBlock(res2_in_channels, out_channels, time_emb_dim, dropout_rate)
         self.attention2 = AttentionBlock(out_channels) if has_attn else nn.Identity()
         self.upsample = Upsample(out_channels, with_conv=True) if upsample else None
 
-    def forward(self, x, skip=None, temb=None):
-        if skip is not None:
-            x = torch.cat([x, skip], dim=1)
+    def forward(self, x, skips=None, temb=None):
+        if skips is not None:
+            x = torch.cat([x, skips[0]], dim=1)
         h = self.res_block1(x, temb)
         h = self.attention1(h)
+        if skips is not None:
+            h = torch.cat([h, skips[1]], dim=1)
         h = self.res_block2(h, temb)
         h = self.attention2(h)
         if self.upsample:
@@ -196,28 +199,30 @@ class ControlNetPACAUpBlock(nn.Module):
         
         self.res_block1 = ResnetBlock(res1_in_channels, out_channels, time_emb_dim, dropout_rate)
         self.attention1 = AttentionBlock(out_channels) if has_attn else nn.Identity()
-        self.paca1 = PACALayer(out_channels, out_channels, num_heads=8)
+        self.paca1 = PACALayer(out_channels, skip_channels, num_heads=8)
         self.res_block2 = ResnetBlock(res2_in_channels, out_channels, time_emb_dim, dropout_rate)
         self.attention2 = AttentionBlock(out_channels) if has_attn else nn.Identity()
-        self.paca2 = PACALayer(out_channels, out_channels, num_heads=8)
-        self.upsample = Upsample(in_channels, with_conv=True) if upsample else None
+        self.paca2 = PACALayer(out_channels, skip_channels, num_heads=8)
+        self.upsample = Upsample(out_channels, with_conv=True) if upsample else None
 
-    def forward(self, x, skips, pacas, temb=None):
+    def forward(self, x, skips, pacas=None, temb=None):
         h = torch.cat([x, skips[0]], dim=1)
         h = self.res_block1(h, temb)
         h = self.attention1(h)
-        h = self.paca1(h, pacas[0])
+        if pacas is not None:
+            h = self.paca1(h, pacas[0])
 
         h = torch.cat([h, skips[1]], dim=1)
         h = self.res_block2(h, temb)
         h = self.attention2(h)
-        h = self.paca2(h, pacas[1])
+        if pacas is not None:
+            h = self.paca2(h, pacas[1])
         
         if self.upsample:
             h = self.upsample(h)
         return h
 
-class PACALayer(nn.Module): # TODO: Use transformer cross attention instead of nn.multihead
+class PACALayer(nn.Module): # TODO: Look into the transformer cross attention used in PASD instead of nn.multihead
     def __init__(self, query_dim, kv_dim = None, num_heads=8):
         super().__init__()
         if kv_dim is None:
@@ -242,9 +247,9 @@ class PACALayer(nn.Module): # TODO: Use transformer cross attention instead of n
     def forward(self, q_features, kv_features):
         residual = q_features
         b, c_q, h, w = q_features.shape
-        _, c_kv, hk, wk = kv_features.shape
+        _, _, hk, wk = kv_features.shape
         if (hk, wk) != (h, w):
-            kv_features = F.interpolate(kv_features, size=(h, w), mode='nearest')
+            print("Warning: PACA layer input features have different spatial dimensions. This may cause issues.")
 
         q_features = self.norm_q(q_features)
         kv_features = self.norm_k(kv_features)

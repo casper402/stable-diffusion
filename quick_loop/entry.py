@@ -12,10 +12,10 @@ from quick_loop.unetControlPACA import load_unet_control_paca
 from quick_loop.unetControlPACA import train_dr_control_paca
 
 ### CONFIG ###
-train_size = 10
-val_size = 2
-test_size = 2
-batch_size = 2
+train_size = None
+val_size = None
+test_size = None
+batch_size = 4
 num_workers = 4
 epochs = 500
 early_stopping = 50

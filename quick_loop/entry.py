@@ -1,0 +1,56 @@
+import os
+import torch
+import torchvision
+
+from utils.dataset import get_dataloaders, CTDatasetNPY, PairedCTCBCTDatasetNPY
+from models.diffusion import Diffusion
+from quick_loop.vae import load_vae, train_vae
+from quick_loop.unet import load_unet, train_unet
+from quick_loop.controlnet import load_controlnet
+from quick_loop.degradationRemoval import load_degradation_removal
+from quick_loop.unetControlPACA import load_unet_control_paca
+from quick_loop.unetControlPACA import train_dr_control_paca
+
+### CONFIG ###
+train_size = 10
+val_size = 2
+test_size = 2
+batch_size = 2
+num_workers = 2
+epochs = 1
+early_stopping = None
+patience = None
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+save_dir = "data_quick_loop"
+
+vae_predict_dir = os.path.join(save_dir, "vae_predictions")
+unet_predict_dir = os.path.join(save_dir, "unet_predictions")
+conditional_predict_dir = os.path.join(save_dir, "conditional_predictions")
+
+vae_save_path = os.path.join(save_dir, "vae.pth")
+unet_save_path = os.path.join(save_dir, "unet.pth")
+controlnet_save_path = os.path.join(save_dir, "controlnet.pth")
+paca_layers_save_path = os.path.join(save_dir, "paca_layers.pth")
+degradation_removal_save_path = os.path.join(save_dir, "degradation_removal.pth")
+
+os.makedirs(save_dir, exist_ok=True)
+
+manifest_path = "../data_quick_loop/manifest.csv"
+train_loader, val_loader, _ = get_dataloaders(manifest_path, batch_size=batch_size, num_workers=num_workers, dataset_class=CTDatasetNPY, train_size=train_size, val_size=val_size, test_size=test_size)
+
+vae = load_vae(trainable=True)
+train_vae(vae=vae, train_loader=train_loader, val_loader=val_loader, epochs=epochs, early_stopping=early_stopping, save_path=os.path.join(save_dir, "vae.pth"), predict_dir=vae_predict_dir)
+
+unet = load_unet(trainable=True)
+train_unet(unet=unet, vae=vae, train_loader=train_loader, val_loader=val_loader, epochs=epochs, early_stopping=early_stopping, save_path=os.path.join(save_dir, "unet.pth"), predict_dir=unet_predict_dir)
+
+vae = load_vae(save_path=vae_save_path, trainable=False)
+controlnet = load_controlnet(trainable=True)
+dr_module = load_degradation_removal(trainable=True)
+unet = load_unet_control_paca(unet_save_path=unet_save_path, paca_trainable=True)
+
+train_loader, val_loader, _ = get_dataloaders(manifest_path, batch_size=batch_size, num_workers=num_workers, dataset_class=PairedCTCBCTDatasetNPY, train_size=train_size, val_size=val_size, test_size=test_size)
+
+train_dr_control_paca(vae=vae, unet=unet, controlnet=controlnet, dr_module=dr_module, train_loader=train_loader, val_loader=val_loader, epochs=epochs, save_dir=save_dir, predict_dir=conditional_predict_dir, early_stopping=early_stopping, patience=patience, gamma=1.0)
+print("All trainings finished.")

@@ -140,7 +140,7 @@ def predict_unet(unet, vae, x_batch, save_path=None):
                 ax[2].set_title("VAE Reconstructed Image")
                 plt.show()
 
-def train_unet(unet, vae, train_loader, val_loader, epochs=1000, save_path='unet.pth', predict_dir=None, perceptual_weight=0.1, ssim_weight=0.8, mse_weight=0.0, kl_weight=0.00001, l1_weight=1.0):
+def train_unet(unet, vae, train_loader, val_loader, epochs=1000, save_path='unet.pth', predict_dir=None, early_stopping=None):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     diffusion = Diffusion(device)
     optimizer = torch.optim.AdamW(vae.parameters(), lr=5.0e-5)
@@ -154,6 +154,7 @@ def train_unet(unet, vae, train_loader, val_loader, epochs=1000, save_path='unet
         min_lr=1e-6            
     )
     best_val_loss = float('inf')
+    early_stopping_counter = 0
 
     for epoch in range(epochs):
         # Training
@@ -192,13 +193,19 @@ def train_unet(unet, vae, train_loader, val_loader, epochs=1000, save_path='unet
         val_loss /= len(val_loader)
         
         scheduler.step(val_loss)
+        early_stopping_counter += 1
         print(f"Epoch {epoch+1} | Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f}")
 
         # Save best model
         if val_loss < best_val_loss:
             best_val_loss = val_loss
+            early_stopping_counter = 0
             torch.save(unet.state_dict(), save_path)
             print(f"✅ Saved new best unet at epoch {epoch+1} with val loss {val_loss:.4f}")
+
+        if early_stopping and early_stopping_counter >= early_stopping:
+            print(f"Early stopped after {early_stopping} epochs with no improvement.")
+            break
 
         # Save predictions
         if predict_dir and (epoch + 1) % 50 == 0:

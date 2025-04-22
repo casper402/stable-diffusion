@@ -203,10 +203,17 @@ class PairedCTCBCTDatasetNPY(Dataset):
 
         return ct, cbct
     
-def get_dataloaders(manifest_csv, batch_size, num_workers, dataset_class=PairedCTCBCTDatasetNPY, shuffle_train=True, drop_last=True):
+def get_dataloaders(manifest_csv, batch_size, num_workers, dataset_class=PairedCTCBCTDatasetNPY, shuffle_train=True, drop_last=True, train_size=None, val_size=None, test_size=None):
     train_dataset = dataset_class(manifest_csv=manifest_csv, split='train')
-    val_dataset = dataset_class(manifest_csv=manifest_csv, split='val')
+    val_dataset = dataset_class(manifest_csv=manifest_csv, split='validation')
     test_dataset = dataset_class(manifest_csv=manifest_csv, split='test')
+    if train_size:
+        train_dataset, _ = random_split(train_dataset, [train_size, len(train_dataset) - train_size])
+    if val_size:
+        val_dataset, _ = random_split(val_dataset, [val_size, len(val_dataset) - val_size])
+    if test_size:
+        test_dataset, _ = random_split(test_dataset, [test_size, len(test_dataset) - test_size])
+
     print(f"Dataset sizes - Train: {len(train_dataset)}, Validation: {len(val_dataset)}, Test: {len(test_dataset)}")
 
     # Train loader

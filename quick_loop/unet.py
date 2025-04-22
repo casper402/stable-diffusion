@@ -48,23 +48,23 @@ class UNet(nn.Module):
 
     def forward(self, x, t):
         t_emb = self.time_embedding(t)
-        x = self.init_conv(x)         
-        x, intermediates1 = self.down1(x, t_emb)
-        x, intermediates2 = self.down2(x, t_emb)
-        x, intermediates3 = self.down3(x, t_emb)
-        x, intermediates4 = self.down4(x, t_emb)
+        h = self.init_conv(x)         
+        h, intermediates1 = self.down1(h, t_emb)
+        h, intermediates2 = self.down2(h, t_emb)
+        h, intermediates3 = self.down3(h, t_emb)
+        h, intermediates4 = self.down4(h, t_emb)
 
-        x = self.middle(x, t_emb)
+        h = self.middle(h, t_emb)
 
-        x = self.up4(x, intermediates4, t_emb)
-        x = self.up3(x, intermediates3, t_emb)
-        x = self.up2(x, intermediates2, t_emb)
-        x = self.up1(x, intermediates1, t_emb)
+        h = self.up4(h, intermediates4, t_emb)
+        h = self.up3(h, intermediates3, t_emb)
+        h = self.up2(h, intermediates2, t_emb)
+        h = self.up1(h, intermediates1, t_emb)
 
-        x = self.final_norm(x)
-        x = nonlinearity(x)
-        x = self.final_conv(x)
-        return x
+        h = self.final_norm(h)
+        h = nonlinearity(h)
+        h = self.final_conv(h)
+        return h
 
 def noise_loss(pred_noise, true_noise):
     return F.mse_loss(pred_noise, true_noise)
@@ -129,7 +129,7 @@ def predict_unet(unet, vae, x_batch, save_path=None):
 def train_unet(unet, vae, train_loader, val_loader, epochs=1000, save_path='unet.pth', predict_dir=None, early_stopping=None, patience=None):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     diffusion = Diffusion(device)
-    optimizer = torch.optim.AdamW(vae.parameters(), lr=5.0e-5)
+    optimizer = torch.optim.AdamW(unet.parameters(), lr=5.0e-5)
     if patience is None:
         patience = epochs
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(

@@ -125,15 +125,6 @@ def predict_unet(unet, vae, x_batch, save_path=None):
                     output_filename,
                     nrow=len(images_to_save),
                 )
-            if not save_path and device=="cpu":
-                _, ax = plt.subplots(1, 3, figsize=(15, 5))
-                ax[0].imshow(np.transpose(original_img.cpu().numpy(), (1, 2, 0)))
-                ax[0].set_title("Original Image")
-                ax[1].imshow(np.transpose(unet_recon_img.cpu().numpy(), (1, 2, 0)))
-                ax[1].set_title("UNet Reconstructed Image")
-                ax[2].imshow(np.transpose(recon_img.cpu().numpy(), (1, 2, 0)))
-                ax[2].set_title("VAE Reconstructed Image")
-                plt.show()
 
 def train_unet(unet, vae, train_loader, val_loader, epochs=1000, save_path='unet.pth', predict_dir=None, early_stopping=None, patience=None):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

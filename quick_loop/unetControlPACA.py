@@ -278,7 +278,7 @@ def train_dr_control_paca(vae, unet, controlnet, dr_module, train_loader, val_lo
             break
 
         # --- Inference/Saving Test Images ---
-        if ((epoch + 1) % 10 == 1): # Save every 10 epochs
+        if ((epoch + 1) % 50 == 0): # Save every 10 epochs
             print(f"--- Saving prediction for epoch {epoch+1} ---")
 
             unet.eval()
@@ -286,7 +286,7 @@ def train_dr_control_paca(vae, unet, controlnet, dr_module, train_loader, val_lo
             dr_module.eval()
             vae.eval()
 
-            num_images_to_save = 3
+            num_images_to_save = 5
             saved_count = 0
 
             with torch.no_grad():

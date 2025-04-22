@@ -81,13 +81,6 @@ def predict_vae(vae, x, save_path=None):
                 output_filename,
                 nrow=len(images_to_save),
             )
-        if not save_path and device=="cpu":
-            _, ax = plt.subplots(1, 2, figsize=(10, 5))
-            ax[0].imshow(np.transpose(original_image_processed.cpu().numpy(), (1, 2, 0)))
-            ax[0].set_title("Original Image")
-            ax[1].imshow(np.transpose(recon_image_processed.cpu().numpy(), (1, 2, 0)))
-            ax[1].set_title("Reconstructed Image")
-            plt.show()
 
 def train_vae(vae, train_loader, val_loader, epochs=1000, save_path='vae.pth', predict_dir=None, early_stopping=None, patience=None, perceptual_weight=0.1, ssim_weight=0.8, mse_weight=0.0, kl_weight=0.00001, l1_weight=1.0):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

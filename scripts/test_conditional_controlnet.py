@@ -126,9 +126,9 @@ for i in range(0, 200):
         # --- Save Output ---
         print("Saving output image...")
         # Prepare images for saving (denormalize)
-        generated_image_vis = (generated_image / 2 + 0.5).clamp(0, 1).squeeze(0) # Remove batch dim
-        cbct_image_vis = (CBCT / 2 + 0.5).clamp(0, 1).squeeze(0) # Remove batch dim
-        ct_image_vis = (CT / 2 + 0.5).clamp(0, 1).squeeze(0)
+        generated_image_vis = (generated_image / 2 + 0.5).clamp(0, 1)
+        cbct_image_vis = (CBCT / 2 + 0.5).clamp(0, 1)
+        ct_image_vis = (CT / 2 + 0.5).clamp(0, 1)
 
         images_to_save = [cbct_image_vis, generated_image_vis, ct_image_vis]
         output_filename = os.path.join(output_dir, f"slice_{i}_prediction.png")

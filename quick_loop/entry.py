@@ -14,8 +14,8 @@ from quick_loop.unetControlPACA import load_unet_control_paca, train_dr_control_
 ### CONFIG ###
 train_size = None
 val_size = None
-test_size = 1
-batch_size = 1
+test_size = 2
+batch_size = 2
 accumulation_steps = 2 # Effectively increases batch size to batch_size * accumulation_steps
 num_workers = 4
 epochs = 500

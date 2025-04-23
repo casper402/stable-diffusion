@@ -24,6 +24,8 @@ early_stopping = 50
 patience = 30
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print(f"Using device: {device}")
+print("using specific gpu: ", os.environ["CUDA_VISIBLE_DEVICES"])
 save_dir = "data_quick_loop"
 
 vae_predict_dir = os.path.join(save_dir, "vae_predictions")

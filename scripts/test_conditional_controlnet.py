@@ -128,14 +128,17 @@ for i in range(0, 200):
         # Prepare images for saving (denormalize)
         generated_image_vis = (generated_image / 2 + 0.5).clamp(0, 1)
         cbct_image_vis = (CBCT / 2 + 0.5).clamp(0, 1)
-        ct_image_vis = (CT / 2 + 0.5).clamp(0, 1)
+        ct_image_vis = (CT / 2 + 0.5)
+        combined_image = torch.cat((cbct_image_vis, generated_image_vis, ct_image_vis), dim=2)
+
+        if combined_image.ndim == 4:
+            combined_image = combined_image.squeeze(0) # Now [1, height, 3*width]
 
         images_to_save = [cbct_image_vis, generated_image_vis, ct_image_vis]
         output_filename = os.path.join(output_dir, f"slice_{i}_prediction.png")
         torchvision.utils.save_image(
-            images_to_save,
+            combined_image,
             output_filename,
-            nrow=len(images_to_save), # Arrange images horizontally
         )
         print(f"Saved comparison image to {output_filename}")
         print("Done.")

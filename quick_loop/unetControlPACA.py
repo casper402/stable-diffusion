@@ -130,16 +130,34 @@ def load_unet_control_paca(unet_save_path=None, paca_save_path=None, unet_traina
 
     return unetControlPACA
 
-def train_dr_control_paca(vae, unet, controlnet, dr_module, train_loader, val_loader, epochs=1000, save_dir='.', predict_dir="predictions", early_stopping=None, patience=None, gamma=1.0, guidance_scale = 1.0, epochs_between_prediction=50):
+def train_dr_control_paca(
+    vae, 
+    unet, 
+    controlnet, 
+    dr_module, 
+    train_loader, 
+    val_loader, 
+    epochs=1000, 
+    save_dir='.', 
+    predict_dir="predictions", 
+    early_stopping=None, 
+    patience=None, 
+    gamma=1.0, 
+    guidance_scale=1.0, 
+    epochs_between_prediction=50, 
+    learning_rate=5.0e-5, 
+    accumulation_steps=1
+):
     os.makedirs(save_dir, exist_ok=True)
     os.makedirs(predict_dir, exist_ok=True)
     amp_enabled = torch.cuda.is_available()
     print(f"AMP Enabled: {amp_enabled}")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    diffusion = Diffusion(device, timesteps=1000)
-    if not patience:
-        patience = epochs
-
+    vae.to(device)
+    unet.to(device)
+    controlnet.to(device)
+    dr_module.to(device)
+    
     # Collect trainable parameters per model
     controlnet_params = [p for p in controlnet.parameters() if p.requires_grad]
     dr_module_params = [p for p in dr_module.parameters() if p.requires_grad]
@@ -159,20 +177,25 @@ def train_dr_control_paca(vae, unet, controlnet, dr_module, train_loader, val_lo
     print(f"Total parameters to train:          {total_param_count}")
     
     scaler = GradScaler(enabled=amp_enabled)
-    optimizer = torch.optim.AdamW(params_to_train, lr=5.0e-5) # Use AdamW
+    optimizer = torch.optim.AdamW(params_to_train, lr=learning_rate) # Use AdamW
+    if not patience:
+        patience = epochs
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer,
         mode='min',
         factor=0.5,
-        patience=patience,
+        patience=patience // accumulation_steps,
         threshold=1e-4,
         verbose=True,
-        min_lr=1e-7
+        min_lr=min(1e-7, learning_rate)
     )
+    diffusion = Diffusion(device, timesteps=1000)
 
     # --- Training Loop ---
     best_val_loss = float('inf')
     early_stopping_counter = 0
+
+    optimizer.zero_grad()
 
     for epoch in range(epochs):
         unet.train()
@@ -182,10 +205,10 @@ def train_dr_control_paca(vae, unet, controlnet, dr_module, train_loader, val_lo
         train_loss_diff = 0
         train_loss_dr = 0
 
-        for ct_img, cbct_img in train_loader:
-            optimizer.zero_grad()
+        for i, (ct_img, cbct_img) in enumerate(train_loader):
             cbct_img = cbct_img.to(device)
             ct_img = ct_img.to(device)
+
             with torch.no_grad():
                 ct_mu, ct_logvar = vae.encode(ct_img)
                 z_ct = vae.reparameterize(ct_mu, ct_logvar)
@@ -204,11 +227,17 @@ def train_dr_control_paca(vae, unet, controlnet, dr_module, train_loader, val_lo
                 loss_diff = noise_loss(pred_noise, noise)
                 total_loss = loss_diff + gamma * loss_dr
 
-            scaler.scale(total_loss).backward() # Scale the loss for mixed precision
-            scaler.unscale_(optimizer) # Unscale gradients before clipping
-            torch.nn.utils.clip_grad_norm_(params_to_train, max_norm=1.0)
-            scaler.step(optimizer)
-            scaler.update()
+                # Gradient accumulation
+                scaled_loss = total_loss / accumulation_steps
+
+            scaler.scale(scaled_loss).backward() # Scale the loss for mixed precision
+
+            if (i + 1) % accumulation_steps == 0 or (i + 1) == len(train_loader):
+                scaler.unscale_(optimizer)
+                torch.nn.utils.clip_grad_norm_(params_to_train, max_norm=1.0) # Clip gradients
+                scaler.step(optimizer)
+                scaler.update()
+                optimizer.zero_grad()
 
             train_loss_total += total_loss.item()
             train_loss_diff += loss_diff.item()

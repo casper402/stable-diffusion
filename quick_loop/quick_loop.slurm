@@ -3,7 +3,7 @@
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=202008583@post.au.dk
 #SBATCH --partition=qgpu
-#SBATCH --gres=gpu
+#SBATCH --gres=gpu:1
 #SBATCH --mem=32G
 #SBATCH --cpus-per-task=8
 #SBATCH --time=48:00:00

@@ -307,7 +307,7 @@ def train_dr_control_paca(
                 print(f"✅ Saved new best ControlNet+DR model (no PACA found/saved) at epoch {epoch+1} with val loss {avg_val_loss_total:.4f}")
 
         if early_stopping and early_stopping_counter >= early_stopping:
-            print(f"Early stopped after {patience} epochs with no improvement.")
+            print(f"Early stopped after {early_stopping} epochs with no improvement.")
             break
 
         # --- Inference/Saving Test Images ---
@@ -399,6 +399,7 @@ def test_dr_control_paca(
     guidance_scales=[1.0],
     num_images_to_save=5
 ):
+    os.makedirs(predict_dir, exist_ok=True)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     diffusion = Diffusion(device)
     unet.eval()

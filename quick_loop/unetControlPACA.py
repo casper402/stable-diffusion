@@ -323,9 +323,9 @@ def train_dr_control_paca(
             saved_count = 0
 
             with torch.no_grad():
-                for i, (cbct, ct) in enumerate(val_loader):
-                    cbct = cbct.to(device)
+                for i, (ct, cbct) in enumerate(val_loader):
                     ct = ct.to(device)
+                    cbct = cbct.to(device)
 
                     controlnet_input, _ = dr_module(cbct)
 
@@ -368,12 +368,13 @@ def train_dr_control_paca(
                         cbct_image = cbct[j]
                         ct_image = ct[j]
 
-                        generated_image_vis = (generated_image[0, 0:1, :, :] / 2 + 0.5).clamp(0, 1) # Shape [1, H, W]
-                        cbct_image_vis = (cbct_image[0, 0:1, :, :] / 2 + 0.5).clamp(0, 1)         # Shape [1, H, W]
-                        ct_image_vis = (ct_image[0, 0:1, :, :] / 2 + 0.5).clamp(0, 1)    
+                        generated_image_vis = (generated_image / 2 + 0.5).clamp(0, 1).squeeze(0) # Remove batch dim
+                        cbct_image_vis = (cbct_image / 2 + 0.5).clamp(0, 1).squeeze(0) # Remove batch dim
+                        ct_image_vis = (ct_image / 2 + 0.5).clamp(0, 1).squeeze(0)
 
                         images_to_save = [cbct_image_vis, generated_image_vis, ct_image_vis]
-                        save_filename = f"{predict_dir}/epoch_{epoch+1}_batch_{i}_img_{j}.png"
+                        save_filename = f"{predict_dir}/batch_{i}_img_{j}_guidance_scale_{guidance_scale}.png"
+
                         torchvision.utils.save_image(
                             images_to_save,
                             save_filename,
@@ -408,9 +409,9 @@ def test_dr_control_paca(
     saved_count = 0
 
     with torch.no_grad():
-        for i, (cbct, ct) in enumerate(test_loader):
-            cbct = cbct.to(device)
+        for i, (ct, cbct) in enumerate(test_loader):
             ct = ct.to(device)
+            cbct = cbct.to(device)
 
             controlnet_input, _ = dr_module(cbct)
 

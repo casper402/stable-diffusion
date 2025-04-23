@@ -46,41 +46,41 @@ train_loader, val_loader, _ = get_dataloaders(manifest_path, batch_size=batch_si
 # unet = load_unet(unet_save_path, trainable=False)
 # train_unet(unet=unet, vae=vae, train_loader=train_loader, val_loader=val_loader, epochs=epochs, early_stopping=early_stopping, patience=patience, save_path=unet_save_path, predict_dir=unet_predict_dir)
 
-# vae = load_vae(save_path=vae_save_path, trainable=False)
-# unet = load_unet_control_paca(unet_save_path=unet_save_path, paca_trainable=True)
-# controlnet = load_controlnet(save_path=unet_save_path, trainable=True)
-# dr_module = load_degradation_removal(trainable=True)
-# unet = load_unet_control_paca(unet_save_path=unet_save_path, paca_trainable=True)
-# train_loader, val_loader, _ = get_dataloaders(manifest_path, batch_size=batch_size, num_workers=num_workers, dataset_class=PairedCTCBCTDatasetNPY, train_size=train_size, val_size=val_size, test_size=test_size)
-# train_dr_control_paca(
-#     vae=vae, 
-#     unet=unet, 
-#     controlnet=controlnet, 
-#     dr_module=dr_module, 
-#     train_loader=train_loader, 
-#     val_loader=val_loader, 
-#     epochs=epochs, 
-#     save_dir=save_dir, 
-#     predict_dir=conditional_predict_dir, 
-#     early_stopping=early_stopping, 
-#     patience=patience, 
-#     epochs_between_prediction=50, 
-#     accumulation_steps=accumulation_steps)
-
-_, _, test_loader = get_dataloaders(manifest_path, batch_size=batch_size, num_workers=num_workers, dataset_class=PairedCTCBCTDatasetNPY, train_size=train_size, val_size=val_size, test_size=test_size)
-vae = load_vae(vae_save_path)
-unet = load_unet_control_paca(unet_save_path=unet_save_path, paca_save_path=paca_layers_save_path)
-control_net = load_controlnet(save_path=controlnet_save_path)
-dr_module = load_degradation_removal(save_path=degradation_removal_save_path)
-test_dr_control_paca(
+vae = load_vae(save_path=vae_save_path, trainable=False)
+unet = load_unet_control_paca(unet_save_path=unet_save_path, paca_trainable=True)
+controlnet = load_controlnet(save_path=unet_save_path, trainable=True)
+dr_module = load_degradation_removal(trainable=True)
+unet = load_unet_control_paca(unet_save_path=unet_save_path, paca_trainable=True)
+train_loader, val_loader, _ = get_dataloaders(manifest_path, batch_size=batch_size, num_workers=num_workers, dataset_class=PairedCTCBCTDatasetNPY, train_size=train_size, val_size=val_size, test_size=test_size)
+train_dr_control_paca(
     vae=vae, 
     unet=unet, 
-    controlnet=control_net, 
+    controlnet=controlnet, 
     dr_module=dr_module, 
-    test_loader=test_loader, 
+    train_loader=train_loader, 
+    val_loader=val_loader, 
+    epochs=epochs, 
+    save_dir=save_dir, 
     predict_dir=conditional_predict_dir, 
-    guidance_scales=[1.0],
-    num_images_to_save=1
-)
+    early_stopping=early_stopping, 
+    patience=patience, 
+    epochs_between_prediction=50, 
+    accumulation_steps=accumulation_steps)
+
+# _, _, test_loader = get_dataloaders(manifest_path, batch_size=batch_size, num_workers=num_workers, dataset_class=PairedCTCBCTDatasetNPY, train_size=train_size, val_size=val_size, test_size=test_size)
+# vae = load_vae(vae_save_path)
+# unet = load_unet_control_paca(unet_save_path=unet_save_path, paca_save_path=paca_layers_save_path)
+# control_net = load_controlnet(save_path=controlnet_save_path)
+# dr_module = load_degradation_removal(save_path=degradation_removal_save_path)
+# test_dr_control_paca(
+#     vae=vae, 
+#     unet=unet, 
+#     controlnet=control_net, 
+#     dr_module=dr_module, 
+#     test_loader=test_loader, 
+#     predict_dir=conditional_predict_dir, 
+#     guidance_scales=[1.0],
+#     num_images_to_save=1
+# )
 
 print("All trainings finished.")

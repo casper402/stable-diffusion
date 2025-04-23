@@ -121,25 +121,21 @@ for i in range(0, 200):
 
         # --- Decode Final Latent ---
         z_0 = z_t
-        generated_batch = vae.decode(z_0)
+        generated_image = vae.decode(z_0)
 
         # --- Save Output ---
         print("Saving output image...")
-        for i in range(generated_batch.shape[0]):
-            generated_image_vis = (generated_batch[i] / 2 + 0.5).clamp(0, 1).squeeze(0)
-            cbct_image_vis = (CBCT[i] / 2 + 0.5).clamp(0, 1).squeeze(0)
-            ct_image_vis = (CT[i] / 2 + 0.5).clamp(0, 1).squeeze(0)
+        # Prepare images for saving (denormalize)
+        generated_image_vis = (generated_image / 2 + 0.5).clamp(0, 1).squeeze(0) # Remove batch dim
+        cbct_image_vis = (CBCT / 2 + 0.5).clamp(0, 1).squeeze(0) # Remove batch dim
+        ct_image_vis = (CT / 2 + 0.5).clamp(0, 1).squeeze(0)
 
-            torchvision.utils.save_image(
-                generated_image_vis,
-                os.path.join(output_dir, f"slice_{i}_prediction.png"),
-            )
-            torchvision.utils.save_image(
-                generated_image_vis,
-                os.path.join(output_dir, f"slice_{i}_conditional.png"),
-            )
-            torchvision.utils.save_image(
-                generated_image_vis,
-                os.path.join(output_dir, f"slice_{i}_ground_truth.png"),
-            )
+        images_to_save = [cbct_image_vis, generated_image_vis, ct_image_vis]
+        output_filename = os.path.join(output_dir, f"slice_{i}_prediction.png")
+        torchvision.utils.save_image(
+            images_to_save,
+            output_filename,
+            nrow=len(images_to_save), # Arrange images horizontally
+        )
+        print(f"Saved comparison image to {output_filename}")
         print("Done.")

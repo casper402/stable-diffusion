@@ -456,9 +456,9 @@ def test_dr_control_paca(
                     cbct_image = cbct[j]
                     ct_image = ct[j]
 
-                    generated_image_vis = (generated_image / 2 + 0.5).clamp(0, 1).squeeze(0) # Remove batch dim
-                    cbct_image_vis = (cbct_image / 2 + 0.5).clamp(0, 1).squeeze(0) # Remove batch dim
-                    ct_image_vis = (ct_image / 2 + 0.5).clamp(0, 1).squeeze(0)
+                    generated_image_vis = (generated_image / 2 + 0.5).clamp(0, 1)
+                    cbct_image_vis = (cbct_image / 2 + 0.5).clamp(0, 1)
+                    ct_image_vis = (ct_image / 2 + 0.5).clamp(0, 1)
 
                     images_to_save = [cbct_image_vis, generated_image_vis, ct_image_vis]
                     save_filename = f"{predict_dir}/batch_{i}_img_{j}_guidance_scale_{guidance_scale}.png"

@@ -131,7 +131,7 @@ def load_unet_control_paca(unet_save_path=None, paca_save_path=None, unet_traina
 
     return unetControlPACA
 
-def train_dr_control_paca(vae, unet, controlnet, dr_module, train_loader, val_loader, epochs=1000, save_dir='.', predict_dir="predictions", early_stopping=None, patience=None, gamma=1.0, guidance_scale = 1.0):
+def train_dr_control_paca(vae, unet, controlnet, dr_module, train_loader, val_loader, epochs=1000, save_dir='.', predict_dir="predictions", early_stopping=None, patience=None, gamma=1.0, guidance_scale = 1.0, epochs_between_prediction=50):
     os.makedirs(save_dir, exist_ok=True)
     os.makedirs(predict_dir, exist_ok=True)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -278,7 +278,7 @@ def train_dr_control_paca(vae, unet, controlnet, dr_module, train_loader, val_lo
             break
 
         # --- Inference/Saving Test Images ---
-        if ((epoch + 1) % 50 == 0): # Save every 10 epochs
+        if ((epoch + 1) % epochs_between_prediction == 0): # Save every 10 epochs
             print(f"--- Saving prediction for epoch {epoch+1} ---")
 
             unet.eval()

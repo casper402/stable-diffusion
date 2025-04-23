@@ -2,10 +2,8 @@ import os
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:128"
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 import torchvision
-import matplotlib.pyplot as plt
-import numpy as np
+from torch.cuda.amp import GradScaler, autocast ### AMP ###
 
 from models.diffusion import Diffusion
 from quick_loop.blocks import nonlinearity, Normalize, TimestepEmbedding, DownBlock, MiddleBlock, ControlNetPACAUpBlock
@@ -135,9 +133,10 @@ def load_unet_control_paca(unet_save_path=None, paca_save_path=None, unet_traina
 def train_dr_control_paca(vae, unet, controlnet, dr_module, train_loader, val_loader, epochs=1000, save_dir='.', predict_dir="predictions", early_stopping=None, patience=None, gamma=1.0, guidance_scale = 1.0, epochs_between_prediction=50):
     os.makedirs(save_dir, exist_ok=True)
     os.makedirs(predict_dir, exist_ok=True)
+    amp_enabled = torch.cuda.is_available()
+    print(f"AMP Enabled: {amp_enabled}")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     diffusion = Diffusion(device, timesteps=1000)
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     if not patience:
         patience = epochs
 
@@ -159,6 +158,7 @@ def train_dr_control_paca(vae, unet, controlnet, dr_module, train_loader, val_lo
     print(f"Trainable parameters in UNet:       {unet_param_count}")
     print(f"Total parameters to train:          {total_param_count}")
     
+    scaler = GradScaler(enabled=amp_enabled)
     optimizer = torch.optim.AdamW(params_to_train, lr=5.0e-5) # Use AdamW
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer,
@@ -184,34 +184,36 @@ def train_dr_control_paca(vae, unet, controlnet, dr_module, train_loader, val_lo
 
         for ct_img, cbct_img in train_loader:
             optimizer.zero_grad()
-
             cbct_img = cbct_img.to(device)
             ct_img = ct_img.to(device)
-
             with torch.no_grad():
                 ct_mu, ct_logvar = vae.encode(ct_img)
                 z_ct = vae.reparameterize(ct_mu, ct_logvar)
 
-            controlnet_input, intermediate_preds = dr_module(cbct_img)
-            loss_dr = degradation_loss(intermediate_preds, ct_img)
+            # Forward pass
+            with autocast(enabled=amp_enabled):
+                controlnet_input, intermediate_preds = dr_module(cbct_img)
+                t = diffusion.sample_timesteps(z_ct.size(0))
+                noise = torch.randn_like(z_ct)
+                z_noisy_ct = diffusion.add_noise(z_ct, t, noise=noise)
+                down_res_samples, middle_res_sample = controlnet(z_noisy_ct, controlnet_input, t)
+                pred_noise = unet(z_noisy_ct, t, down_res_samples, middle_res_sample)
 
-            t = diffusion.sample_timesteps(z_ct.size(0))
-            noise = torch.randn_like(z_ct)
-            z_noisy_ct = diffusion.add_noise(z_ct, t, noise=noise)
+                # Compute losses
+                loss_dr = degradation_loss(intermediate_preds, ct_img)
+                loss_diff = noise_loss(pred_noise, noise)
+                total_loss = loss_diff + gamma * loss_dr
 
-            down_res_samples, middle_res_sample = controlnet(z_noisy_ct, controlnet_input, t)
-            pred_noise = unet(z_noisy_ct, t, down_res_samples, middle_res_sample)
-
-            loss_diff = noise_loss(pred_noise, noise)
-            total_loss = loss_diff + gamma * loss_dr
-
-            total_loss.backward()
+            scaler.scale(total_loss).backward() # Scale the loss for mixed precision
+            scaler.unscale_(optimizer) # Unscale gradients before clipping
             torch.nn.utils.clip_grad_norm_(params_to_train, max_norm=1.0)
-            optimizer.step()
+            scaler.step(optimizer)
+            scaler.update()
 
             train_loss_total += total_loss.item()
             train_loss_diff += loss_diff.item()
             train_loss_dr += loss_dr.item()
+            
         avg_train_loss_total = train_loss_total / len(train_loader)
         avg_train_loss_diff = train_loss_diff / len(train_loader)
         avg_train_loss_dr = train_loss_dr / len(train_loader)

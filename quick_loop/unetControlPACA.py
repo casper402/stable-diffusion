@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 import torchvision
 from torch.cuda.amp import GradScaler, autocast ### AMP ###
+from tqdm import tqdm
 
 from models.diffusion import Diffusion
 from quick_loop.blocks import nonlinearity, Normalize, TimestepEmbedding, DownBlock, MiddleBlock, ControlNetPACAUpBlock
@@ -305,7 +306,7 @@ def train_dr_control_paca(
             else:
                 print(f"✅ Saved new best ControlNet+DR model (no PACA found/saved) at epoch {epoch+1} with val loss {avg_val_loss_total:.4f}")
 
-        if early_stopping and early_stopping_counter >= patience:
+        if early_stopping and early_stopping_counter >= early_stopping:
             print(f"Early stopped after {patience} epochs with no improvement.")
             break
 
@@ -367,9 +368,9 @@ def train_dr_control_paca(
                         cbct_image = cbct[j]
                         ct_image = ct[j]
 
-                        generated_image_vis = (generated_image / 2 + 0.5).clamp(0, 1).squeeze(0)
-                        cbct_image_vis = (cbct_image / 2 + 0.5).clamp(0, 1).squeeze(0)
-                        ct_image_vis = (ct_image / 2 + 0.5).clamp(0, 1).squeeze(0)
+                        generated_image_vis = (generated_image[0, 0:1, :, :] / 2 + 0.5).clamp(0, 1) # Shape [1, H, W]
+                        cbct_image_vis = (cbct_image[0, 0:1, :, :] / 2 + 0.5).clamp(0, 1)         # Shape [1, H, W]
+                        ct_image_vis = (ct_image[0, 0:1, :, :] / 2 + 0.5).clamp(0, 1)    
 
                         images_to_save = [cbct_image_vis, generated_image_vis, ct_image_vis]
                         save_filename = f"{predict_dir}/epoch_{epoch+1}_batch_{i}_img_{j}.png"
@@ -386,4 +387,90 @@ def train_dr_control_paca(
             print(f"Saved {num_images_to_save} images for epoch {epoch+1} to {predict_dir}")
 
     print("Training finished.")
+
+def test_dr_control_paca(
+    vae, 
+    unet, 
+    controlnet, 
+    dr_module, 
+    test_loader, 
+    predict_dir="predictions", 
+    guidance_scales=[1.0],
+    num_images_to_save=5
+):
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    diffusion = Diffusion(device)
+    unet.eval()
+    controlnet.eval()
+    dr_module.eval()
+    vae.eval()
+
+    saved_count = 0
+
+    with torch.no_grad():
+        for i, (cbct, ct) in enumerate(test_loader):
+            cbct = cbct.to(device)
+            ct = ct.to(device)
+
+            controlnet_input, _ = dr_module(cbct)
+
+            z_t = torch.randn_like(vae.encode(ct)[0])
+            T = diffusion.timesteps
+
+            for guidance_scale in guidance_scales:
+                for t_int in tqdm(range(T - 1, -1, -1), total=T, desc=f"Sampling image", leave=False):
+                    t = torch.full((z_t.size(0),), t_int, device=device, dtype=torch.long)
+
+                    # CFG: Predict noise twice
+                    down_res_samples, middle_res_sample = controlnet(z_t, controlnet_input, t)
+                    pred_noise_cond = unet(z_t, t, down_res_samples, middle_res_sample)
+                    pred_noise_uncond = unet(z_t, t, None, None)
+                    pred_noise = pred_noise_uncond + guidance_scale * (pred_noise_cond - pred_noise_uncond)
+
+                    # DDPM
+                    beta_t = diffusion.beta[t_int].view(-1, 1, 1, 1)
+                    alpha_t = diffusion.alpha[t_int].view(-1, 1, 1, 1)
+                    alpha_cumprod_t = diffusion.alpha_cumprod[t_int].view(-1, 1, 1, 1)
+                    sqrt_one_minus_alpha_cumprod_t = torch.sqrt(1.0 - alpha_cumprod_t)
+                    sqrt_reciprocal_alpha_t = torch.sqrt(1.0 / alpha_t)
+
+                    model_mean_coef2 = beta_t / sqrt_one_minus_alpha_cumprod_t
+                    model_mean = sqrt_reciprocal_alpha_t * (z_t - model_mean_coef2 * pred_noise)
+
+                    if t_int > 0:
+                        variance = diffusion.beta[t_int].view(-1, 1, 1, 1) # Use posterior variance beta_t
+                        noise = torch.randn_like(z_t)
+                        z_t_minus_1 = model_mean + torch.sqrt(variance) * noise
+                    else:
+                        z_t_minus_1 = model_mean
+                    z_t = z_t_minus_1
+
+                # Decode final latent
+                z_0 = z_t
+                generated_image_batch = vae.decode(z_0)
+
+                for j in range(generated_image_batch.size(0)):
+                    generated_image = generated_image_batch[j]
+                    cbct_image = cbct[j]
+                    ct_image = ct[j]
+
+                    generated_image_vis = (generated_image[0, 0:1, :, :] / 2 + 0.5).clamp(0, 1) # Shape [1, H, W]
+                    cbct_image_vis = (cbct_image[0, 0:1, :, :] / 2 + 0.5).clamp(0, 1)         # Shape [1, H, W]
+                    ct_image_vis = (ct_image[0, 0:1, :, :] / 2 + 0.5).clamp(0, 1)    
+
+                    images_to_save = [cbct_image_vis, generated_image_vis, ct_image_vis]
+                    save_filename = f"{predict_dir}/batch_{i}_img_{j}_guidance_scale_{guidance_scale}.png"
+
+                    torchvision.utils.save_image(
+                        images_to_save,
+                        save_filename,
+                        nrow=len(images_to_save),
+                    )
+                    saved_count += 1
+                    if saved_count >= num_images_to_save:
+                        break
+                if saved_count >= num_images_to_save:
+                    break
+            if saved_count >= num_images_to_save:
+                break
     

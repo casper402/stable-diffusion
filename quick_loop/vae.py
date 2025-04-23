@@ -145,7 +145,7 @@ def train_vae(vae, train_loader, val_loader, epochs=1000, save_path='vae.pth', p
             break
 
         # Save predictions
-        if predict_dir and (epoch + 1) % 50 == 0:
+        if predict_dir and (epoch+1) % 50 == 0:
             for x in val_loader:
                 predict_dir = os.path.join(predict_dir, f"epoch_{epoch+1}")
                 predict_vae(vae, x, save_path=predict_dir)

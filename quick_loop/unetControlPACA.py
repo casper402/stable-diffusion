@@ -147,7 +147,7 @@ def train_dr_control_paca(
     guidance_scale=1.0, 
     epochs_between_prediction=50, 
     learning_rate=5.0e-5, 
-    accumulation_steps=1
+    accumulation_steps=None
 ):
     os.makedirs(save_dir, exist_ok=True)
     os.makedirs(predict_dir, exist_ok=True)
@@ -181,6 +181,8 @@ def train_dr_control_paca(
     optimizer = torch.optim.AdamW(params_to_train, lr=learning_rate) # Use AdamW
     if not patience:
         patience = epochs
+    if not accumulation_steps:
+        accumulation_steps = 1
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer,
         mode='min',

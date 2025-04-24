@@ -23,28 +23,31 @@ early_stopping = 50
 patience = 10
 epochs_between_prediction = 5
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-print(f"Using device: {device}")
-save_dir = "data_quick_loop"
-os.makedirs(save_dir, exist_ok=True)
+# Load pretrained model paths
+load_dir = "../pretrained_models"
+load_vae_path = os.path.join(load_dir, "vae.pth")
 
+# Save prediction / model directories
+save_dir = "unet_base_channels_256"
+os.makedirs(save_dir, exist_ok=True)
 vae_predict_dir = os.path.join(save_dir, "vae_predictions")
 unet_predict_dir = os.path.join(save_dir, "unet_predictions")
 conditional_predict_dir = os.path.join(save_dir, "conditional_predictions")
-
 vae_save_path = os.path.join(save_dir, "vae.pth")
 unet_save_path = os.path.join(save_dir, "unet.pth")
 controlnet_save_path = os.path.join(save_dir, "controlnet.pth")
 paca_layers_save_path = os.path.join(save_dir, "paca_layers.pth")
 degradation_removal_save_path = os.path.join(save_dir, "dr_module.pth")
 
-manifest_path = "../data_quick_loop/manifest.csv"
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print(f"Using device: {device}")
+manifest_path = "../manifest-full.csv"
 train_loader, val_loader, test_loader = get_dataloaders(manifest_path, batch_size=batch_size, num_workers=num_workers, dataset_class=CTDatasetNPY, train_size=train_size, val_size=val_size, test_size=test_size)
 
-vae = load_vae(vae_save_path, trainable=False)
+vae = load_vae(load_vae_path, trainable=False)
 # train_vae(vae=vae, train_loader=train_loader, val_loader=val_loader, epochs=epochs, early_stopping=early_stopping, patience=patience, save_path=vae_save_path, predict_dir=vae_predict_dir)
 
-unet = load_unet(trainable=True)
+unet = load_unet(trainable=True, base_channels=256)
 train_unet(unet=unet, 
            vae=vae, 
            train_loader=train_loader, 

@@ -69,9 +69,13 @@ class UNet(nn.Module):
 def noise_loss(pred_noise, true_noise):
     return F.mse_loss(pred_noise, true_noise)
     
-def load_unet(save_path=None, trainable=False):
+def load_unet(save_path=None, trainable=False, base_channels=None):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    unet = UNet().to(device)
+    if base_channels is None:
+        unet = UNet().to(device)
+    else:
+        unet = UNet(base_channels=base_channels).to(device)
+        print("UNET initialized with base channels:", base_channels)
     if save_path is None:
         print("UNET initialized with random weights.")
         return unet
@@ -213,4 +217,3 @@ def train_unet(
         if predict_dir and (epoch + 1) % epochs_between_prediction == 0:
             for i , x in enumerate(test_loader):
                 predict_unet(unet, vae, x, i, save_path=os.path.join(predict_dir, f"epoch_{epoch+1}"))
-                break # Only predict on the first batch

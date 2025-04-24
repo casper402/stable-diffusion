@@ -86,7 +86,7 @@ def load_unet(save_path=None, trainable=False):
     unet.eval()
     return unet
 
-def predict_unet(unet, vae, x_batch, save_path=None):
+def predict_unet(unet, vae, x_batch, batch_idx, save_path=None):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     diffusion = Diffusion(device)
     unet.eval()
@@ -95,7 +95,7 @@ def predict_unet(unet, vae, x_batch, save_path=None):
         os.makedirs(save_path, exist_ok=True)
     with torch.no_grad():
         x_batch = x_batch.to(device)
-        z, _, _, x_recon_batch = vae(x_batch)
+        z, _, _, _ = vae(x_batch)
         t = diffusion.sample_timesteps(x_batch.shape[0])
         noise = torch.randn_like(z)
         z_noisy = diffusion.add_noise(z, t, noise=noise)
@@ -108,25 +108,39 @@ def predict_unet(unet, vae, x_batch, save_path=None):
         z_denoised_pred = (z_noisy - sqrt_one_minus_alpha_cumprod_t * pred_noise) / sqrt_alpha_cumprod_t
 
         unet_recon_batch = vae.decode(z_denoised_pred)
+        noisy_batch = vae.decode(z_noisy)
 
         for i in range(x_batch.size(0)):
             original = x_batch[i]
             unet_recon = unet_recon_batch[i]
-            x_recon = x_recon_batch[i]
+            x_noisy = noisy_batch[i]
             original_img = (original / 2 + 0.5).clamp(0, 1)
             unet_recon_img = (unet_recon / 2 + 0.5).clamp(0, 1)
-            recon_img = (x_recon / 2 + 0.5).clamp(0, 1)
+            recon_img = (x_noisy / 2 + 0.5).clamp(0, 1)
+            timestep = t[i].item()
 
             if save_path:
                 images_to_save = [original_img, unet_recon_img, recon_img]
-                output_filename = os.path.join(save_path, f"{i}.png")
+                output_filename = os.path.join(save_path, f"batch_{batch_idx}_img_{i}_t_{timestep}.png")
                 torchvision.utils.save_image(
                     images_to_save,
                     output_filename,
                     nrow=len(images_to_save),
                 )
 
-def train_unet(unet, vae, train_loader, val_loader, epochs=1000, save_path='unet.pth', predict_dir=None, early_stopping=None, patience=None):
+def train_unet(
+    unet, 
+    vae, 
+    train_loader, 
+    val_loader,
+    test_loader, 
+    epochs=1000, 
+    save_path='unet.pth', 
+    predict_dir=None, 
+    early_stopping=None, 
+    patience=None, 
+    epochs_between_prediction=50
+):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     diffusion = Diffusion(device)
     optimizer = torch.optim.AdamW(unet.parameters(), lr=5.0e-5)
@@ -196,8 +210,7 @@ def train_unet(unet, vae, train_loader, val_loader, epochs=1000, save_path='unet
             break
 
         # Save predictions
-        if predict_dir and (epoch + 1) % 50 == 0:
-            for x in val_loader:
-                predict_dir = os.path.join(predict_dir, f"epoch_{epoch+1}")
-                predict_unet(unet, vae, x, save_path=predict_dir)
+        if predict_dir and (epoch + 1) % epochs_between_prediction == 0:
+            for i , x in enumerate(test_loader):
+                predict_unet(unet, vae, x, i, save_path=os.path.join(predict_dir, f"epoch_{epoch+1}"))
                 break # Only predict on the first batch

@@ -174,7 +174,7 @@ def train_unet(
 
     optimizer.zero_grad()
 
-    for epoch in range(epochs):
+    for i, epoch in enumerate(range(epochs)):
         unet.train()
         train_loss = 0
 

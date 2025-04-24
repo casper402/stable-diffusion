@@ -174,11 +174,11 @@ def train_unet(
 
     optimizer.zero_grad()
 
-    for i, epoch in enumerate(range(epochs)):
+    for epoch in range(epochs):
         unet.train()
         train_loss = 0
 
-        for x in train_loader:
+        for i, x in enumerate(train_loader):
             x = x.to(device)
 
             with torch.no_grad():

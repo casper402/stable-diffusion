@@ -147,13 +147,13 @@ def train_dr_control_paca(
     guidance_scale=1.0, 
     epochs_between_prediction=50, 
     learning_rate=5.0e-5, 
-    accumulation_steps=None
+    accumulation_steps=1
 ):
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     os.makedirs(save_dir, exist_ok=True)
     os.makedirs(predict_dir, exist_ok=True)
     amp_enabled = torch.cuda.is_available()
     print(f"AMP Enabled: {amp_enabled}")
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     vae.to(device)
     unet.to(device)
     controlnet.to(device)
@@ -179,15 +179,15 @@ def train_dr_control_paca(
     
     scaler = GradScaler(enabled=amp_enabled)
     optimizer = torch.optim.AdamW(params_to_train, lr=learning_rate) # Use AdamW
-    if not patience:
+    if patience is None:
         patience = epochs
-    if not accumulation_steps:
+    if accumulation_steps is None:
         accumulation_steps = 1
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer,
         mode='min',
         factor=0.5,
-        patience=patience // accumulation_steps,
+        patience=patience,
         threshold=1e-4,
         verbose=True,
         min_lr=min(1e-7, learning_rate)
@@ -283,6 +283,7 @@ def train_dr_control_paca(
                 val_loss_total += total_loss.item()
                 val_loss_diff += loss_diff.item()
                 val_loss_dr += loss_dr.item()
+
         avg_val_loss_total = val_loss_total / len(val_loader)
         avg_val_loss_diff = val_loss_diff / len(val_loader)
         avg_val_loss_dr = val_loss_dr / len(val_loader)

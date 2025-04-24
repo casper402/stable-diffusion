@@ -15,12 +15,12 @@ from quick_loop.unetControlPACA import load_unet_control_paca, train_dr_control_
 train_size = None
 val_size = None
 test_size = 10
-batch_size = 4
-accumulation_steps = None # Effectively increases batch size to batch_size * accumulation_steps
-num_workers = 4
+batch_size = 8
+accumulation_steps = 1 # Effectively increases batch size to batch_size * accumulation_steps
+num_workers = 8
 epochs = 2000
 early_stopping = 50
-patience = 10
+patience = 20
 epochs_between_prediction = 5
 
 # Load pretrained model paths

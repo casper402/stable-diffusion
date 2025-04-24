@@ -5,6 +5,7 @@ import torch.nn.functional as F
 import torchvision
 import matplotlib.pyplot as plt
 import numpy as np
+from torch.cuda.amp import GradScaler, autocast ### AMP ###
 
 from models.diffusion import Diffusion
 from quick_loop.blocks import nonlinearity, Normalize, TimestepEmbedding, DownBlock, MiddleBlock, UpBlock
@@ -75,7 +76,7 @@ def load_unet(save_path=None, trainable=False, base_channels=None):
         unet = UNet().to(device)
     else:
         unet = UNet(base_channels=base_channels).to(device)
-        print("UNET initialized with base channels:", base_channels)
+        print("UNET base channels:", base_channels)
     if save_path is None:
         print("UNET initialized with random weights.")
         return unet
@@ -143,13 +144,19 @@ def train_unet(
     predict_dir=None, 
     early_stopping=None, 
     patience=None, 
-    epochs_between_prediction=50
+    epochs_between_prediction=50,
+    accumulation_steps=1
 ):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    diffusion = Diffusion(device)
+    amp_enabled = torch.cuda.is_available()
+    print(f"AMP Enabled: {amp_enabled}")
+
+    scaler = GradScaler(enabled=amp_enabled)
     optimizer = torch.optim.AdamW(unet.parameters(), lr=5.0e-5)
     if patience is None:
         patience = epochs
+    if accumulation_steps is None:
+        accumulation_steps = 1
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer,
         mode='min',            
@@ -159,27 +166,49 @@ def train_unet(
         verbose=True,          
         min_lr=1e-6            
     )
+    diffusion = Diffusion(device)
+
+    # --- Training loop ---
     best_val_loss = float('inf')
     early_stopping_counter = 0
 
+    optimizer.zero_grad()
+
     for epoch in range(epochs):
-        # Training
         unet.train()
         train_loss = 0
+
         for x in train_loader:
             x = x.to(device)
+
             with torch.no_grad():
                 z_mu, z_logvar = vae.encode(x)
                 z = vae.reparameterize(z_mu, z_logvar)
-            t = diffusion.sample_timesteps(z.size(0))
-            noise = torch.randn_like(z)
-            z_noisy = diffusion.add_noise(z, t, noise=noise)
-            pred_noise = unet(z_noisy, t)
-            loss = noise_loss(pred_noise, noise)
-            loss.backward()
-            optimizer.step()
-            optimizer.zero_grad()
+            
+            # Forward pass
+            with autocast(enabled=amp_enabled):
+                t = diffusion.sample_timesteps(z.size(0))
+                noise = torch.randn_like(z)
+                z_noisy = diffusion.add_noise(z, t, noise=noise)
+                pred_noise = unet(z_noisy, t)
+
+                # Compute Loss
+                loss = noise_loss(pred_noise, noise)
+
+                # Gradient accumulation
+                scaled_loss = loss / accumulation_steps
+
+            scaler.scale(scaled_loss).backward() # Scale the loss for mixed precision
+            
+            if (i + 1) % accumulation_steps == 0 or (i + 1) == len(train_loader):
+                scaler.unscale_(optimizer)
+                torch.nn.utils.clip_grad_norm_(unet.parameters(), max_norm=1.0) # Clip gradients
+                scaler.step(optimizer)
+                scaler.update()
+                optimizer.zero_grad()
+
             train_loss += loss.item()
+
         train_loss /= len(train_loader)
 
         # Validation

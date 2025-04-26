@@ -316,6 +316,7 @@ def main():
        "bigvae.pth",
        # "bigvaeV2.pth",
        # "bigvaeV3.pth",
+       "bigvaeV5.pth",
     ]
     vaes = []
     for path in vae_paths:
@@ -323,9 +324,9 @@ def main():
         model.load_state_dict(torch.load(path, map_location=device))
         vaes.append(model)
 
-    # visualize_reconstructions(vaes, loader, device, names=vae_paths, num_batches=10)
+    visualize_reconstructions(vaes, loader, device, names=vae_paths, num_batches=10)
     # visualize_latent(vaes[0], loader, device)
-    visualize_latent_with_target(...)
+    # visualize_latent_with_target(...)
 
 if __name__ == "__main__":
     main()

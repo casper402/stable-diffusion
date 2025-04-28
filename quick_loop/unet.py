@@ -132,6 +132,17 @@ def predict_unet(unet, vae, x_batch, batch_idx, save_path=None):
                     nrow=len(images_to_save),
                 )
 
+def augment_with_noise(x, noise_std=0.05):
+    """
+    Additive Gaussian noise augmentation.
+    x: Tensor of shape (B, C, H, W), assumed in [-1, 1] or [0, 1].
+    noise_std: standard deviation of the noise.
+    """
+    noise = torch.randn_like(x) * noise_std
+    x_noisy = x + noise
+    # if your inputs are normalized to [-1,1], clamp there; if [0,1], clamp to [0,1]
+    return x_noisy.clamp(-1.0, 1.0)
+
 def train_unet(
     unet, 
     vae, 
@@ -175,6 +186,7 @@ def train_unet(
 
         for i, x in enumerate(train_loader):
             x = x.to(device)
+            x = augment_with_noise(x, noise_std=0.02)
 
             with torch.no_grad():
                 z_mu, z_logvar = vae.encode(x)

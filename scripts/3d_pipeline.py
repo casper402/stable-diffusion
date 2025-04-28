@@ -22,6 +22,7 @@ ct_path = '/Volumes/Lenovo PS8/Casper/kaggle_dataset/TRAINCTAlignedToCBCT/volume
 
 # - Constructing sCT -
 cbct_path = '/Volumes/Lenovo PS8/Casper/kaggle_dataset/TRAINCBCTSimulated/256/REC-' + volume_idx + '.nii' # path to CBCT volume
+rotate = True
 align_to_CT = True
 diff_timesteps = 2 # TODO: Should be 1000, but temporarily using 2, just for quick feedback loop on dimensions
 interpolation_method = 'NN'  # options: 'NN' | 'bspline'
@@ -83,11 +84,14 @@ def clip(volume):
     return np.clip(volume, -1000, 1000)
 
 
-def slice_volume(volume):
+def slice_volume(volume, rotate=False):
     """
     Split a 3D volume into a list of 2D slices along the z-axis.
     """
-    return [volume[:, :, i] for i in range(volume.shape[2])]
+    slices = [volume[:, :, i] for i in range(volume.shape[2])]
+    if rotate:
+        slices = np.rot90(slices[:, :, i], k=-1)
+    return slices
 
 
 def get_sd_pipeline(guidance_scale=1.0):
@@ -113,7 +117,7 @@ def get_sd_pipeline(guidance_scale=1.0):
                 f"Input tensor must be 2D, got {cbct_slice_tensor.dim()}D"
             )
 
-        x = cbct_slice_tensor.to(device).unsqueeze(0)  # Add batch dim
+        x = cbct_slice_tensor.to(device).unsqueeze(0).unsqueeze(1) # TODO: added an extra unsqueeze here!
 
         with torch.no_grad():
             control_input, _ = dr_module(x)
@@ -150,7 +154,7 @@ def get_sd_pipeline(guidance_scale=1.0):
             out = (generated / 2 + 0.5).clamp(0,1)
             hu = out * 2000 - 1000
 
-            return hu.squeeze(0).cpu().numpy()
+            return hu.squeeze().cpu().numpy() # TODO: changed from hu.squeeze(0)... to hu.squeeze()
 
     return sd_process
 
@@ -217,7 +221,7 @@ def construct():
         cbct_vol = align_CBCT_to_CT_range(cbct_vol, ct_vol)
 
     cbct_vol = clip(cbct_vol)
-    slices = slice_volume(cbct_vol)
+    slices = slice_volume(cbct_vol, rotate=rotate)
 
     print("[construct] Running inference on slices")
     with mp.Pool(mp.cpu_count(), initializer=init_worker) as pool:

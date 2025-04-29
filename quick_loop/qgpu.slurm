@@ -3,10 +3,10 @@
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=202008583@post.au.dk
 #SBATCH --partition=qgpu
-#SBATCH --gres=gpu:v100:1
+#SBATCH --gres=gpu:1
 #SBATCH --mem=32G
-#SBATCH --cpus-per-task=8
-#SBATCH --time=4:00:00
+#SBATCH --cpus-per-task=4
+#SBATCH --time=144:00:00
 #SBATCH --export=NONE
 
 cd $SLURM_SUBMIT_DIR
@@ -23,6 +23,6 @@ module load cuda/11.2.0
 source activate cuda_env
 
 export PYTHONPATH=$PYTHONPATH:$(pwd)
-python scripts/test_conditional_controlnet.py
+python quick_loop/entry.py
 
 echo "========= Job finished at $(date) =========="

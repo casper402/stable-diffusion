@@ -84,7 +84,11 @@ def predict_volume(
 
     scaler = torch.cuda.amp.GradScaler(enabled=False)  # for mixed-precision infer
 
-    for batch in chunks(cbct_slices, batch_size):
+    total_batches = math.ceil(len(cbct_slices) / batch_size)
+
+    for batch_idx, batch in enumerate(chunks(cbct_slices, batch_size), start=1):
+        print(f"Processing batch {batch_idx}/{total_batches}…")
+
         names = [item[0] for item in batch]
         imgs = torch.stack([item[1] for item in batch], dim=0).to(device)  # (B,1,H,W)
 

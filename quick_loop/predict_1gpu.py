@@ -1,8 +1,8 @@
 import os
+import math
 import numpy as np
 import torch
 import torch.nn as nn
-import math
 from torchvision import transforms
 from models.diffusion import Diffusion
 from quick_loop.vae import load_vae
@@ -44,7 +44,6 @@ def load_volume_slices(volume_dir: str, transform=None):
         slices.append((fname, tensor))
     return slices
 
-
 def chunks(lst, n):
     """Yield successive n-sized chunks from list."""
     for i in range(0, len(lst), n):
@@ -70,16 +69,11 @@ def predict_volume(
     alpha_cumprod = diffusion.alpha_cumprod.to(device)
     timesteps = diffusion.timesteps
 
-    # Move models to device
+    # Move models to device (no DataParallel)
     vae.to(device).eval()
     unet.to(device).eval()
     controlnet.to(device).eval()
     dr_module.to(device).eval()
-
-    # Wrap heavy models for multi-GPU
-    unet = nn.DataParallel(unet, device_ids=[0, 1])
-    controlnet = nn.DataParallel(controlnet, device_ids=[0, 1])
-    dr_module = nn.DataParallel(dr_module, device_ids=[0, 1])
 
     os.makedirs(save_dir, exist_ok=True)
 
@@ -128,7 +122,7 @@ def predict_volume(
             # 4) VAE decode
             gen = vae.decode(z_t)
 
-        # 5) Save outputs
+        # 5) Save outputs (scaled to [-1000, 1000])
         out_np = gen.cpu().numpy() * 1000.0
         for i, fname in enumerate(names):
             out = out_np[i].squeeze(0)

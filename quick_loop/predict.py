@@ -17,8 +17,9 @@ from quick_loop.unetControlPACA import (
 # Configuration Variables
 # ------------------------
 CBCT_DIR = '../training_data/CBCT/test/'
-# Possible volumes: 32, 59, 33, 12, 129, 54, 35, 8, 3, 116, 61, 26, 106
-VOLUME_IDX = 3
+# Possible volumes: 3, 8, 12, 26, 32, 33, 35, 54, 59, 61, 106, 116, 129
+# Volumes done: 3
+VOLUME_IDX = 8
 OUT_DIR = '../predictions/'
 GUIDANCE_SCALES = [1.0]
 MODELS_PATH = 'controlnet_training/v2/'
@@ -64,6 +65,7 @@ def predict_volume(
 
     for cbct_name, cbct_tensor in cbct_slices:
         cbct = cbct_tensor.unsqueeze(0).to(device)
+        print(f"Starting to predict for {cbct_name}")
 
         with torch.no_grad():
             control_input, _ = dr_module(cbct)
@@ -71,7 +73,7 @@ def predict_volume(
             T = diffusion.timesteps
 
             for guidance_scale in guidance_scales:
-                for t_int in tqdm(range(T - 1, -1, -1), desc=f"Sampling {cbct_name}", leave=False):
+                for t_int in range(T - 1, -1, -1):
                     t = torch.full((z_t.size(0),), t_int, device=device, dtype=torch.long)
 
                     down_res, mid_res = controlnet(z_t, control_input, t)

@@ -1,33 +1,33 @@
 import os
 import numpy as np
 import torch
+import torch.nn as nn
 from torchvision import transforms
-from tqdm import tqdm
 from models.diffusion import Diffusion
-from quick_loop.vae import load_vae, train_vae
+from quick_loop.vae import load_vae
 from quick_loop.controlnet import load_controlnet
 from quick_loop.degradationRemoval import load_degradation_removal
-from quick_loop.unetControlPACA import (
-    load_unet_control_paca,
-    train_dr_control_paca,
-    test_dr_control_paca
-)
+from quick_loop.unetControlPACA import load_unet_control_paca
 
 # ------------------------
 # Configuration Variables
 # ------------------------
 CBCT_DIR = '../training_data/CBCT/test/'
 # Possible volumes: 3, 8, 12, 26, 32, 33, 35, 54, 59, 61, 106, 116, 129
-# Volumes done: 3
-VOLUME_IDX = 8
+VOLUME_IDX = 8  # choose from the list above
 OUT_DIR = '../predictions/'
-GUIDANCE_SCALES = [1.0]
+
+# Single guidance scale (set to 1.0)
+GUIDANCE_SCALE = 1.0
+# Number of slices to process in one batch (tune based on your GPU memory)
+BATCH_SIZE = 4
+
 MODELS_PATH = 'controlnet_training/v2/'
-VAE_SAVE_PATH = MODELS_PATH + 'vae.pth'
-UNET_SAVE_PATH = MODELS_PATH + 'unet.pth'
-PACA_LAYERS_SAVE_PATH = MODELS_PATH + 'paca_layers.pth'
-CONTROLNET_SAVE_PATH = MODELS_PATH + 'controlnet.pth'
-DEGRADATION_REMOVAL_SAVE_PATH = MODELS_PATH + 'dr_module.pth'
+VAE_SAVE_PATH = os.path.join(MODELS_PATH, 'vae.pth')
+UNET_SAVE_PATH = os.path.join(MODELS_PATH, 'unet.pth')
+PACA_LAYERS_SAVE_PATH = os.path.join(MODELS_PATH, 'paca_layers.pth')
+CONTROLNET_SAVE_PATH = os.path.join(MODELS_PATH, 'controlnet.pth')
+DEGRADATION_REMOVAL_SAVE_PATH = os.path.join(MODELS_PATH, 'dr_module.pth')
 
 def load_volume_slices(volume_dir: str, transform=None):
     """
@@ -44,62 +44,91 @@ def load_volume_slices(volume_dir: str, transform=None):
     return slices
 
 
+def chunks(lst, n):
+    """Yield successive n-sized chunks from list."""
+    for i in range(0, len(lst), n):
+        yield lst[i:i + n]
+
 def predict_volume(
     vae, unet, controlnet, dr_module,
     cbct_slices,
     save_dir: str,
-    guidance_scales
+    guidance_scale: float,
+    batch_size: int
 ):
     """
-    Run inference on each CBCT slice and save predicted slices as .npy under save_dir.
+    Run batched, mixed-precision inference on CBCT slices and save predictions.
     """
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # Set up device and diffusion scheduler
+    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     diffusion = Diffusion(device)
 
+    # Preload constants on GPU
+    betas = diffusion.beta.to(device)
+    alphas = diffusion.alpha.to(device)
+    alpha_cumprod = diffusion.alpha_cumprod.to(device)
+    timesteps = diffusion.timesteps
+
+    # Move models to device
     vae.to(device).eval()
     unet.to(device).eval()
     controlnet.to(device).eval()
     dr_module.to(device).eval()
 
+    # Wrap heavy models for multi-GPU
+    unet = nn.DataParallel(unet, device_ids=[0, 1])
+    controlnet = nn.DataParallel(controlnet, device_ids=[0, 1])
+    dr_module = nn.DataParallel(dr_module, device_ids=[0, 1])
+
     os.makedirs(save_dir, exist_ok=True)
 
-    for cbct_name, cbct_tensor in cbct_slices:
-        cbct = cbct_tensor.unsqueeze(0).to(device)
-        print(f"Starting to predict for {cbct_name}")
+    scaler = torch.cuda.amp.GradScaler(enabled=False)  # for mixed-precision infer
 
-        with torch.no_grad():
-            control_input, _ = dr_module(cbct)
-            z_t = torch.randn_like(vae.encode(cbct)[0])
-            T = diffusion.timesteps
+    for batch in chunks(cbct_slices, batch_size):
+        names = [item[0] for item in batch]
+        imgs = torch.stack([item[1] for item in batch], dim=0).to(device)  # (B,1,H,W)
 
-            for guidance_scale in guidance_scales:
-                for t_int in range(T - 1, -1, -1):
-                    t = torch.full((z_t.size(0),), t_int, device=device, dtype=torch.long)
+        with torch.no_grad(), torch.cuda.amp.autocast():
+            # 1) Degradation removal / control inputs
+            control_inputs, _ = dr_module(imgs)
 
-                    down_res, mid_res = controlnet(z_t, control_input, t)
-                    pred_cond = unet(z_t, t, down_res, mid_res)
-                    pred_uncond = unet(z_t, t, None, None)
-                    pred_noise = pred_uncond + guidance_scale * (pred_cond - pred_uncond)
+            # 2) VAE encode
+            mu, logvar = vae.encode(imgs)
+            z_t = torch.randn_like(mu)
 
-                    beta_t = diffusion.beta[t_int].view(-1, 1, 1, 1)
-                    alpha_t = diffusion.alpha[t_int].view(-1, 1, 1, 1)
-                    alpha_cum = diffusion.alpha_cumprod[t_int].view(-1, 1, 1, 1)
-                    coef = beta_t / torch.sqrt(1.0 - alpha_cum)
-                    mean = torch.sqrt(1.0 / alpha_t) * (z_t - coef * pred_noise)
+            # 3) Reverse diffusion
+            for t_int in reversed(range(timesteps)):
+                t = torch.full((z_t.size(0),), t_int, device=device, dtype=torch.long)
 
-                    if t_int > 0:
-                        noise = torch.randn_like(z_t)
-                        z_t = mean + torch.sqrt(beta_t) * noise
-                    else:
-                        z_t = mean
+                # ControlNet guidance
+                down_res, mid_res = controlnet(z_t, control_inputs, t)
+                pred_cond = unet(z_t, t, down_res, mid_res)
 
-                z_0 = z_t
-                gen = vae.decode(z_0)[0]
-                output = (gen / 2 + 0.5).clamp(0, 1).cpu().numpy().squeeze(0)
+                # With guidance scale 1.0, we only need the conditioned output
+                pred_noise = pred_cond
 
-                out_name = cbct_name
-                save_path = os.path.join(save_dir, out_name)
-                np.save(save_path, output)
+                # Compute update
+                beta_t = betas[t_int].view(-1, 1, 1, 1)
+                alpha_t = alphas[t_int].view(-1, 1, 1, 1)
+                alpha_c = alpha_cumprod[t_int].view(-1, 1, 1, 1)
+                coef = beta_t / torch.sqrt(1.0 - alpha_c)
+                mean = torch.sqrt(1.0 / alpha_t) * (z_t - coef * pred_noise)
+
+                if t_int > 0:
+                    noise = torch.randn_like(z_t)
+                    z_t = mean + torch.sqrt(beta_t) * noise
+                else:
+                    z_t = mean
+
+            # 4) VAE decode
+            gen = vae.decode(z_t)
+
+        # 5) Save outputs
+        out_np = gen.cpu().numpy() * 1000.0
+        for i, fname in enumerate(names):
+            out = out_np[i].squeeze(0)
+            save_path = os.path.join(save_dir, fname)
+            np.save(save_path, out)
 
     print(f"Saved predictions to {save_dir}")
 
@@ -126,5 +155,6 @@ if __name__ == '__main__':
         vae, unet, controlnet, dr_module,
         cbct_slices,
         save_folder,
-        GUIDANCE_SCALES
+        GUIDANCE_SCALE,
+        BATCH_SIZE
     )

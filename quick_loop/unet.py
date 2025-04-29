@@ -169,7 +169,6 @@ def train_unet(
         factor=0.5,            
         patience=patience,           
         threshold=1e-4,        
-        verbose=True,          
         min_lr=1e-6            
     )
     diffusion = Diffusion(device)

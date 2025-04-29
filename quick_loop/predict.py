@@ -20,7 +20,7 @@ OUT_DIR = '../predictions/'
 # Single guidance scale (set to 1.0)
 GUIDANCE_SCALE = 1.0
 # Number of slices to process in one batch (tune based on your GPU memory)
-BATCH_SIZE = 4
+BATCH_SIZE = 8
 
 MODELS_PATH = 'controlnet_training/v2/'
 VAE_SAVE_PATH = os.path.join(MODELS_PATH, 'vae.pth')

@@ -13,19 +13,19 @@ DEBUG = False
 
 def compute_mae(test, gt):
     """MAE over all pixels."""
-    assert test.shape == gt.shape, "Shapes must match"
+    assert test.shape == gt.shape, f"Shapes must match, test.shape={test.shape}, gt.shape={gt.shape}"
     return np.mean(np.abs(test - gt))
 
 
 def compute_rmse(test, gt):
     """RMSE over all pixels."""
-    assert test.shape == gt.shape, "Shapes must match"
+    assert test.shape == gt.shape, f"Shapes must match, test.shape={test.shape}, gt.shape={gt.shape}"
     return np.sqrt(np.mean((test - gt)**2))
 
 
 def compute_psnr(test, gt, data_range):
     """PSNR over all pixels with fixed data range."""
-    assert test.shape == gt.shape, "Shapes must match"
+    assert test.shape == gt.shape, f"Shapes must match, test.shape={test.shape}, gt.shape={gt.shape}"
     return psnr(gt, test, data_range=data_range)
 
 

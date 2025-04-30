@@ -20,7 +20,7 @@ accumulation_steps = 1 # Effectively increases batch size to batch_size * accumu
 num_workers = 8
 epochs = 2000
 early_stopping = 50
-patience = 20
+patience = 10
 epochs_between_prediction = 5
 
 # Load pretrained model paths
@@ -47,7 +47,7 @@ train_loader, val_loader, test_loader = get_dataloaders(manifest_path, batch_siz
 vae = load_vae(load_vae_path, trainable=False)
 # train_vae(vae=vae, train_loader=train_loader, val_loader=val_loader, epochs=epochs, early_stopping=early_stopping, patience=patience, save_path=vae_save_path, predict_dir=vae_predict_dir)
 
-unet = load_unet(trainable=True, base_channels=256)
+unet = load_unet(trainable=True, base_channels=256, dropout_rate=0.1)
 train_unet(unet=unet, 
            vae=vae, 
            train_loader=train_loader, 

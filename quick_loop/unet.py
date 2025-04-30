@@ -69,12 +69,12 @@ class UNet(nn.Module):
 def noise_loss(pred_noise, true_noise):
     return F.mse_loss(pred_noise, true_noise)
     
-def load_unet(save_path=None, trainable=False, base_channels=None):
+def load_unet(save_path=None, trainable=False, base_channels=None, dropout_rate=None):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     if base_channels is None:
-        unet = UNet().to(device)
+        unet = UNet(dropout_rate=dropout_rate).to(device)
     else:
-        unet = UNet(base_channels=base_channels).to(device)
+        unet = UNet(base_channels=base_channels, dropout_rate=dropout_rate).to(device)
         print("UNET base channels:", base_channels)
     if save_path is None:
         print("UNET initialized with random weights.")

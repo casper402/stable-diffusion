@@ -185,7 +185,6 @@ def train_unet(
 
         for i, x in enumerate(train_loader):
             x = x.to(device)
-            x = augment_with_noise(x, noise_std=0.02)
 
             with torch.no_grad():
                 z_mu, z_logvar = vae.encode(x)

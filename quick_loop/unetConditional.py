@@ -7,14 +7,14 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from models.diffusion import Diffusion
-from quick_loop.blocks import nonlinearity, Normalize, TimestepEmbedding, DownBlock, MiddleBlock, UpBlock
+from quick_loop.blocks import nonlinearity, Normalize, TimestepEmbedding, DownBlock, MiddleBlock, ConditionalUpBlock
 
 class UNet(nn.Module):
     def __init__(self, 
                  in_channels=3, 
                  out_channels=3, 
-                 base_channels=128, 
-                 dropout_rate=0.0):
+                 base_channels=256, 
+                 dropout_rate=0.1):
         super().__init__()
         time_emb_dim = base_channels * 4
 
@@ -29,8 +29,8 @@ class UNet(nn.Module):
         attn_res_8 = True
 
         self.time_embedding = TimestepEmbedding(time_emb_dim)
-        self.init_conv = nn.Conv2d(in_channels, ch1, kernel_size=3, padding=1)
 
+        self.init_conv = nn.Conv2d(in_channels, ch1, kernel_size=3, padding=1)
         self.down1 = DownBlock(ch1, ch1, time_emb_dim, attn_res_64, dropout_rate)
         self.down2 = DownBlock(ch1, ch2, time_emb_dim, attn_res_32, dropout_rate)
         self.down3 = DownBlock(ch2, ch3, time_emb_dim, attn_res_16, dropout_rate)
@@ -38,16 +38,29 @@ class UNet(nn.Module):
 
         self.middle = MiddleBlock(ch4, time_emb_dim, dropout_rate)
 
-        self.up4 = UpBlock(ch4, ch3, ch4, time_emb_dim, attn_res_8, dropout_rate)
-        self.up3 = UpBlock(ch3, ch2, ch3, time_emb_dim, attn_res_16, dropout_rate)
-        self.up2 = UpBlock(ch2, ch1, ch2, time_emb_dim, attn_res_32, dropout_rate)
-        self.up1 = UpBlock(ch1, ch1, ch1, time_emb_dim, attn_res_64, dropout_rate, upsample=False)
-
+        self.up4 = ConditionalUpBlock(ch4, ch3, ch4, ch4, time_emb_dim, attn_res_8, dropout_rate)
+        self.up3 = ConditionalUpBlock(ch3, ch2, ch3, ch3, time_emb_dim, attn_res_16, dropout_rate)
+        self.up2 = ConditionalUpBlock(ch2, ch1, ch2, ch2, time_emb_dim, attn_res_32, dropout_rate)
+        self.up1 = ConditionalUpBlock(ch1, ch1, ch1, ch1, time_emb_dim, attn_res_64, dropout_rate, upsample=False)
         self.final_norm = Normalize(ch1)
         self.final_conv = nn.Conv2d(ch1, out_channels, kernel_size=3, stride=1, padding=1)
 
-    def forward(self, x, t):
+        # Conditioning Encoder Path
+        self.cond_init_conv = nn.Conv2d(in_channels, ch1, kernel_size=3, padding=1)
+        self.cond_down1 = DownBlock(ch1, ch1, time_emb_dim, attn_res_64, dropout_rate)
+        self.cond_down2 = DownBlock(ch1, ch2, time_emb_dim, attn_res_32, dropout_rate)
+        self.cond_down3 = DownBlock(ch2, ch3, time_emb_dim, attn_res_16, dropout_rate)
+        self.cond_down4 = DownBlock(ch3, ch4, time_emb_dim, attn_res_8, dropout_rate, downsample=False)
+
+    def forward(self, x, condition, t):
         t_emb = self.time_embedding(t)
+
+        c = self.cond_init_conv(condition)
+        c, cond_intermediates1 = self.cond_down1(c)
+        c, cond_intermediates2 = self.cond_down2(c)
+        c, cond_intermediates3 = self.cond_down3(c)
+        c, cond_intermediates4 = self.cond_down4(c)
+
         h = self.init_conv(x)         
         h, intermediates1 = self.down1(h, t_emb)
         h, intermediates2 = self.down2(h, t_emb)
@@ -56,10 +69,10 @@ class UNet(nn.Module):
 
         h = self.middle(h, t_emb)
 
-        h = self.up4(h, intermediates4, t_emb)
-        h = self.up3(h, intermediates3, t_emb)
-        h = self.up2(h, intermediates2, t_emb)
-        h = self.up1(h, intermediates1, t_emb)
+        h = self.up4(h, intermediates4, cond_intermediates4, t_emb)
+        h = self.up3(h, intermediates3, cond_intermediates3, t_emb)
+        h = self.up2(h, intermediates2, cond_intermediates2, t_emb)
+        h = self.up1(h, intermediates1, cond_intermediates1, t_emb)
 
         h = self.final_norm(h)
         h = nonlinearity(h)
@@ -69,7 +82,7 @@ class UNet(nn.Module):
 def noise_loss(pred_noise, true_noise):
     return F.mse_loss(pred_noise, true_noise)
     
-def load_unet(save_path=None, trainable=False, base_channels=None, dropout_rate=None):
+def load_cond_unet(save_path=None, trainable=False, base_channels=None, dropout_rate=None):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     if base_channels is None:
         unet = UNet(dropout_rate=dropout_rate).to(device)
@@ -90,7 +103,7 @@ def load_unet(save_path=None, trainable=False, base_channels=None, dropout_rate=
     unet.eval()
     return unet
 
-def predict_unet(unet, vae, x_batch, batch_idx, save_path=None):
+def predict_cond_unet(unet, vae, ct_batch, cbct_batch, batch_idx, save_path=None):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     diffusion = Diffusion(device)
     unet.eval()
@@ -98,29 +111,31 @@ def predict_unet(unet, vae, x_batch, batch_idx, save_path=None):
     if save_path:
         os.makedirs(save_path, exist_ok=True)
     with torch.no_grad():
-        x_batch = x_batch.to(device)
-        z, _, _, _ = vae(x_batch)
-        t = diffusion.sample_timesteps(x_batch.shape[0])
-        noise = torch.randn_like(z)
-        z_noisy = diffusion.add_noise(z, t, noise=noise)
-        pred_noise = unet(z_noisy, t)
+        ct_batch = ct_batch.to(device)
+        cbct_batch = cbct_batch.to(device)
+        ct_z, _, _, _ = vae(ct_batch)
+        cbct_z, _, _, _ = vae(cbct_batch)
+        t = diffusion.sample_timesteps(ct_batch.shape[0])
+        noise = torch.randn_like(ct_z)
+        ct_z_noisy = diffusion.add_noise(ct_z, t, noise=noise)
+        pred_noise = unet(ct_z_noisy, cbct_z, t)
 
         # Approximate denoise latent
         alpha_cumprod_t = diffusion.alpha_cumprod[t].view(-1, 1, 1, 1)
         sqrt_alpha_cumprod_t = torch.sqrt(alpha_cumprod_t)
         sqrt_one_minus_alpha_cumprod_t = torch.sqrt(1.0 - alpha_cumprod_t)
-        z_denoised_pred = (z_noisy - sqrt_one_minus_alpha_cumprod_t * pred_noise) / sqrt_alpha_cumprod_t
+        z_denoised_pred = (ct_z_noisy - sqrt_one_minus_alpha_cumprod_t * pred_noise) / sqrt_alpha_cumprod_t
 
         unet_recon_batch = vae.decode(z_denoised_pred)
-        noisy_batch = vae.decode(z_noisy)
+        noisy_batch = vae.decode(ct_z_noisy)
 
-        for i in range(x_batch.size(0)):
-            original = x_batch[i]
+        for i in range(cbct_batch.size(0)):
+            original = ct_batch[i]
             unet_recon = unet_recon_batch[i]
-            x_noisy = noisy_batch[i]
+            ct_noisy = noisy_batch[i]
             original_img = (original / 2 + 0.5).clamp(0, 1)
             unet_recon_img = (unet_recon / 2 + 0.5).clamp(0, 1)
-            recon_img = (x_noisy / 2 + 0.5).clamp(0, 1)
+            recon_img = (ct_noisy / 2 + 0.5).clamp(0, 1)
             timestep = t[i].item()
 
             if save_path:
@@ -143,7 +158,7 @@ def augment_with_noise(x, noise_std=0.05):
     # if your inputs are normalized to [-1,1], clamp there; if [0,1], clamp to [0,1]
     return x_noisy.clamp(-1.0, 1.0)
 
-def train_unet(
+def train_cond_unet(
     unet, 
     vae, 
     train_loader, 
@@ -181,18 +196,22 @@ def train_unet(
         unet.train()
         train_loss = 0
 
-        for i, x in enumerate(train_loader):
-            x = x.to(device)
+        for i, (ct, cbct) in enumerate(train_loader):
+            ct = ct.to(device)
+            cbct = cbct.to(device)
 
             with torch.no_grad():
-                z_mu, z_logvar = vae.encode(x)
-                z = vae.reparameterize(z_mu, z_logvar)
+                ct_z_mu, ct_z_logvar = vae.encode(ct)
+                ct_z = vae.reparameterize(ct_z_mu, ct_z_logvar)
+
+                cbct_z_mu, cbct_z_logvar = vae.encode(cbct)
+                cbct_z = vae.reparameterize(cbct_z_mu, cbct_z_logvar)
             
             # Forward pass
-            t = diffusion.sample_timesteps(z.size(0))
-            noise = torch.randn_like(z)
-            z_noisy = diffusion.add_noise(z, t, noise=noise)
-            pred_noise = unet(z_noisy, t)
+            t = diffusion.sample_timesteps(ct_z.size(0))
+            noise = torch.randn_like(ct_z)
+            ct_z_noisy = diffusion.add_noise(ct_z, t, noise=noise)
+            pred_noise = unet(ct_z_noisy, cbct_z, t)
 
             # Compute Loss
             loss = noise_loss(pred_noise, noise)
@@ -209,14 +228,20 @@ def train_unet(
         unet.eval()
         val_loss = 0
         with torch.no_grad():
-            for x in val_loader:
-                x = x.to(device)
-                z_mu, z_logvar = vae.encode(x)
-                z = vae.reparameterize(z_mu, z_logvar)
-                t = diffusion.sample_timesteps(x.size(0))
-                noise = torch.randn_like(z)
-                z_noisy = diffusion.add_noise(z, t, noise)
-                pred_noise = unet(z_noisy, t)
+            for (ct, cbct) in val_loader:
+                ct = ct.to(device)
+                cbct = cbct.to(device)
+
+                ct_z_mu, ct_z_logvar = vae.encode(ct)
+                ct_z = vae.reparameterize(ct_z_mu, ct_z_logvar)
+
+                cbct_z_mu, cbct_z_logvar = vae.encode(cbct)
+                cbct_z = vae.reparameterize(cbct_z_mu, cbct_z_logvar)
+
+                t = diffusion.sample_timesteps(ct_z.size(0))
+                noise = torch.randn_like(ct_z)
+                ct_z_noisy = diffusion.add_noise(ct_z, t, noise)
+                pred_noise = unet(ct_z_noisy, cbct_z, t)
                 loss = noise_loss(pred_noise, noise)
                 val_loss += loss.item()
         val_loss /= len(val_loader)
@@ -238,5 +263,5 @@ def train_unet(
 
         # Save predictions
         if predict_dir and (epoch + 1) % epochs_between_prediction == 0:
-            for i , x in enumerate(test_loader):
-                predict_unet(unet, vae, x, i, save_path=os.path.join(predict_dir, f"epoch_{epoch+1}"))
+            for i , (ct, cbct) in enumerate(test_loader):
+                predict_cond_unet(unet, vae, ct, cbct, i, save_path=os.path.join(predict_dir, f"epoch_{epoch+1}"))

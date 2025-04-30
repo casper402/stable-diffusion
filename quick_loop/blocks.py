@@ -189,6 +189,32 @@ class MiddleBlock(nn.Module):
         h = self.res_block2(h, temb)
         return h
     
+class ConditionalUpBlock(nn.Module):
+    def __init__(self, in_channels, out_channels, skip_channels, conditional_channels, time_emb_dim=None, has_attn=False, dropout_rate=0.1, upsample=True):
+        super().__init__()
+        self.has_attn = has_attn
+        self.upsample = upsample
+
+        res1_in_channels = in_channels + skip_channels + conditional_channels
+        res2_in_channels = out_channels + skip_channels + conditional_channels
+
+        self.res_block1 = ResnetBlock(res1_in_channels, out_channels, time_emb_dim, dropout_rate)
+        self.attention1 = AttentionBlock(out_channels) if has_attn else nn.Identity()
+        self.res_block2 = ResnetBlock(res2_in_channels, out_channels, time_emb_dim, dropout_rate)
+        self.attention2 = AttentionBlock(out_channels) if has_attn else nn.Identity()
+        self.upsample = Upsample(out_channels, with_conv=True) if upsample else None
+
+    def forward(self, x, skips, conditionals, temb):
+        x = torch.cat([x, skips[0], conditionals[0]], dim=1)
+        h = self.res_block1(x, temb)
+        h = self.attention1(h)
+        h = torch.cat([h, skips[1], conditionals[1]], dim=1)
+        h = self.res_block2(h, temb)
+        h = self.attention2(h)
+        if self.upsample:
+            h = self.upsample(h)
+        return h
+    
 class ControlNetPACAUpBlock(nn.Module):
     def __init__(self, in_channels, out_channels, skip_channels, time_emb_dim=None, has_attn=False, dropout_rate=0.1, upsample=True):
         super().__init__()

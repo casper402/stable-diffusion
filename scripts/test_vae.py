@@ -318,6 +318,7 @@ def main():
        # "bigvaeV3.pth",
        "bigvaeV5.pth",
        "vaeV5.pth",
+       "vaeV6.pth"
     ]
     vaes = []
     for path in vae_paths:

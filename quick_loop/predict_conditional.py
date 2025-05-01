@@ -52,7 +52,7 @@ def predict_volume(
     batch_size: int
 ):
     """
-    Run batched, mixed-precision inference on CBCT slices and save predictions.
+    Run batched inference on CBCT slices and save predictions.
     """
     # Set up device and diffusion scheduler
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
@@ -88,7 +88,6 @@ def predict_volume(
             for t_int in reversed(range(0, timesteps, 250)):
                 print(f"  t={t_int}: z_t stats: min={z_t.min().item():.4f}, max={z_t.max().item():.4f}, has_nan={torch.isnan(z_t).any()}")
                 t = torch.full((z_t.size(0),), t_int, device=device, dtype=torch.long)
-                print(f"    Params: beta_t={beta_t.item():.6f}, alpha_t={alpha_t.item():.6f}, alpha_c={alpha_c.item():.6f}")
 
                 # ControlNet guidance
                 pred_cond = unet(z_t, z_cond, t)
@@ -103,6 +102,7 @@ def predict_volume(
                 coef = beta_t / torch.sqrt(1.0 - alpha_c)
                 mean = torch.sqrt(1.0 / alpha_t) * (z_t - coef * pred_noise)
 
+                print(f"    Params: beta_t={beta_t.item():.6f}, alpha_t={alpha_t.item():.6f}, alpha_c={alpha_c.item():.6f}")
                 if t_int > 0:
                     noise = torch.randn_like(z_t)
                     z_t = mean + torch.sqrt(beta_t) * noise

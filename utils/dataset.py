@@ -155,7 +155,7 @@ class PreprocessedCBCTtoCTDataset(Dataset):
             return None
 
 class CTDatasetNPY(Dataset):
-    def __init__(self, manifest_csv: str, split: str, augmentation=False, rotation_degrees=10, translate_fraction=0.05):
+    def __init__(self, manifest_csv: str, split: str, augmentation=False):
         self.df = pd.read_csv(manifest_csv)
         self.df = self.df[self.df['split'] == split].reset_index(drop=True)
         self.base_transform = transforms.Compose([
@@ -165,9 +165,9 @@ class CTDatasetNPY(Dataset):
         if augmentation == True:
             self.augmentation_transform = transforms.Compose([
                 transforms.RandomAffine(
-                    degrees=rotation_degrees,       # Random rotation between -rot..+rot degrees
-                    translate=(translate_fraction, translate_fraction), # Random translation up to fraction% horizontally and vertically
-                    scale=(0.95, 1.05), # Add slight scaling
+                    degrees=10,       # Random rotation between -rot..+rot degrees
+                    translate=(0.30, 0.30), # Random translation up to fraction% horizontally and vertically
+                    scale=(0.70, 1.30), # Add slight scaling
                     shear=5,           # Add slight shear
                     fill=-1              # Fill new pixels with -1, consistent with Pad
                 ),
@@ -183,9 +183,9 @@ class CTDatasetNPY(Dataset):
         row = self.df.iloc[idx]
         ct = np.load(row['ct_path']).astype(np.float32) / 1000.0
         ct = torch.from_numpy(ct).unsqueeze(0)
+        ct = self.base_transform(ct)
         if self.augmentation_transform:
             ct = self.augmentation_transform(ct)
-        ct = self.base_transform(ct)
         return ct
 
 class PairedCTCBCTDatasetNPY(Dataset):

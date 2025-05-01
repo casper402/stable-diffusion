@@ -6,6 +6,19 @@ from evaluation import compute_mae, compute_rmse, compute_psnr, DATA_RANGE, ssim
 from PIL import Image
 from torchvision import transforms
 
+# ──────── constants ───────────────────────────────────────────────────────────
+DATA_RANGE = 2000.0    # CT range -1000…1000
+ORIG_H, ORIG_W = 238, 366
+PAD_L, PAD_T, PAD_R, PAD_B = 0, 64, 0, 64
+RES_H, RES_W = 256, 256
+
+_pad_h = ORIG_H + PAD_T + PAD_B
+_pad_w = ORIG_W + PAD_L + PAD_R
+TOP_CROP    = int(round((PAD_T / _pad_h) * RES_H))
+BOTTOM_CROP = int(round((PAD_B / _pad_h) * RES_H))
+LEFT_CROP   = int(round((PAD_L / _pad_w) * RES_W))
+RIGHT_CROP  = int(round((PAD_R / _pad_w) * RES_W))
+
 transform = transforms.Compose([
     transforms.Pad((0, 64, 0, 64), fill=-1000),
     transforms.Resize((256, 256)),
@@ -16,6 +29,12 @@ def apply_transform(np_img):
     pil = Image.fromarray(np_img)
     out = transform(pil)
     return np.array(out)
+
+def crop_back(arr):
+    return arr[
+        TOP_CROP:   RES_H - BOTTOM_CROP,
+        LEFT_CROP:  RES_W - RIGHT_CROP
+    ]
 
 def plot_multi_side_by_side(test_dirs, gt_dir, volume_idx, slice_num):
     """
@@ -39,6 +58,7 @@ def plot_multi_side_by_side(test_dirs, gt_dir, volume_idx, slice_num):
 
     gt_image = np.load(os.path.join(gt_dir, filename))
     gt_image = apply_transform(gt_image)
+    gt_image = crop_back(gt_image)
 
     test_images = []
     test_names  = []
@@ -47,6 +67,8 @@ def plot_multi_side_by_side(test_dirs, gt_dir, volume_idx, slice_num):
         
         if os.path.basename(test_dir) == "test":
             img = apply_transform(img)
+
+        img = crop_back(img)
 
         test_images.append(img)
         test_names.append(os.path.basename(os.path.normpath(test_dir)))
@@ -108,11 +130,12 @@ def plot_multi_side_by_side(test_dirs, gt_dir, volume_idx, slice_num):
     plt.show()
 
 def main():
-    volume_idx = 3
-    slice_num = 50
+    volume_idx = 35 
+    slice_num = 200
 
     test_dirs = [
-        os.path.expanduser(f"/Users/Niklas/thesis/predictions/volume-{volume_idx}"),
+        os.path.expanduser(f"/Users/Niklas/thesis/predictions/v1/volume-{volume_idx}"),
+        # os.path.expanduser(f"/Users/Niklas/thesis/predictions/basic/volume-{volume_idx}"),
         os.path.expanduser("/Users/Niklas/thesis/training_data/CBCT/test"),
     ]
     gt_dir = os.path.expanduser("/Users/Niklas/thesis/training_data/CT/test")

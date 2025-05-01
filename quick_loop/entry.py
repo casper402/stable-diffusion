@@ -32,7 +32,7 @@ load_dir = "../pretrained_models"
 load_vae_path = os.path.join(load_dir, "vae.pth")
 
 # Save prediction / model directories
-save_dir = "conditional_unet_base_channels_256"
+save_dir = "unet_base_channels_256_v2"
 os.makedirs(save_dir, exist_ok=True)
 vae_predict_dir = os.path.join(save_dir, "vae_predictions")
 unet_predict_dir = os.path.join(save_dir, "unet_predictions")

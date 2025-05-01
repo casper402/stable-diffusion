@@ -19,7 +19,7 @@ OUT_DIR = 'conditional_unet_base_channels_256/inference/'
 # Single guidance scale (set to 1.0)
 GUIDANCE_SCALE = 1.0
 # Number of slices to process in one batch (tune based on your GPU memory)
-BATCH_SIZE = 8
+BATCH_SIZE = 1
 
 VAE_SAVE_PATH = '../pretrained_models/vae.pth'
 UNET_SAVE_PATH = 'conditional_unet_base_channels_256/unet.pth'
@@ -78,14 +78,17 @@ def predict_volume(
         names = [item[0] for item in batch]
         imgs = torch.stack([item[1] for item in batch], dim=0).to(device)  # (B,1,H,W)
 
-        with torch.no_grad(), torch.cuda.amp.autocast():
+        with torch.no_grad():
             mu, logvar = vae.encode(imgs)
             z_cond = vae.reparameterize(mu, logvar)
             z_t = torch.randn_like(mu)
 
             # 3) Reverse diffusion
-            for t_int in reversed(range(timesteps)):
+            print(f"Batch {batch_idx}: z_cond stats: min={z_cond.min().item():.4f}, max={z_cond.max().item():.4f}, has_nan={torch.isnan(z_cond).any()}")
+            for t_int in reversed(range(0, timesteps, 250)):
+                print(f"  t={t_int}: z_t stats: min={z_t.min().item():.4f}, max={z_t.max().item():.4f}, has_nan={torch.isnan(z_t).any()}")
                 t = torch.full((z_t.size(0),), t_int, device=device, dtype=torch.long)
+                print(f"    Params: beta_t={beta_t.item():.6f}, alpha_t={alpha_t.item():.6f}, alpha_c={alpha_c.item():.6f}")
 
                 # ControlNet guidance
                 pred_cond = unet(z_t, z_cond, t)
@@ -105,9 +108,12 @@ def predict_volume(
                     z_t = mean + torch.sqrt(beta_t) * noise
                 else:
                     z_t = mean
+                print(f"  t={t_int} (end): z_t stats: min={z_t.min().item():.4f}, max={z_t.max().item():.4f}, has_nan={torch.isnan(z_t).any()}")
 
             # 4) VAE decode
+            print(f"Batch {batch_idx}: Final z_t stats: min={z_t.min().item():.4f}, max={z_t.max().item():.4f}, has_nan={torch.isnan(z_t).any()}")
             gen = vae.decode(z_t)
+            print(f"Batch {batch_idx}: Decoded gen stats: min={gen.min().item():.4f}, max={gen.max().item():.4f}, has_nan={torch.isnan(gen).any()}")
 
         # 5) Save outputs (scaled to [-1000, 1000])
         out_np = gen.cpu().numpy() * 1000.0

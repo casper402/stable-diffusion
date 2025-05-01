@@ -182,7 +182,8 @@ def train_cond_unet(
         factor=0.5,            
         patience=patience,           
         threshold=1e-4,        
-        min_lr=1e-6            
+        min_lr=1e-6, 
+        verbose=True
     )
     diffusion = Diffusion(device)
 

@@ -23,6 +23,8 @@ epochs = 2000
 early_stopping = 50
 patience = 10
 epochs_between_prediction = 5
+base_channels = 256
+dropout_rate = 0.1
 
 # Load pretrained model paths
 load_dir = "../pretrained_models"
@@ -50,7 +52,7 @@ vae = load_vae(load_vae_path, trainable=False)
 # train_loader, val_loader, test_loader = get_dataloaders(manifest_path, batch_size=batch_size, num_workers=num_workers, dataset_class=CTDatasetNPY, train_size=train_size, val_size=val_size, test_size=test_size)
 # train_vae(vae=vae, train_loader=train_loader, val_loader=val_loader, epochs=epochs, early_stopping=early_stopping, patience=patience, save_path=vae_save_path, predict_dir=vae_predict_dir)
 
-#unet = load_unet(trainable=True, base_channels=256, dropout_rate=0.1)
+#unet = load_unet(trainable=True, base_channels=base_channels, dropout_rate=dropout_rate)
 #train_unet(unet=unet, 
         #    vae=vae, 
         #    train_loader=train_loader, 
@@ -66,7 +68,7 @@ vae = load_vae(load_vae_path, trainable=False)
 
 train_loader, val_loader, test_loader = get_dataloaders(manifest_path, batch_size=batch_size, num_workers=num_workers, dataset_class=PairedCTCBCTDatasetNPY, train_size=train_size, val_size=val_size, test_size=test_size)
 
-unet = load_cond_unet(trainable=True, base_channels=256, dropout_rate=0.1)
+unet = load_cond_unet(trainable=True, base_channels=base_channels, dropout_rate=dropout_rate)
 train_cond_unet(
     unet=unet, 
     vae=vae, 

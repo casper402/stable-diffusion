@@ -132,7 +132,7 @@ def plot_slice_comparisons(stacks, names, slice_idx):
 
 # — Main —
 if __name__ == '__main__':
-    volume_idx = 3
+    volume_idx = 8
     slice_idx = 50
     base = os.path.expanduser('~/thesis')
     sct_dir = os.path.join(base, 'predictions', f'volume-{volume_idx}')
@@ -179,9 +179,10 @@ if __name__ == '__main__':
         methods.append((partial(smooth_z_guided_bilateral, guide=cbct, sigma_spatial=sp, sigma_range=rg), f'guided sp={sp},rg={rg}'))
 
     results = []
-    stacks = [gt, raw_sct]
-    names = ['GT', 'raw']
+    stacks = [gt, raw_sct, cbct]
+    names = ['GT', 'raw', 'cbct']
     results.append({'name': 'raw', 'method': 'raw', 'param': '-', **evaluate_volume(raw_sct, gt)})
+    results.append({'name': 'cbct', 'method': 'cbct', 'param': '-', **evaluate_volume(cbct, gt)})
 
     for idx, (func, name) in enumerate(methods, 1):
         print(f"[{idx}/{len(methods)}] Applying {name}...")
@@ -197,12 +198,14 @@ if __name__ == '__main__':
     print('Metrics table:')
     print(df_all.to_markdown(index=False))
 
-    # select top 7 (excluding GT/raw)
-    df_best = df_all[df_all['name'] != 'raw'].nsmallest(7, 'MAE')
-    selected = ['GT'] + df_best['name'].tolist()
+    # select top 5 (excluding GT/raw/cbct)
+    df_best = df_all[df_all['name'] != 'raw'].nsmallest(5, 'MAE')
+
+    selected = ['GT'] + ['raw'] + ['cbct'] + df_best['name'].tolist()
 
     sel_stacks = [stacks[names.index(n)] for n in selected]
+
     sel_names  = selected
 
-    print(f"Plotting GT and top 7 methods: {selected[1:]}...")
+    print(f"Plotting cbct, GT, raw and top 5 methods...")
     plot_slice_comparisons(sel_stacks, sel_names, slice_idx)

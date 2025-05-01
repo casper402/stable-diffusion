@@ -5,6 +5,9 @@ import nibabel as nib
 import concurrent.futures
 
 
+# Just test volumes:
+volumes = [3, 8, 12, 26, 32, 33, 35, 54, 59, 61, 106, 116, 129]
+
 def process_nifti_pair(ct_folder, ct_fname, cbct_folder, cbct_fname, output_dir, debug=False):
     # --- 1) Load CT and CBCT (keep full CT range) ---
     ct_path   = os.path.join(ct_folder,   ct_fname)
@@ -78,7 +81,7 @@ def main():
         return volume_idx
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = {executor.submit(worker, idx): idx for idx in range(num_volumes)}
+        futures = {executor.submit(worker, idx): idx for idx in volumes}
         for future in concurrent.futures.as_completed(futures):
             idx = futures[future]
             try:

@@ -130,8 +130,8 @@ def plot_multi_side_by_side(test_dirs, gt_dir, volume_idx, slice_num):
     plt.show()
 
 def main():
-    volume_idx = 35 
-    slice_num = 200
+    volume_idx = 33
+    slice_num = 191
 
     test_dirs = [
         os.path.expanduser(f"/Users/Niklas/thesis/predictions/v1/volume-{volume_idx}"),

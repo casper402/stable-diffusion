@@ -138,6 +138,7 @@ if __name__ == '__main__':
     vae = load_vae(VAE_SAVE_PATH)
     unet = load_cond_unet(
         save_path=UNET_SAVE_PATH,
+        base_channels=256,
     )
 
     predict_volume(

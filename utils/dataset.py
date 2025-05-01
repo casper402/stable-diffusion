@@ -155,13 +155,26 @@ class PreprocessedCBCTtoCTDataset(Dataset):
             return None
 
 class CTDatasetNPY(Dataset):
-    def __init__(self, manifest_csv: str, split: str):
+    def __init__(self, manifest_csv: str, split: str, augmentation=False, rotation_degrees=10, translate_fraction=0.05):
         self.df = pd.read_csv(manifest_csv)
         self.df = self.df[self.df['split'] == split].reset_index(drop=True)
-        self.transform = transforms.Compose([
+        self.base_transform = transforms.Compose([
             transforms.Pad((0, 64, 0, 64), fill=-1),
             transforms.Resize((256, 256)),
         ])
+        if augmentation == False:
+            self.augmentation_transform = transforms.Compose([
+                transforms.RandomAffine(
+                    degrees=rotation_degrees,       # Random rotation between -rot..+rot degrees
+                    translate=(translate_fraction, translate_fraction), # Random translation up to fraction% horizontally and vertically
+                    scale=(0.95, 1.05), # Add slight scaling
+                    shear=5,           # Add slight shear
+                    fill=-1              # Fill new pixels with -1, consistent with Pad
+                ),
+            ])
+        else:
+            self.augmentation_transform = None
+
 
     def __len__(self):
         return len(self.df)
@@ -170,12 +183,13 @@ class CTDatasetNPY(Dataset):
         row = self.df.iloc[idx]
         ct = np.load(row['ct_path']).astype(np.float32) / 1000.0
         ct = torch.from_numpy(ct).unsqueeze(0)
-        if self.transform:
-            ct = self.transform(ct)
+        if self.augmentation_transform:
+            ct = self.augmentation_transform(ct)
+        ct = self.base_transform(ct)
         return ct
 
 class PairedCTCBCTDatasetNPY(Dataset):
-    def __init__(self, manifest_csv: str, split: str):
+    def __init__(self, manifest_csv: str, split: str, augmentation=False, rotation_degrees=10, translate_fraction=0.05):
         self.df = pd.read_csv(manifest_csv)
         # filter to only this split
         self.df = self.df[self.df['split'] == split].reset_index(drop=True)
@@ -183,6 +197,18 @@ class PairedCTCBCTDatasetNPY(Dataset):
             transforms.Pad((0, 64, 0, 64), fill=-1),
             transforms.Resize((256, 256)),
         ])
+        if augmentation == False:
+            self.augmentation_transform = transforms.Compose([
+                transforms.RandomAffine(
+                    degrees=rotation_degrees,       # Random rotation between -rot..+rot degrees
+                    translate=(translate_fraction, translate_fraction), # Random translation up to fraction% horizontally and vertically
+                    scale=(0.95, 1.05), # Add slight scaling
+                    shear=5,           # Add slight shear
+                    fill=-1              # Fill new pixels with -1, consistent with Pad
+                ),
+            ])
+        else:
+            self.augmentation_transform = None
 
     def __len__(self):
         return len(self.df)
@@ -196,16 +222,19 @@ class PairedCTCBCTDatasetNPY(Dataset):
         ct   = torch.from_numpy(ct).unsqueeze(0)
         cbct = torch.from_numpy(cbct).unsqueeze(0)
 
+        if self.augmentation_transform:
+            ct = self.augmentation_transform(ct) # TODO: Should augment CBCT?
+
         if self.transform:
             ct   = self.transform(ct)
             cbct = self.transform(cbct)
 
         return ct, cbct
     
-def get_dataloaders(manifest_csv, batch_size, num_workers, dataset_class=PairedCTCBCTDatasetNPY, shuffle_train=True, drop_last=True, train_size=None, val_size=None, test_size=None):
-    train_dataset = dataset_class(manifest_csv=manifest_csv, split='train')
-    val_dataset = dataset_class(manifest_csv=manifest_csv, split='validation')
-    test_dataset = dataset_class(manifest_csv=manifest_csv, split='test')
+def get_dataloaders(manifest_csv, batch_size, num_workers, dataset_class=PairedCTCBCTDatasetNPY, shuffle_train=True, drop_last=True, train_size=None, val_size=None, test_size=None, augmentation=False):
+    train_dataset = dataset_class(manifest_csv=manifest_csv, split='train', augmentation=augmentation)
+    val_dataset = dataset_class(manifest_csv=manifest_csv, split='validation', augmentation=False)
+    test_dataset = dataset_class(manifest_csv=manifest_csv, split='test', augmentation=False)
     if train_size:
         train_dataset, _ = random_split(train_dataset, [train_size, len(train_dataset) - train_size])
     if val_size:
@@ -232,7 +261,7 @@ def get_dataloaders(manifest_csv, batch_size, num_workers, dataset_class=PairedC
         shuffle=False,
         num_workers=num_workers,
         pin_memory=True,
-        drop_last=drop_last
+        drop_last=False
     )
 
     # Test loader
@@ -242,7 +271,7 @@ def get_dataloaders(manifest_csv, batch_size, num_workers, dataset_class=PairedC
         shuffle=False,
         num_workers=num_workers,
         pin_memory=True,
-        drop_last=drop_last
+        drop_last=False
     )
 
     print("DataLoaders created successfully.")

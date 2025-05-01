@@ -162,7 +162,7 @@ class CTDatasetNPY(Dataset):
             transforms.Pad((0, 64, 0, 64), fill=-1),
             transforms.Resize((256, 256)),
         ])
-        if augmentation == False:
+        if augmentation == True:
             self.augmentation_transform = transforms.Compose([
                 transforms.RandomAffine(
                     degrees=rotation_degrees,       # Random rotation between -rot..+rot degrees

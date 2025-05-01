@@ -19,7 +19,7 @@ OUT_DIR = 'conditional_unet_base_channels_256/inference/'
 # Single guidance scale (set to 1.0)
 GUIDANCE_SCALE = 1.0
 # Number of slices to process in one batch (tune based on your GPU memory)
-BATCH_SIZE = 1
+BATCH_SIZE = 8
 
 VAE_SAVE_PATH = '../pretrained_models/vae.pth'
 UNET_SAVE_PATH = 'conditional_unet_base_channels_256/unet.pth'
@@ -131,7 +131,7 @@ if __name__ == '__main__':
 
     vae = load_vae(VAE_SAVE_PATH)
     unet = load_cond_unet(
-        unet_save_path=UNET_SAVE_PATH,
+        save_path=UNET_SAVE_PATH,
     )
 
     predict_volume(

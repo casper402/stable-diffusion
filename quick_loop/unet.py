@@ -9,6 +9,9 @@ import numpy as np
 from models.diffusion import Diffusion
 from quick_loop.blocks import nonlinearity, Normalize, TimestepEmbedding, DownBlock, MiddleBlock, UpBlock
 
+from torch.optim import AdamW
+from torch.optim.lr_scheduler import ReduceLROnPlateau
+
 class UNet(nn.Module):
     def __init__(self, 
                  in_channels=3, 
@@ -249,3 +252,122 @@ def train_unet(
         if predict_dir and (epoch + 1) % epochs_between_prediction == 0:
             for i , x in enumerate(test_loader):
                 predict_unet(unet, vae, x, i, save_path=os.path.join(predict_dir, f"epoch_{epoch+1}"))
+
+def train_joint(
+    unet,
+    vae,
+    train_loader,
+    val_loader,
+    test_loader=None,
+    epochs=1000,
+    save_unet_path='unet.pth',
+    save_vae_path='vae.pth',
+    learning_rate=5e-6,
+    weight_decay=1e-4,
+    gradient_clip_val=1.0,
+    early_stopping=None,
+    vae_loss_weights=None,      # dict with keys: perceptual, ssim, mse, kl, l1
+):
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    # single optimizer over both models
+    optimizer = AdamW(
+        list(unet.parameters()) + list(vae.parameters()),
+        lr=learning_rate,
+        weight_decay=weight_decay,
+    )
+
+    diffusion = Diffusion(device)
+
+    best_val_loss = float('inf')
+    early_counter = 0
+
+    # unpack your vae‐loss weights (with defaults)
+    perceptual_w = vae_loss_weights.get('perceptual', 0.1)
+    ssim_w       = vae_loss_weights.get('ssim',       0.8)
+    mse_w        = vae_loss_weights.get('mse',        0.0)
+    kl_w         = vae_loss_weights.get('kl',         1e-5)
+    l1_w         = vae_loss_weights.get('l1',         1.0)
+
+    for epoch in range(1, epochs+1):
+        unet.train()
+        vae.train()
+        train_loss = 0.0
+
+        for x in train_loader:
+            x = x.to(device)
+            optimizer.zero_grad()
+
+            # --- Shared VAE encoding ---
+            z_mu, z_logvar = vae.encode(x)
+            z = vae.reparameterize(z_mu, z_logvar)
+
+            # --- Path A: UNet diffusion loss ---
+            t = diffusion.sample_timesteps(z.size(0))
+            noise = torch.randn_like(z)
+            z_noisy = diffusion.add_noise(z, t, noise=noise)
+            pred_noise = unet(z_noisy, t)
+            loss_unet = F.mse_loss(pred_noise, noise)
+
+            # --- Path B: VAE reconstruction + KLD + perceptual/SSIM/etc ---
+            recon = vae.decode(z)
+            loss_vae = vae_loss(
+                recon, x, z_mu, z_logvar,
+                perceptual_loss, ssim_loss,
+                perceptual_w, ssim_w, mse_w, kl_w, l1_w
+            )
+
+            # --- Combined loss & step ---
+            loss = loss_unet + loss_vae
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(
+                list(unet.parameters()) + list(vae.parameters()),
+                max_norm=gradient_clip_val
+            )
+            optimizer.step()
+
+            train_loss += loss.item()
+
+        train_loss /= len(train_loader)
+
+        # --- Validation pass ---
+        unet.eval()
+        vae.eval()
+        val_loss = 0.0
+        with torch.no_grad():
+            for x in val_loader:
+                x = x.to(device)
+                mu, logvar = vae.encode(x)
+                z = vae.reparameterize(mu, logvar)
+
+                # UNet part
+                t = diffusion.sample_timesteps(z.size(0))
+                noise = torch.randn_like(z)
+                pred = unet(diffusion.add_noise(z, t, noise), t)
+                l_unet = F.mse_loss(pred, noise)
+
+                # VAE part
+                recon = vae.decode(z)
+                l_vae = vae_loss(
+                    recon, x, mu, logvar,
+                    perceptual_loss, ssim_loss,
+                    perceptual_w, ssim_w, mse_w, kl_w, l1_w
+                )
+                val_loss += (l_unet + l_vae).item()
+        val_loss /= len(val_loader)
+
+        print(f"[Epoch {epoch}] train_loss={train_loss:.4f}  val_loss={val_loss:.4f}")
+
+        # --- Save best and handle early stopping ---
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
+            early_counter = 0
+            torch.save(unet.state_dict(), save_unet_path)
+            torch.save(vae.state_dict(), save_vae_path)
+            print(f"✔︎ Saved best models at epoch {epoch} (val_loss={val_loss:.4f})")
+        else:
+            early_counter += 1
+
+        if early_stopping and early_counter >= early_stopping:
+            print(f"➡︎ Early stopping after {early_stopping} epochs with no improvement.")
+            break

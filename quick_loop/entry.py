@@ -67,6 +67,35 @@ train_unet(unet=unet,
            epochs_between_prediction=epochs_between_prediction,
 )
 
+vae = load_vae(vae_save_path, trainable=True)
+unet = load_unet(save_path=unet_save_path, trainable=True)
+
+# Define your VAE‐loss weights:
+vae_loss_weights = {
+    'perceptual': 0.1,
+    'ssim':       0.8,
+    'mse':        0.0,
+    'kl':         1e-5,
+    'l1':         1.0,
+}
+
+# Jointly train UNet + VAE
+train_joint(
+    unet=unet,
+    vae=vae,
+    train_loader=train_loader,
+    val_loader=val_loader,
+    test_loader=test_loader,
+    epochs=epochs,
+    save_unet_path=unet_save_path.replace('.pth','_joint_unet.pth'),
+    save_vae_path=vae_save_path.replace('.pth','_joint_vae.pth'),
+    learning_rate=5e-6,
+    weight_decay=1e-4,
+    gradient_clip_val=1.0,
+    early_stopping=early_stopping,
+    vae_loss_weights=vae_loss_weights,
+)
+
 # train_loader, val_loader, test_loader = get_dataloaders(manifest_path, batch_size=batch_size, num_workers=num_workers, dataset_class=PairedCTCBCTDatasetNPY, train_size=train_size, val_size=val_size, test_size=test_size, augmentation=augmentation)
 
 # unet = load_cond_unet(trainable=True, base_channels=base_channels, dropout_rate=dropout_rate)

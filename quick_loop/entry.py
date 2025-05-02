@@ -21,12 +21,13 @@ accumulation_steps = 1 # Effectively increases batch size to batch_size * accumu
 num_workers = 8
 epochs = 2000
 early_stopping = 50
-patience = 20
+patience = 10
 epochs_between_prediction = 5
 base_channels = 256
 dropout_rate = 0.1
 augmentation = True # NOTE: Set augmentation parameters manually in dataset.py
-warmup_lr = 1e-8
+learning_rate = 1e-4
+warmup_lr = 0
 warmup_epochs = 5
 
 # Load pretrained model paths
@@ -34,7 +35,7 @@ load_dir = "../pretrained_models"
 load_vae_path = os.path.join(load_dir, "vae.pth")
 
 # Save prediction / model directories
-save_dir = "unet_base_channels_256_v2"
+save_dir = "unet_base_channels_256_warmup_v3"
 os.makedirs(save_dir, exist_ok=True)
 vae_predict_dir = os.path.join(save_dir, "vae_predictions")
 unet_predict_dir = os.path.join(save_dir, "unet_predictions")
@@ -70,6 +71,7 @@ train_unet(unet=unet,
            save_path=unet_save_path, 
            predict_dir=unet_predict_dir,
            epochs_between_prediction=epochs_between_prediction,
+           learning_rate=learning_rate,
            warmup_lr=warmup_lr,
            warmup_epochs=warmup_epochs
 )

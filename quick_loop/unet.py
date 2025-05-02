@@ -158,8 +158,8 @@ def train_unet(
     learning_rate=1e-4,
     weight_decay_val=1e-4,
     gradient_clip_val=1.0,
-    warmup_lr=1e-8,
-    warmup_epochs=5,
+    warmup_lr=0,
+    warmup_epochs=0,
 ):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -199,7 +199,7 @@ def train_unet(
         current_epoch_lr = learning_rate
 
         if epoch < warmup_epochs:
-            lr_factor = (epoch + 1) / warmup_epochs
+            lr_factor = epoch+1 / warmup_epochs
             current_epoch_lr = warmup_lr + lr_factor * (learning_rate - warmup_lr)
 
             for param_group in optimizer.param_groups:

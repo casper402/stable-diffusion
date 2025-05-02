@@ -17,7 +17,7 @@ VOLUME_INDICES = [3, 8, 12, 26, 32, 33, 35, 54, 59, 61, 106, 116, 129]
 OUT_DIR = '../predictions-speed/'
 
 GUIDANCE_SCALE = 1.0
-BATCH_SIZE = 64  # tune as needed
+BATCH_SIZE = 32
 
 MODELS_PATH = 'controlnet_training/v2/'
 VAE_SAVE_PATH = os.path.join(MODELS_PATH, 'vae.pth')

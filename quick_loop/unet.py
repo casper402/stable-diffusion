@@ -14,6 +14,8 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 from quick_loop.vae import vae_loss
 
+from utils.losses import PerceptualLoss, SsimLoss
+
 class UNet(nn.Module):
     def __init__(self, 
                  in_channels=3, 
@@ -279,6 +281,8 @@ def train_joint(
     )
 
     diffusion = Diffusion(device)
+    perceptual_loss = PerceptualLoss(device=device)
+    ssim_loss = SsimLoss()
 
     best_val_loss = float('inf')
     early_counter = 0

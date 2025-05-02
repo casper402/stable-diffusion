@@ -288,6 +288,8 @@ def train_joint(
     kl_w         = vae_loss_weights.get('kl',         1e-5)
     l1_w         = vae_loss_weights.get('l1',         1.0)
 
+    print("starting joint training")
+
     for epoch in range(1, epochs+1):
         unet.train()
         vae.train()

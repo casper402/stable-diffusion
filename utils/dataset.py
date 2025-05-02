@@ -188,6 +188,18 @@ class CTDatasetNPY(Dataset):
             ct = self.augmentation_transform(ct)
         return ct
 
+class CTDatasetWithMeta(CTDatasetNPY):
+    """
+    Extends CTDatasetNPY to also return the volume index for each sample.
+    """
+    def __getitem__(self, idx):
+        ct = super().__getitem__(idx)
+        row = self.df.iloc[idx]
+        filename = os.path.basename(row['ct_path'])  # e.g. "volume-59_slice_192.npy"
+        volume_part = filename.split('_')[0]          # "volume-59"
+        volume_idx = int(volume_part.split('-')[1])   # 59
+        return ct, volume_idx
+
 class PairedCTCBCTDatasetNPY(Dataset):
     def __init__(self, manifest_csv: str, split: str, augmentation=False, rotation_degrees=10, translate_fraction=0.05):
         self.df = pd.read_csv(manifest_csv)

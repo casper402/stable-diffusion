@@ -67,7 +67,7 @@ train_loader, val_loader, test_loader = get_dataloaders(manifest_path, batch_siz
 #            epochs_between_prediction=epochs_between_prediction,
 # )
 
-vae = load_vae(vae_save_path, trainable=True)
+vae = load_vae(load_vae_path, trainable=True)
 unet = load_unet(save_path=unet_save_path, trainable=True, base_channels=base_channels, dropout_rate=dropout_rate)
 
 # Define your VAE‐loss weights:

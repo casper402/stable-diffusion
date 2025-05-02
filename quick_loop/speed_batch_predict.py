@@ -1,4 +1,5 @@
 import os
+import math
 import numpy as np
 import torch
 import torch.nn as nn
@@ -14,7 +15,7 @@ from quick_loop.unetControlPACA import load_unet_control_paca
 # ------------------------
 CBCT_DIR = '../training_data/scaled-490/'
 VOLUME_INDICES = [3, 8]
-OUT_DIR = '../predictions490-speed/'
+OUT_DIR = '../predictions490/'
 
 GUIDANCE_SCALE = 1.0
 BATCH_SIZE = 32  # tune as needed
@@ -25,6 +26,30 @@ UNET_SAVE_PATH = os.path.join(MODELS_PATH, 'unet.pth')
 PACA_LAYERS_SAVE_PATH = os.path.join(MODELS_PATH, 'paca_layers.pth')
 CONTROLNET_SAVE_PATH = os.path.join(MODELS_PATH, 'controlnet.pth')
 DEGRADATION_REMOVAL_SAVE_PATH = os.path.join(MODELS_PATH, 'dr_module.pth')
+
+# ------------------------
+# Utility Functions
+# ------------------------
+
+def load_volume_slices(volume_dir: str, transform=None):
+    """
+    Load all .npy slices in volume_dir, apply transform and return list of (filename, tensor).
+    """
+    slice_files = sorted([f for f in os.listdir(volume_dir) if f.endswith('.npy')])
+    slices = []
+    for fname in slice_files:
+        arr = np.load(os.path.join(volume_dir, fname)).astype(np.float32) / 1000.0
+        tensor = torch.from_numpy(arr).unsqueeze(0)  # add channel dim
+        if transform:
+            tensor = transform(tensor)
+        slices.append((fname, tensor))
+    return slices
+
+
+def chunks(lst, n):
+    """Yield successive n-sized chunks from list."""
+    for i in range(0, len(lst), n):
+        yield lst[i:i + n]
 
 # ------------------------
 # Schedule Helper
@@ -58,6 +83,9 @@ def predict_volume(
     power_p: float = 2.0,
     fine_cutoff: int = 25
 ):
+    """
+    Run batched, half-precision DDIM inference on CBCT slices and save predictions.
+    """
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     torch.backends.cudnn.benchmark = True
 
@@ -66,7 +94,6 @@ def predict_volume(
     alpha_cumprod = diffusion.alpha_cumprod.to(device)
     T = diffusion.timesteps
 
-    # half precision already applied; ensure models eval
     vae.to(device).eval()
     unet.to(device).eval()
     controlnet.to(device).eval()
@@ -78,33 +105,32 @@ def predict_volume(
         dr_module = nn.DataParallel(dr_module)
 
     os.makedirs(save_dir, exist_ok=True)
-
-    total_batches = math.ceil(len(cbct_slices) / batch_size)
     schedule = make_mixed_schedule(T=T, N=ddim_steps, p=power_p, fine_cutoff=fine_cutoff)
 
     for batch_idx, batch in enumerate(chunks(cbct_slices, batch_size), start=1):
-        print(f"Batch {batch_idx}/{total_batches}")
         names = [fn for fn, _ in batch]
         imgs = torch.stack([t for _, t in batch], dim=0).to(device)
 
         with torch.inference_mode():
-            # 1) control inputs
+            # 1) Degradation removal / control inputs
             control_inputs, _ = dr_module(imgs)
             # 2) VAE encode
             mu, logvar = vae.encode(imgs)
             z = torch.randn_like(mu)
 
-            # 3) DDIM reverse
-            for i in range(len(schedule)-1):
-                t, t_prev = int(schedule[i]), int(schedule[i+1])
+            # 3) DDIM reverse diffusion
+            for i in range(len(schedule) - 1):
+                t, t_prev = int(schedule[i]), int(schedule[i + 1])
                 t_tensor = torch.full((z.size(0),), t, device=device, dtype=torch.long)
-                eps = unet(z, t_tensor, *controlnet(z, control_inputs, t_tensor)[0:2])
+                # combine controlnet + unet steps
+                down_res, mid_res = controlnet(z, control_inputs, t_tensor)
+                eps = unet(z, t_tensor, down_res, mid_res)
 
                 a_t = alpha_cumprod[t]
                 a_prev = alpha_cumprod[t_prev]
                 sqrt_a_t = a_t.sqrt()
                 sqrt_one_minus_a_t = (1 - a_t).sqrt()
-                
+
                 # DDIM update
                 z = ((z - sqrt_one_minus_a_t * eps) / sqrt_a_t) * a_prev.sqrt() \
                     + (1 - a_prev).sqrt() * eps
@@ -112,7 +138,7 @@ def predict_volume(
             # 4) VAE decode
             gen = vae.decode(z)
 
-        # 5) save
+        # 5) Save outputs
         out_np = (gen.cpu().float().numpy() * 1000.0)
         for i, fname in enumerate(names):
             np.save(os.path.join(save_dir, fname), out_np[i].squeeze(0))
@@ -124,7 +150,6 @@ def predict_volume(
 # ------------------------
 
 if __name__ == '__main__':
-    import math
     transform = transforms.Compose([
         transforms.Pad((0, 64, 0, 64), fill=-1),
         transforms.Resize((256, 256)),

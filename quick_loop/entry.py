@@ -154,25 +154,4 @@ train_dr_control_paca(
 #     num_images_to_save=100
 # )
 
-# import numpy as np
-# import matplotlib.pyplot as plt
-# train_loader, val_loader, test_loader = get_dataloaders(manifest_path, batch_size=batch_size, num_workers=num_workers, dataset_class=PairedCTCBCTDatasetNPY, train_size=train_size, val_size=val_size, test_size=test_size, augmentation=augmentation)
-# for (ct, cbct) in train_loader:
-#     ct_image = ct[0].squeeze().numpy()  # Assuming ct and cbct are PyTorch tensors
-#     cbct_image = cbct[0].squeeze().numpy() # Assuming cbct had a typo: squueze -> squeeze
-
-#     fig, axes = plt.subplots(1, 2, figsize=(10, 5))  # Create a figure with 1 row and 2 columns
-
-#     # Display CT image in the first subplot
-#     im1 = axes[0].imshow(ct_image, cmap='gray', vmin=-1, vmax=1)
-#     axes[0].set_title('CT Image')
-#     axes[0].axis('off')
-
-#     # Display CBCT image in the second subplot
-#     im2 = axes[1].imshow(cbct_image, cmap='gray', vmin=-1, vmax=1)
-#     axes[1].set_title('CBCT Image')
-#     axes[1].axis('off')
-
-#     plt.tight_layout()  # Adjust layout to prevent overlapping titles
-#     plt.show()
 print("All trainings finished.")

@@ -12,6 +12,8 @@ from quick_loop.blocks import nonlinearity, Normalize, TimestepEmbedding, DownBl
 from torch.optim import AdamW
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
+from quick_loop.vae import vae_loss
+
 class UNet(nn.Module):
     def __init__(self, 
                  in_channels=3, 

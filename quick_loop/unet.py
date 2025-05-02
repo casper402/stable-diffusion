@@ -270,7 +270,6 @@ def train_joint(
 ):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    # single optimizer over both models
     optimizer = AdamW(
         list(unet.parameters()) + list(vae.parameters()),
         lr=learning_rate,
@@ -282,7 +281,7 @@ def train_joint(
     best_val_loss = float('inf')
     early_counter = 0
 
-    # unpack your vae‐loss weights (with defaults)
+    # unpack vae‐loss weights
     perceptual_w = vae_loss_weights.get('perceptual', 0.1)
     ssim_w       = vae_loss_weights.get('ssim',       0.8)
     mse_w        = vae_loss_weights.get('mse',        0.0)
@@ -292,24 +291,28 @@ def train_joint(
     for epoch in range(1, epochs+1):
         unet.train()
         vae.train()
-        train_loss = 0.0
+
+        # running sums for this epoch
+        sum_unet_loss = 0.0
+        sum_vae_loss  = 0.0
+        sum_combined  = 0.0
 
         for x in train_loader:
             x = x.to(device)
             optimizer.zero_grad()
 
-            # --- Shared VAE encoding ---
+            # encode
             z_mu, z_logvar = vae.encode(x)
             z = vae.reparameterize(z_mu, z_logvar)
 
-            # --- Path A: UNet diffusion loss ---
+            # UNet path
             t = diffusion.sample_timesteps(z.size(0))
             noise = torch.randn_like(z)
             z_noisy = diffusion.add_noise(z, t, noise=noise)
             pred_noise = unet(z_noisy, t)
             loss_unet = F.mse_loss(pred_noise, noise)
 
-            # --- Path B: VAE reconstruction + KLD + perceptual/SSIM/etc ---
+            # VAE path
             recon = vae.decode(z)
             loss_vae = vae_loss(
                 recon, x, z_mu, z_logvar,
@@ -317,7 +320,7 @@ def train_joint(
                 perceptual_w, ssim_w, mse_w, kl_w, l1_w
             )
 
-            # --- Combined loss & step ---
+            # combine & step
             loss = loss_unet + loss_vae
             loss.backward()
             torch.nn.utils.clip_grad_norm_(
@@ -326,48 +329,69 @@ def train_joint(
             )
             optimizer.step()
 
-            train_loss += loss.item()
+            # accumulate
+            sum_unet_loss += loss_unet.item()
+            sum_vae_loss  += loss_vae.item()
+            sum_combined  += loss.item()
 
-        train_loss /= len(train_loader)
+        # average training losses
+        n_batches = len(train_loader)
+        avg_unet_train = sum_unet_loss / n_batches
+        avg_vae_train  = sum_vae_loss  / n_batches
+        avg_comb_train = sum_combined  / n_batches
 
-        # --- Validation pass ---
+        # validation
         unet.eval()
         vae.eval()
-        val_loss = 0.0
+        sum_unet_val = 0.0
+        sum_vae_val  = 0.0
+        sum_comb_val = 0.0
+
         with torch.no_grad():
             for x in val_loader:
                 x = x.to(device)
                 mu, logvar = vae.encode(x)
                 z = vae.reparameterize(mu, logvar)
 
-                # UNet part
+                # unet
                 t = diffusion.sample_timesteps(z.size(0))
                 noise = torch.randn_like(z)
                 pred = unet(diffusion.add_noise(z, t, noise), t)
                 l_unet = F.mse_loss(pred, noise)
 
-                # VAE part
+                # vae
                 recon = vae.decode(z)
                 l_vae = vae_loss(
                     recon, x, mu, logvar,
                     perceptual_loss, ssim_loss,
                     perceptual_w, ssim_w, mse_w, kl_w, l1_w
                 )
-                val_loss += (l_unet + l_vae).item()
-        val_loss /= len(val_loader)
 
-        print(f"[Epoch {epoch}] train_loss={train_loss:.4f}  val_loss={val_loss:.4f}")
+                sum_unet_val += l_unet.item()
+                sum_vae_val  += l_vae.item()
+                sum_comb_val += (l_unet + l_vae).item()
 
-        # --- Save best and handle early stopping ---
-        if val_loss < best_val_loss:
-            best_val_loss = val_loss
+        n_val = len(val_loader)
+        avg_unet_val = sum_unet_val / n_val
+        avg_vae_val  = sum_vae_val  / n_val
+        avg_comb_val = sum_comb_val / n_val
+
+        # logging
+        print(
+            f"[Epoch {epoch}] "
+            f"Train UNet: {avg_unet_train:.4f}, VAE: {avg_vae_train:.4f}, Combined: {avg_comb_train:.4f}  |  "
+            f"Val UNet:   {avg_unet_val:.4f}, VAE:   {avg_vae_val:.4f}, Combined: {avg_comb_val:.4f}"
+        )
+
+        # save & early stop
+        if avg_comb_val < best_val_loss:
+            best_val_loss = avg_comb_val
             early_counter = 0
             torch.save(unet.state_dict(), save_unet_path)
             torch.save(vae.state_dict(), save_vae_path)
-            print(f"✔︎ Saved best models at epoch {epoch} (val_loss={val_loss:.4f})")
+            print(f"✔︎ Saved best models at epoch {epoch} (val_combined={avg_comb_val:.4f})")
         else:
             early_counter += 1
-
-        if early_stopping and early_counter >= early_stopping:
-            print(f"➡︎ Early stopping after {early_stopping} epochs with no improvement.")
-            break
+            if early_stopping and early_counter >= early_stopping:
+                print(f"➡︎ Early stopping after {early_stopping} epochs with no improvement.")
+                break

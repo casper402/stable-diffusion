@@ -5,6 +5,7 @@ import torch
 from torch.utils.data import Dataset, DataLoader, random_split
 from PIL import Image
 import pandas as pd
+import torchvision.transforms.functional as F
 from torchvision import transforms
 
 class CTDataset(Dataset):
@@ -165,10 +166,10 @@ class CTDatasetNPY(Dataset):
         if augmentation == True:
             self.augmentation_transform = transforms.Compose([
                 transforms.RandomAffine(
-                    degrees=10,       # Random rotation between -rot..+rot degrees
-                    translate=(0.30, 0.30), # Random translation up to fraction% horizontally and vertically
-                    scale=(0.70, 1.30), # Add slight scaling
-                    shear=5,           # Add slight shear
+                    degrees=1,       # Random rotation between -rot..+rot degrees
+                    translate=(0.20, 0.20), # Random translation up to fraction% horizontally and vertically
+                    scale=(0.80, 1.20), # Add slight scaling
+                    # shear=5,           # Add slight shear
                     fill=-1              # Fill new pixels with -1, consistent with Pad
                 ),
             ])
@@ -189,26 +190,21 @@ class CTDatasetNPY(Dataset):
         return ct
 
 class PairedCTCBCTDatasetNPY(Dataset):
-    def __init__(self, manifest_csv: str, split: str, augmentation=False, rotation_degrees=10, translate_fraction=0.05):
+    def __init__(self, manifest_csv: str, split: str, augmentation=False):
         self.df = pd.read_csv(manifest_csv)
         # filter to only this split
         self.df = self.df[self.df['split'] == split].reset_index(drop=True)
-        self.transform = transforms.Compose([
+        self.base_transform = transforms.Compose([
             transforms.Pad((0, 64, 0, 64), fill=-1),
             transforms.Resize((256, 256)),
         ])
-        if augmentation == False:
-            self.augmentation_transform = transforms.Compose([
-                transforms.RandomAffine(
-                    degrees=rotation_degrees,       # Random rotation between -rot..+rot degrees
-                    translate=(translate_fraction, translate_fraction), # Random translation up to fraction% horizontally and vertically
-                    scale=(0.95, 1.05), # Add slight scaling
-                    shear=5,           # Add slight shear
-                    fill=-1              # Fill new pixels with -1, consistent with Pad
-                ),
-            ])
-        else:
-            self.augmentation_transform = None
+        if augmentation == True:
+                self.degrees=(-10, 10)       # Random rotation between -rot..+rot degrees
+                self.translate=(0.30, 0.30) # Random translation up to fraction% horizontally and vertically
+                self.scale=(0.70, 1.30) # Add slight scaling
+                self.shear=(-5, 5)           # Add slight shear
+                self.fill=-1              # Fill new pixels with -1, consistent with Pad
+        self.augmentation = augmentation
 
     def __len__(self):
         return len(self.df)
@@ -222,12 +218,21 @@ class PairedCTCBCTDatasetNPY(Dataset):
         ct   = torch.from_numpy(ct).unsqueeze(0)
         cbct = torch.from_numpy(cbct).unsqueeze(0)
 
-        if self.augmentation_transform:
-            ct = self.augmentation_transform(ct) # TODO: Should augment CBCT?
+        if self.base_transform:
+            ct   = self.base_transform(ct)
+            cbct = self.base_transform(cbct)
 
-        if self.transform:
-            ct   = self.transform(ct)
-            cbct = self.transform(cbct)
+        if self.augmentation:
+            img_size = F.get_image_size(ct)
+            affine_params = transforms.RandomAffine.get_params(
+                self.degrees,
+                self.translate,
+                self.scale,
+                self.shear,
+                img_size # Pass image size [height, width]
+            )
+            ct = F.affine(ct, *affine_params, interpolation=transforms.InterpolationMode.BILINEAR, fill=self.fill)
+            cbct = F.affine(cbct, *affine_params, interpolation=transforms.InterpolationMode.BILINEAR, fill=self.fill)
 
         return ct, cbct
     

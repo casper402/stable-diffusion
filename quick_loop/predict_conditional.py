@@ -85,7 +85,7 @@ def predict_volume(
 
             # 3) Reverse diffusion
             print(f"Batch {batch_idx}: z_cond stats: min={z_cond.min().item():.4f}, max={z_cond.max().item():.4f}, has_nan={torch.isnan(z_cond).any()}")
-            for t_int in reversed(range(0, timesteps, 250)):
+            for t_int in reversed(range(0, timesteps)):
                 print(f"  t={t_int}: z_t stats: min={z_t.min().item():.4f}, max={z_t.max().item():.4f}, has_nan={torch.isnan(z_t).any()}")
                 t = torch.full((z_t.size(0),), t_int, device=device, dtype=torch.long)
 

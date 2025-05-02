@@ -155,9 +155,11 @@ def train_unet(
     early_stopping=None, 
     patience=None, 
     epochs_between_prediction=50,
-    learning_rate=5.0e-5,
+    learning_rate=1e-4,
     weight_decay_val=1e-4,
     gradient_clip_val=1.0,
+    warmup_lr=1e-8,
+    warmup_epochs=5,
 ):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -182,10 +184,35 @@ def train_unet(
     best_val_loss = float('inf')
     early_stopping_counter = 0
 
+    print(f"Starting training for {epochs} epochs.")
+    if warmup_epochs > 0:
+        print(f"Warmup phase: {warmup_epochs} epochs with LR: {warmup_lr:.2e} -> {learning_rate:.2e}")
+    else:
+        print("No warmup phase.")
+        print(f"Main phase: Base LR={learning_rate:.2e}, ReduceLROnPlateau scheduler")
+
+
 
     for epoch in range(epochs):
         unet.train()
         train_loss = 0
+        current_epoch_lr = learning_rate
+
+        if epoch < warmup_epochs:
+            remaining_fraction = 1.0 - (epoch / warmup_epochs)
+            current_epoch_lr = learning_rate + (warmup_lr - learning_rate) * remaining_fraction
+            current_epoch_lr = max(current_epoch_lr, learning_rate)
+
+            for param_group in optimizer.param_groups:
+                param_group['lr'] = current_epoch_lr
+
+        elif epoch == warmup_epochs:
+            print(f"Warmup finished. Setting LR precisely to {learning_rate:.2e}")
+            current_epoch_lr = learning_rate
+            for param_group in optimizer.param_groups:
+                param_group['lr'] = learning_rate
+        else:
+            current_epoch_lr = optimizer.param_groups[0]['lr']
 
         for i, x in enumerate(train_loader):
             x = x.to(device)
@@ -232,7 +259,7 @@ def train_unet(
         
         scheduler.step(val_loss)
         early_stopping_counter += 1
-        print(f"Epoch {epoch+1} | Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f}")
+        print(f"Epoch {epoch+1} | Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f} | LR: {current_epoch_lr:.2e}{' (Warmup)' if epoch < warmup_epochs else ''}")
 
         # Save best model
         if val_loss < best_val_loss:

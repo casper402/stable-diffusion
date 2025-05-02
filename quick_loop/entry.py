@@ -25,7 +25,7 @@ patience = 10
 epochs_between_prediction = 5
 base_channels = 256
 dropout_rate = 0.1
-augmentation = True
+augmentation = True # NOTE: Set augmentation parameters manually in dataset.py
 
 # Load pretrained model paths
 load_dir = "../pretrained_models"
@@ -46,26 +46,25 @@ degradation_removal_save_path = os.path.join(save_dir, "dr_module.pth")
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
 manifest_path = "../manifest-full.csv"
-# manifest_path = "../data_quick_loop/manifest.csv" # Local config
+manifest_path = "../data_quick_loop/manifest.csv" # Local config
 
-vae = load_vae(load_vae_path, trainable=False)
+# vae = load_vae(load_vae_path, trainable=False)
 
-train_loader, val_loader, test_loader = get_dataloaders(manifest_path, batch_size=batch_size, num_workers=num_workers, dataset_class=CTDatasetNPY, train_size=train_size, val_size=val_size, test_size=test_size, augmentation=augmentation)
+# train_loader, val_loader, test_loader = get_dataloaders(manifest_path, batch_size=batch_size, num_workers=num_workers, dataset_class=CTDatasetNPY, train_size=train_size, val_size=val_size, test_size=test_size, augmentation=augmentation)
 # train_vae(vae=vae, train_loader=train_loader, val_loader=val_loader, epochs=epochs, early_stopping=early_stopping, patience=patience, save_path=vae_save_path, predict_dir=vae_predict_dir)
-
-unet = load_unet(trainable=True, base_channels=base_channels, dropout_rate=dropout_rate)
-train_unet(unet=unet, 
-           vae=vae, 
-           train_loader=train_loader, 
-           val_loader=val_loader,
-           test_loader=test_loader, 
-           epochs=epochs, 
-           early_stopping=early_stopping, 
-           patience=patience, 
-           save_path=unet_save_path, 
-           predict_dir=unet_predict_dir,
-           epochs_between_prediction=epochs_between_prediction,
-)
+# unet = load_unet(trainable=True, base_channels=base_channels, dropout_rate=dropout_rate)
+# train_unet(unet=unet, 
+#            vae=vae, 
+#            train_loader=train_loader, 
+#            val_loader=val_loader,
+#            test_loader=test_loader, 
+#            epochs=epochs, 
+#            early_stopping=early_stopping, 
+#            patience=patience, 
+#            save_path=unet_save_path, 
+#            predict_dir=unet_predict_dir,
+#            epochs_between_prediction=epochs_between_prediction,
+# )
 
 # train_loader, val_loader, test_loader = get_dataloaders(manifest_path, batch_size=batch_size, num_workers=num_workers, dataset_class=PairedCTCBCTDatasetNPY, train_size=train_size, val_size=val_size, test_size=test_size, augmentation=augmentation)
 
@@ -120,4 +119,25 @@ train_unet(unet=unet,
 #     num_images_to_save=100
 # )
 
+# import numpy as np
+# import matplotlib.pyplot as plt
+# train_loader, val_loader, test_loader = get_dataloaders(manifest_path, batch_size=batch_size, num_workers=num_workers, dataset_class=PairedCTCBCTDatasetNPY, train_size=train_size, val_size=val_size, test_size=test_size, augmentation=augmentation)
+# for (ct, cbct) in train_loader:
+#     ct_image = ct[0].squeeze().numpy()  # Assuming ct and cbct are PyTorch tensors
+#     cbct_image = cbct[0].squeeze().numpy() # Assuming cbct had a typo: squueze -> squeeze
+
+#     fig, axes = plt.subplots(1, 2, figsize=(10, 5))  # Create a figure with 1 row and 2 columns
+
+#     # Display CT image in the first subplot
+#     im1 = axes[0].imshow(ct_image, cmap='gray', vmin=-1, vmax=1)
+#     axes[0].set_title('CT Image')
+#     axes[0].axis('off')
+
+#     # Display CBCT image in the second subplot
+#     im2 = axes[1].imshow(cbct_image, cmap='gray', vmin=-1, vmax=1)
+#     axes[1].set_title('CBCT Image')
+#     axes[1].axis('off')
+
+#     plt.tight_layout()  # Adjust layout to prevent overlapping titles
+#     plt.show()
 print("All trainings finished.")

@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 from evaluation import compute_mae, compute_rmse, compute_psnr, DATA_RANGE, ssim
 from PIL import Image
 from torchvision import transforms
+import random
 
 # ──────── constants ───────────────────────────────────────────────────────────
 DATA_RANGE = 2000.0    # CT range -1000…1000
@@ -130,10 +131,7 @@ def plot_multi_side_by_side(test_dirs, gt_dir, volume_idx, slice_num):
     plt.tight_layout(rect=[0, 0.04, 1, 0.95])
     plt.show()
 
-def main():
-    volume_idx = 3
-    slice_num = 120
-
+def plot(volume_idx, slice_num):
     test_dirs = [
         # os.path.expanduser(f"/Users/Niklas/thesis/predictions/v1/volume-{volume_idx}"),
         # os.path.expanduser(f"/Users/Niklas/thesis/predictions/basic/volume-{volume_idx}"),
@@ -146,5 +144,16 @@ def main():
     
     plot_multi_side_by_side(test_dirs, gt_dir, volume_idx, slice_num)
 
+def plot_random_slice(volume_idx):
+    while True:
+        slice_num = random.randint(0, 363)
+        plot(volume_idx, slice_num)
+
+
+def plot_specific():
+    volume_idx = 3
+    slice_num = 120
+    plot(volume_idx, slice_num)
+
 if __name__ == "__main__":
-    main()
+    plot_random_slice(3)

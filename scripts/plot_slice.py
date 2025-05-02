@@ -64,8 +64,9 @@ def plot_multi_side_by_side(test_dirs, gt_dir, volume_idx, slice_num):
     test_names  = []
     for idx, test_dir in enumerate(test_dirs):
         img = np.load(os.path.join(test_dir, filename))
-        
-        if os.path.basename(test_dir) == "test":
+
+        cbct_names = ["test", "scaled-490"]
+        if os.path.basename(test_dir) in cbct_names:
             img = apply_transform(img)
 
         img = crop_back(img)
@@ -130,13 +131,15 @@ def plot_multi_side_by_side(test_dirs, gt_dir, volume_idx, slice_num):
     plt.show()
 
 def main():
-    volume_idx = 33
-    slice_num = 191
+    volume_idx = 3
+    slice_num = 50
 
     test_dirs = [
         os.path.expanduser(f"/Users/Niklas/thesis/predictions/v1/volume-{volume_idx}"),
         # os.path.expanduser(f"/Users/Niklas/thesis/predictions/basic/volume-{volume_idx}"),
         os.path.expanduser("/Users/Niklas/thesis/training_data/CBCT/test"),
+        os.path.expanduser(f"/Users/Niklas/thesis/predictions/v1_490/volume-{volume_idx}"),
+        os.path.expanduser("/Users/Niklas/thesis/training_data/CBCT/scaled-490"),
     ]
     gt_dir = os.path.expanduser("/Users/Niklas/thesis/training_data/CT/test")
     

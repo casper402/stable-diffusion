@@ -316,9 +316,10 @@ def main():
        "bigvae.pth",
        # "bigvaeV2.pth",
        # "bigvaeV3.pth",
-       "bigvaeV5.pth",
-       "vaeV5.pth",
-       "vaeV6.pth"
+       # "bigvaeV5.pth",
+       # "vaeV5.pth",
+       "vaeV6.pth",
+       "vae_joint_v1.pth"
     ]
     vaes = []
     for path in vae_paths:

@@ -199,9 +199,8 @@ def train_unet(
         current_epoch_lr = learning_rate
 
         if epoch < warmup_epochs:
-            remaining_fraction = 1.0 - (epoch / warmup_epochs)
-            current_epoch_lr = learning_rate + (warmup_lr - learning_rate) * remaining_fraction
-            current_epoch_lr = max(current_epoch_lr, learning_rate)
+            lr_factor = (epoch + 1) / warmup_epochs
+            current_epoch_lr = warmup_lr + lr_factor * (learning_rate - warmup_lr)
 
             for param_group in optimizer.param_groups:
                 param_group['lr'] = current_epoch_lr
@@ -257,7 +256,9 @@ def train_unet(
                 val_loss += loss.item()
         val_loss /= len(val_loader)
         
-        scheduler.step(val_loss)
+        if epoch >= warmup_epochs:
+            scheduler.step(val_loss)
+
         early_stopping_counter += 1
         print(f"Epoch {epoch+1} | Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f} | LR: {current_epoch_lr:.2e}{' (Warmup)' if epoch < warmup_epochs else ''}")
 

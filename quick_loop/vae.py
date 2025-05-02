@@ -82,11 +82,26 @@ def predict_vae(vae, x, save_path=None):
                 nrow=len(images_to_save),
             )
 
-def train_vae(vae, train_loader, val_loader, epochs=1000, save_path='vae.pth', predict_dir=None, early_stopping=None, patience=None, perceptual_weight=0.1, ssim_weight=0.8, mse_weight=0.0, kl_weight=0.00001, l1_weight=1.0):
+def train_vae(
+        vae, 
+        train_loader, 
+        val_loader, 
+        epochs=1000, 
+        save_path='vae.pth', 
+        predict_dir=None, 
+        early_stopping=None, 
+        patience=None, 
+        perceptual_weight=0.1, 
+        ssim_weight=0.8, 
+        mse_weight=0.0, 
+        kl_weight=0.00001, 
+        l1_weight=1.0,
+        learning_rate=5.0e-5
+    ):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     perceptual_loss = PerceptualLoss(device=device)
     ssim_loss = SsimLoss()
-    optimizer = torch.optim.AdamW(vae.parameters(), lr=5.0e-5)
+    optimizer = torch.optim.AdamW(vae.parameters(), lr=learning_rate)
     if not patience:
         patience = epochs
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(

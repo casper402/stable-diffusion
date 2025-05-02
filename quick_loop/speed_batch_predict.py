@@ -111,7 +111,7 @@ def predict_volume(
         names = [fn for fn, _ in batch]
         imgs = torch.stack([t for _, t in batch], dim=0).to(device).half()
 
-        with torch.inference_mode():
+        with torch.inference_mode(), torch.cuda.amp.autocast():
             # 1) Degradation removal / control inputs
             control_inputs, _ = dr_module(imgs)
             # 2) VAE encode

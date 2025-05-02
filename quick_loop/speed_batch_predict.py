@@ -1,5 +1,4 @@
 import os
-import math
 import numpy as np
 import torch
 import torch.nn as nn
@@ -93,6 +92,7 @@ def predict_volume(
     betas = diffusion.beta.to(device).half()
     alpha_cumprod = diffusion.alpha_cumprod.to(device).half()
     T = diffusion.timesteps
+    T_max = T - 1
 
     vae.to(device).eval()
     unet.to(device).eval()
@@ -105,9 +105,9 @@ def predict_volume(
         dr_module = nn.DataParallel(dr_module)
 
     os.makedirs(save_dir, exist_ok=True)
-    schedule = make_mixed_schedule(T=T, N=ddim_steps, p=power_p, fine_cutoff=fine_cutoff)
+    schedule = make_mixed_schedule(T=T_max, N=ddim_steps, p=power_p, fine_cutoff=fine_cutoff)
 
-    for batch_idx, batch in enumerate(chunks(cbct_slices, batch_size), start=1):
+    for batch in chunks(cbct_slices, batch_size):
         names = [fn for fn, _ in batch]
         imgs = torch.stack([t for _, t in batch], dim=0).to(device).half()
 
@@ -122,7 +122,6 @@ def predict_volume(
             for i in range(len(schedule) - 1):
                 t, t_prev = int(schedule[i]), int(schedule[i + 1])
                 t_tensor = torch.full((z.size(0),), t, device=device, dtype=torch.long)
-                # combine controlnet + unet steps
                 down_res, mid_res = controlnet(z, control_inputs, t_tensor)
                 eps = unet(z, t_tensor, down_res, mid_res)
 
@@ -155,7 +154,6 @@ if __name__ == '__main__':
         transforms.Resize((256, 256)),
     ])
 
-    # Load & prep models in half precision
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     vae = load_vae(VAE_SAVE_PATH).half()
     unet = load_unet_control_paca(UNET_SAVE_PATH, PACA_LAYERS_SAVE_PATH).half()

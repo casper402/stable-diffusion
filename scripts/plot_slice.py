@@ -135,10 +135,11 @@ def main():
     slice_num = 50
 
     test_dirs = [
-        os.path.expanduser(f"/Users/Niklas/thesis/predictions/v1/volume-{volume_idx}"),
+        # os.path.expanduser(f"/Users/Niklas/thesis/predictions/v1/volume-{volume_idx}"),
         # os.path.expanduser(f"/Users/Niklas/thesis/predictions/basic/volume-{volume_idx}"),
-        os.path.expanduser("/Users/Niklas/thesis/training_data/CBCT/test"),
+        # os.path.expanduser("/Users/Niklas/thesis/training_data/CBCT/test"),
         os.path.expanduser(f"/Users/Niklas/thesis/predictions/v1_490/volume-{volume_idx}"),
+        os.path.expanduser(f"/Users/Niklas/thesis/predictions/v1_490_speed/volume-{volume_idx}"),
         os.path.expanduser("/Users/Niklas/thesis/training_data/CBCT/scaled-490"),
     ]
     gt_dir = os.path.expanduser("/Users/Niklas/thesis/training_data/CT/test")

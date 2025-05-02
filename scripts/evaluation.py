@@ -223,18 +223,23 @@ def collect_slice_stats(volumes, cbct_base, pred_base,
     return stats
 
 if __name__ == "__main__":
-    volumes = [3, 8, 12, 26, 32, 33, 35, 54, 59, 61, 106, 116, 129]
+    volumes_all = [3, 8, 12, 26, 32, 33, 35, 54, 59, 61, 106, 116, 129]
+    volumes = [3]
 
     cbct_base    = os.path.expanduser("~/thesis/training_data/CBCT/test")
+    cbct490_base = os.path.expanduser("~/thesis/training_data/CBCT/scaled-490")
     pred_base    = os.path.expanduser("~/thesis/predictions/v1")
+    pred490_base = os.path.expanduser("~/thesis/predictions/v1_490")
 
     gt_folder          = os.path.expanduser("~/thesis/training_data/CT/test")
     liver_mask_folder  = os.path.expanduser("~/thesis/training_data/liver/test")
     tumor_mask_folder  = os.path.expanduser("~/thesis/training_data/tumor/test")
 
     eval_sets = [
-        ("CBCT", cbct_base, True),
-        ("Pred", pred_base, False),
+        # ("CBCT", cbct_base, True),
+        ("CBCT490", cbct490_base, True),
+        # ("Pred", pred_base, False),
+        ("Pred490", pred490_base, False),
     ]
 
     # ──────── 1) GLOBAL & REGION‐BASED EVAL ─────────────────────────────────
@@ -313,6 +318,8 @@ if __name__ == "__main__":
             )
             row_parts.append(part)
         print(f"{'ALL':>4} | {region:>6} | " + " | ".join(row_parts))
+
+    raise Exception("just wanted to stop earlier, remove this if you want per slice statistics")
 
     # ──────── 2) PER‐SLICE STATISTICS ───────────────────────────────────────────
     slice_stats = collect_slice_stats(

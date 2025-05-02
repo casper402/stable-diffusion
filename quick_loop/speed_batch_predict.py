@@ -90,8 +90,8 @@ def predict_volume(
     torch.backends.cudnn.benchmark = True
 
     diffusion = Diffusion(device)
-    betas = diffusion.beta.to(device)
-    alpha_cumprod = diffusion.alpha_cumprod.to(device)
+    betas = diffusion.beta.to(device).half()
+    alpha_cumprod = diffusion.alpha_cumprod.to(device).half()
     T = diffusion.timesteps
 
     vae.to(device).eval()
@@ -109,7 +109,7 @@ def predict_volume(
 
     for batch_idx, batch in enumerate(chunks(cbct_slices, batch_size), start=1):
         names = [fn for fn, _ in batch]
-        imgs = torch.stack([t for _, t in batch], dim=0).to(device)
+        imgs = torch.stack([t for _, t in batch], dim=0).to(device).half()
 
         with torch.inference_mode():
             # 1) Degradation removal / control inputs
@@ -161,11 +161,6 @@ if __name__ == '__main__':
     unet = load_unet_control_paca(UNET_SAVE_PATH, PACA_LAYERS_SAVE_PATH).half()
     controlnet = load_controlnet(CONTROLNET_SAVE_PATH).half()
     dr_module = load_degradation_removal(DEGRADATION_REMOVAL_SAVE_PATH).half()
-
-    # Optional: Torch-compile for further speed
-    unet = torch.compile(unet)
-    controlnet = torch.compile(controlnet)
-    dr_module = torch.compile(dr_module)
 
     for vol in VOLUME_INDICES:
         print(f"Starting inference for volume {vol}")

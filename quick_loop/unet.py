@@ -176,7 +176,7 @@ def train_unet(
         factor=0.5,            
         patience=patience,           
         threshold=1e-4,        
-        min_lr=1e-6            
+        min_lr=1e-8            
     )
     diffusion = Diffusion(device)
 
@@ -199,8 +199,9 @@ def train_unet(
         current_epoch_lr = learning_rate
 
         if epoch < warmup_epochs:
-            lr_factor = epoch+1 / warmup_epochs
-            current_epoch_lr = warmup_lr + lr_factor * (learning_rate - warmup_lr)
+            lr_increase = learning_rate - warmup_lr
+            warmup_factor = (epoch + 1) / warmup_epochs
+            current_epoch_lr = warmup_lr + warmup_factor * lr_increase
 
             for param_group in optimizer.param_groups:
                 param_group['lr'] = current_epoch_lr
@@ -210,6 +211,7 @@ def train_unet(
             current_epoch_lr = learning_rate
             for param_group in optimizer.param_groups:
                 param_group['lr'] = learning_rate
+
         else:
             current_epoch_lr = optimizer.param_groups[0]['lr']
 

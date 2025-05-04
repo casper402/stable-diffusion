@@ -167,8 +167,8 @@ class CTDatasetNPY(Dataset):
             self.augmentation_transform = transforms.Compose([
                 transforms.RandomAffine(
                     degrees=1,       # Random rotation between -rot..+rot degrees
-                    translate=(0.20, 0.20), # Random translation up to fraction% horizontally and vertically
-                    scale=(0.80, 1.20), # Add slight scaling
+                    translate=(0.10, 0.10), # Random translation up to fraction% horizontally and vertically
+                    scale=(0.90, 1.10), # Add slight scaling
                     # shear=5,           # Add slight shear
                     fill=-1              # Fill new pixels with -1, consistent with Pad
                 ),

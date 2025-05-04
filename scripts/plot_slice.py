@@ -133,12 +133,13 @@ def plot_multi_side_by_side(test_dirs, gt_dir, volume_idx, slice_num):
 
 def plot(volume_idx, slice_num):
     test_dirs = [
-        # os.path.expanduser(f"/Users/Niklas/thesis/predictions/v1/volume-{volume_idx}"),
+        os.path.expanduser(f"/Users/Niklas/thesis/predictions/v1/volume-{volume_idx}"),
+        os.path.expanduser(f"/Users/Niklas/thesis/predictions/v1_speed/volume-{volume_idx}"),
         # os.path.expanduser(f"/Users/Niklas/thesis/predictions/basic/volume-{volume_idx}"),
-        # os.path.expanduser("/Users/Niklas/thesis/training_data/CBCT/test"),
-        os.path.expanduser(f"/Users/Niklas/thesis/predictions/v1_490/volume-{volume_idx}"),
-        os.path.expanduser(f"/Users/Niklas/thesis/predictions/v1_490_speed/volume-{volume_idx}"),
-        os.path.expanduser("/Users/Niklas/thesis/training_data/CBCT/scaled-490"),
+        os.path.expanduser("/Users/Niklas/thesis/training_data/CBCT/test"),
+        # os.path.expanduser(f"/Users/Niklas/thesis/predictions/v1_490/volume-{volume_idx}"),
+        # os.path.expanduser(f"/Users/Niklas/thesis/predictions/v1_490_speed/volume-{volume_idx}"),
+        # os.path.expanduser("/Users/Niklas/thesis/training_data/CBCT/scaled-490"),
     ]
     gt_dir = os.path.expanduser("/Users/Niklas/thesis/training_data/CT/test")
     
@@ -156,4 +157,4 @@ def plot_specific():
     plot(volume_idx, slice_num)
 
 if __name__ == "__main__":
-    plot_random_slice(3)
+    plot_random_slice(116)

@@ -22,7 +22,7 @@ BOTTOM_CROP = int(round((PAD_B / _pad_h) * RES_H))
 LEFT_CROP   = int(round((PAD_L / _pad_w) * RES_W))
 RIGHT_CROP  = int(round((PAD_R / _pad_w) * RES_W))
 
-# ──────── slice‐selection for evaluation ───────────────────────────────────────
+# ──────── slice-selection for evaluation ───────────────────────────────────────
 SLICE_RANGES = {
     3: None,
     8: (0, 354),
@@ -38,6 +38,9 @@ SLICE_RANGES = {
     116: None,
     129: (5, 346)
 }
+
+# all volumes are valid; None means include all slices
+VALID_VOLUMES = list(SLICE_RANGES.keys())
 
 # ──────── transforms & crops ──────────────────────────────────────────────────
 gt_transform = transforms.Compose([
@@ -74,7 +77,7 @@ def compute_rmse(a, b):
 def compute_psnr(a, b, data_range):
     return psnr(b, a, data_range=data_range)
 
-# ──────── per‐slice comparison ────────────────────────────────────────────────
+# ──────── per-slice comparison ────────────────────────────────────────────────
 def compare_single(fname, test_folder, gt_folder, lm_folder, tm_folder, is_cbct):
     test = np.load(os.path.join(test_folder, fname))
     gt   = np.load(os.path.join(gt_folder,   fname))
@@ -114,23 +117,26 @@ def compare_single(fname, test_folder, gt_folder, lm_folder, tm_folder, is_cbct)
         t_mae, t_rmse, t_psnr, t_ssim
     )
 
-def compare_batch(vol_idx, test_base, gt_folder, lm_folder, tm_folder, is_cbct):
-    test_folder = test_base if is_cbct else os.path.join(test_base, f"volume-{vol_idx}")
-    pattern = os.path.join(test_folder, f"volume-{vol_idx}_slice_*.npy")
+# ──────── helper to list & filter slice files ─────────────────────────────────
+def get_slice_files(folder, vol_idx, is_cbct=False):
+    base = folder if is_cbct else os.path.join(folder, f"volume-{vol_idx}")
+    pattern = os.path.join(base, f"volume-{vol_idx}_slice_*.npy")
     files = sorted(glob.glob(pattern))
-    if not files:
-        print(f"No files for volume {vol_idx}")
-        return None
-
-    # apply slice‐range
     rng = SLICE_RANGES.get(vol_idx)
     if rng is not None:
         start, end = rng
-        files = [f for f in files
-                 if start <= int(os.path.basename(f).split('_')[-1].split('.')[0]) <= end]
-        if not files:
-            print(f"No files in range {start}-{end} for volume {vol_idx}")
-            return None
+        files = [
+            f for f in files
+            if start <= int(os.path.basename(f).split('_')[-1].split('.')[0]) <= end
+        ]
+    return files
+
+# ──────── batch & global eval ─────────────────────────────────────────────────
+def compare_batch(vol_idx, test_base, gt_folder, lm_folder, tm_folder, is_cbct):
+    files = get_slice_files(test_base, vol_idx, is_cbct)
+    if not files:
+        print(f"No files for volume {vol_idx}")
+        return None
 
     keys = ["g_mae","g_rmse","g_psnr","g_ssim",
             "l_mae","l_rmse","l_psnr","l_ssim",
@@ -138,8 +144,8 @@ def compare_batch(vol_idx, test_base, gt_folder, lm_folder, tm_folder, is_cbct):
     acc = {k: [] for k in keys}
     for p in files:
         vals = compare_single(os.path.basename(p),
-                              test_folder, gt_folder,
-                              lm_folder, tm_folder, is_cbct)
+                              test_base if is_cbct else os.path.join(test_base, f"volume-{vol_idx}"),
+                              gt_folder, lm_folder, tm_folder, is_cbct)
         for k, v in zip(keys, vals):
             acc[k].append(v)
     return tuple(np.nanmean(acc[k]) for k in keys)
@@ -153,7 +159,7 @@ def run_eval(vols, base_folder, is_cbct, gt_folder, lm_folder, tm_folder):
             res[v] = vals
     return res
 
-# ──────── per‐slice stats collector with range filtering ──────────────────────
+# ──────── per-slice stats collector with range filtering ──────────────────────
 SliceStat = namedtuple("SliceStat", [
     "volume", "slice_idx",
     "cbct_mae", "pred_mae", "delta_mae",
@@ -165,47 +171,31 @@ def collect_slice_stats(volumes, cbct_base, pred_base,
                         gt_folder, lm_folder, tm_folder):
     stats = []
     for v in volumes:
-        # gather CBCT files and apply the same slice‐range
-        pattern = os.path.join(cbct_base, f"volume-{v}_slice_*.npy")
-        files = sorted(glob.glob(pattern))
-        rng = SLICE_RANGES.get(v)
-        if rng is not None:
-            start, end = rng
-            files = [f for f in files
-                     if start <= int(os.path.basename(f).split('_')[-1].split('.')[0]) <= end]
-
+        files = get_slice_files(cbct_base, v, is_cbct=True)
         for cbct_f in files:
             fname = os.path.basename(cbct_f)
             idx = int(fname.split('_')[-1].split('.')[0])
-
-            # CBCT metrics
             cbct_vals = compare_single(
                 fname, cbct_base,
                 gt_folder, lm_folder, tm_folder,
                 is_cbct=True
             )
-            # Pred metrics
             pred_folder = os.path.join(pred_base, f"volume-{v}")
             pred_vals = compare_single(
                 fname, pred_folder,
                 gt_folder, lm_folder, tm_folder,
                 is_cbct=False
             )
-
-            # tumor mask & pixel count (after transform+crop)
             tm_raw = np.load(os.path.join(tm_folder, fname)).astype(bool)
             tm_mask = crop_back(apply_transform_to_mask(tm_raw))
             tumor_pixels = int(tm_mask.sum())
-
-            # unpack relevant metrics
             cbct_mae   = cbct_vals[0]
             pred_mae   = pred_vals[0]
             delta_mae  = abs(cbct_mae - pred_mae)
             cbct_ssim  = cbct_vals[3]
             pred_ssim  = pred_vals[3]
             delta_ssim = abs(cbct_ssim - pred_ssim)
-            t_pred_mae = pred_vals[8]  # tumor MAE
-
+            t_pred_mae = pred_vals[8]
             stats.append(
                 SliceStat(
                     volume=v,
@@ -223,29 +213,25 @@ def collect_slice_stats(volumes, cbct_base, pred_base,
     return stats
 
 if __name__ == "__main__":
-    volumes = [3, 8, 12, 26, 32, 33, 35, 54, 59, 61, 106, 116, 129]
+    volumes = VALID_VOLUMES
 
-    cbct_base    = os.path.expanduser("~/thesis/training_data/CBCT/test")
-    cbct490_base = os.path.expanduser("~/thesis/training_data/CBCT/scaled-490")
-    pred_base    = os.path.expanduser("~/thesis/predictions/v1")
-    predspeed_base    = os.path.expanduser("~/thesis/predictions/v1_speed")
-    pred490_base = os.path.expanduser("~/thesis/predictions/v1_490")
-    pred490speed_base = os.path.expanduser("~/thesis/predictions/v1_490_speed")
+    cbct_base           = os.path.expanduser("~/thesis/training_data/CBCT/test")
+    cbct490_base        = os.path.expanduser("~/thesis/training_data/CBCT/scaled-490")
+    pred_base           = os.path.expanduser("~/thesis/predictions/v1")
+    predspeed_base      = os.path.expanduser("~/thesis/predictions/v1_speed")
+    pred490_base        = os.path.expanduser("~/thesis/predictions/v1_490")
+    pred490speed_base   = os.path.expanduser("~/thesis/predictions/v1_490_speed")
 
-    gt_folder          = os.path.expanduser("~/thesis/training_data/CT/test")
-    liver_mask_folder  = os.path.expanduser("~/thesis/training_data/liver/test")
-    tumor_mask_folder  = os.path.expanduser("~/thesis/training_data/tumor/test")
+    gt_folder           = os.path.expanduser("~/thesis/training_data/CT/test")
+    liver_mask_folder   = os.path.expanduser("~/thesis/training_data/liver/test")
+    tumor_mask_folder   = os.path.expanduser("~/thesis/training_data/tumor/test")
 
     eval_sets = [
-        # ("CBCT", cbct_base, True),
-        # ("CBCT490", cbct490_base, True),
-        ("Slow", pred_base, False),
-        ("Fast", predspeed_base, False),
-        # ("Slow", pred490_base, False),
-        # ("Fast", pred490speed_base, False),
+        ("Slow",  pred_base,      False),
+        ("Fast",  predspeed_base, False),
     ]
 
-    # ──────── 1) GLOBAL & REGION‐BASED EVAL ─────────────────────────────────
+    # ──────── 1) GLOBAL & REGION‑BASED EVAL ─────────────────────────────────
     results = {
         label: run_eval(volumes, folder, is_cbct,
                         gt_folder, liver_mask_folder, tumor_mask_folder)
@@ -272,8 +258,8 @@ if __name__ == "__main__":
             )
             parts.append(part)
         print(f"{v:4d} | " + " | ".join(parts))
-    def overall(rs):
-        arr = np.stack(list(rs.values()), axis=0)
+    def overall(rr):
+        arr = np.stack(list(rr.values()), axis=0)
         return np.nanmean(arr, axis=0)
     overall_results = {label: overall(results[label]) for label,_,_ in eval_sets}
     print("-" * len(hdr_g))
@@ -322,18 +308,17 @@ if __name__ == "__main__":
             row_parts.append(part)
         print(f"{'ALL':>4} | {region:>6} | " + " | ".join(row_parts))
 
-    raise Exception("just wanted to stop earlier, remove this if you want per slice statistics")
-
-    # ──────── 2) PER‐SLICE STATISTICS ───────────────────────────────────────────
+    # ──────── 2) PER-SLICE STATISTICS ───────────────────────────────────────────
     slice_stats = collect_slice_stats(
         volumes,
-        cbct_base, pred_base,
+        cbct_base,
+        pred_base,
         gt_folder,
         liver_mask_folder,
         tumor_mask_folder
     )
 
-    # (a) Top‐5 ΔMAE per volume
+    # (a) Top-5 ΔMAE per volume
     per_vol_max_mae = {}
     for s in slice_stats:
         cur = per_vol_max_mae.get(s.volume)
@@ -343,26 +328,26 @@ if __name__ == "__main__":
                              key=lambda x: x.delta_mae,
                              reverse=True)[:5]
 
-    # (b) Top‐5 ΔSSIM per volume
+    # (b) Top-5 ΔSSIM per volume
     per_vol_max_ssim = {}
     for s in slice_stats:
-        cur = per_vol_max_ssim.get(s.volume) if 'per_vol_max_ssim' in locals() else None
+        cur = per_vol_max_ssim.get(s.volume)
         if cur is None or s.delta_ssim > cur.delta_ssim:
             per_vol_max_ssim[s.volume] = s
     top5_delta_ssim = sorted(per_vol_max_ssim.values(),
                               key=lambda x: x.delta_ssim,
                               reverse=True)[:5]
 
-    # (c) Top‐5 worst Pred MAE
+    # (c) Top-5 worst Pred MAE
     top5_pred_mae = sorted(slice_stats,
                             key=lambda x: x.pred_mae,
                             reverse=True)[:5]
 
-    # (d) Top‐5 worst Pred SSIM
+    # (d) Top-5 worst Pred SSIM
     top5_pred_ssim = sorted(slice_stats,
                              key=lambda x: x.pred_ssim)[:5]
 
-    # (e) Top‐5 best Pred tumor MAE (only slices with >300 tumor px)
+    # (e) Top-5 best Pred tumor MAE (only slices with >300 tumor px)
     filtered = [s for s in slice_stats if s.tumor_pixels > 300]
     top5_tumor_best = sorted(filtered, key=lambda x: x.t_pred_mae)[:5]
 

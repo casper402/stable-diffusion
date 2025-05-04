@@ -78,6 +78,9 @@ def predict_volume(
 ):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     torch.backends.cudnn.benchmark = True
+    # enable TF32 on Ampere+ for faster matmuls
+    torch.backends.cuda.matmul.allow_tf32 = True
+    torch.backends.cudnn.allow_tf32 = True
 
     diffusion = Diffusion(device)
     betas = diffusion.beta.to(device).half()
@@ -86,11 +89,12 @@ def predict_volume(
     T_max = T - 1
     schedule = make_mixed_schedule(T=T_max)
 
-    # move models to device
-    for m in (vae, unet, controlnet, dr_module):
-        m.to(device).eval()
-
-    if torch.cuda.device_count() > 1:
+    # move models to device and convert to channels-last memory format for faster convolutions
+    vae = vae.to(device, memory_format=torch.channels_last).eval()
+    unet = unet.to(device, memory_format=torch.channels_last).eval()
+    controlnet = controlnet.to(device, memory_format=torch.channels_last).eval()
+    dr_module = dr_module.to(device, memory_format=torch.channels_last).eval()
+    if torch.cuda.device_count() > 1:() > 1:
         unet = nn.DataParallel(unet)
         controlnet = nn.DataParallel(controlnet)
         dr_module = nn.DataParallel(dr_module)
@@ -100,7 +104,7 @@ def predict_volume(
 
     for batch_idx, (names, imgs) in enumerate(dataloader, start=1):
         batch_start = time.time()
-        imgs = imgs.to(device).half()
+        imgs = imgs.to(device, memory_format=torch.channels_last).half()()
         with torch.inference_mode(), torch.cuda.amp.autocast():
             control_inputs, _ = dr_module(imgs)
             mu, logvar = vae.encode(imgs)

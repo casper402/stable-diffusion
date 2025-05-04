@@ -31,16 +31,17 @@ warmup_lr = 1e-8
 warmup_epochs = 5
 
 # Load pretrained model paths
-load_dir = "../pretrained_models"
+#load_dir = "../pretrained_models"
+load_dir = "vae_new_weights"
 load_vae_path = os.path.join(load_dir, "vae.pth")
 
 # Save prediction / model directories
-save_dir = "unet_warmup"
+save_dir = "vae_new_weights"
 os.makedirs(save_dir, exist_ok=True)
-vae_predict_dir = os.path.join(save_dir, "vae_predictions")
+vae_predict_dir = os.path.join(save_dir, "vae_predictions_v2")
 unet_predict_dir = os.path.join(save_dir, "unet_predictions")
 conditional_predict_dir = os.path.join(save_dir, "conditional_predictions")
-vae_save_path = os.path.join(save_dir, "vae.pth")
+vae_save_path = os.path.join(save_dir, "vae_v2.pth")
 unet_save_path = os.path.join(save_dir, "unet.pth")
 controlnet_save_path = os.path.join(save_dir, "controlnet.pth")
 paca_layers_save_path = os.path.join(save_dir, "paca_layers.pth")
@@ -52,44 +53,44 @@ manifest_path = "../manifest-full.csv"
 # manifest_path = "../data_quick_loop/manifest.csv" # Local config
 
 # --- VAE ---
-# train_loader, val_loader, test_loader = get_dataloaders(manifest_path, batch_size=batch_size, num_workers=num_workers, dataset_class=CTDatasetNPY, train_size=train_size, val_size=val_size, test_size=test_size, augmentation=augmentation)
-# vae = load_vae(load_vae_path, trainable=True)
-# train_vae(
-#     vae=vae, 
-#     train_loader=train_loader, 
-#     val_loader=val_loader, 
-#     epochs=epochs, 
-#     early_stopping=early_stopping, 
-#     patience=patience, 
-#     save_path=vae_save_path, 
-#     predict_dir=vae_predict_dir,
-#     perceptual_weight=0.05,
-#     ssim_weight=1,
-#     mse_weight=1.0,
-#     kl_weight=0.000001,
-#     l1_weight=0,
-#     learning_rate=5.0e-5
-# )
+train_loader, val_loader, test_loader = get_dataloaders(manifest_path, batch_size=batch_size, num_workers=num_workers, dataset_class=CTDatasetNPY, train_size=train_size, val_size=val_size, test_size=test_size, augmentation=augmentation)
+vae = load_vae(load_vae_path, trainable=True)
+train_vae(
+    vae=vae, 
+    train_loader=train_loader, 
+    val_loader=val_loader, 
+    epochs=epochs, 
+    early_stopping=early_stopping, 
+    patience=patience, 
+    save_path=vae_save_path, 
+    predict_dir=vae_predict_dir,
+    perceptual_weight=0.05,
+    ssim_weight=1,
+    mse_weight=1.0,
+    kl_weight=0.000001,
+    l1_weight=0,
+    learning_rate=5.0e-5
+)
 
 # --- UNET ---
-train_loader, val_loader, test_loader = get_dataloaders(manifest_path, batch_size=batch_size, num_workers=num_workers, dataset_class=CTDatasetNPY, train_size=train_size, val_size=val_size, test_size=test_size, augmentation=augmentation)
-vae = load_vae(load_vae_path, trainable=False)
-unet = load_unet(trainable=True, base_channels=base_channels, dropout_rate=dropout_rate)
-train_unet(unet=unet, 
-           vae=vae, 
-           train_loader=train_loader, 
-           val_loader=val_loader,
-           test_loader=test_loader, 
-           epochs=epochs, 
-           early_stopping=early_stopping, 
-           patience=patience, 
-           save_path=unet_save_path, 
-           predict_dir=unet_predict_dir,
-           epochs_between_prediction=epochs_between_prediction,
-           learning_rate=learning_rate,
-           warmup_lr=warmup_lr,
-           warmup_epochs=warmup_epochs
-)
+# train_loader, val_loader, test_loader = get_dataloaders(manifest_path, batch_size=batch_size, num_workers=num_workers, dataset_class=CTDatasetNPY, train_size=train_size, val_size=val_size, test_size=test_size, augmentation=augmentation)
+# vae = load_vae(load_vae_path, trainable=False)
+# unet = load_unet(trainable=True, base_channels=base_channels, dropout_rate=dropout_rate)
+# train_unet(unet=unet, 
+#            vae=vae, 
+#            train_loader=train_loader, 
+#            val_loader=val_loader,
+#            test_loader=test_loader, 
+#            epochs=epochs, 
+#            early_stopping=early_stopping, 
+#            patience=patience, 
+#            save_path=unet_save_path, 
+#            predict_dir=unet_predict_dir,
+#            epochs_between_prediction=epochs_between_prediction,
+#            learning_rate=learning_rate,
+#            warmup_lr=warmup_lr,
+#            warmup_epochs=warmup_epochs
+# )
 
 # train_loader, val_loader, test_loader = get_dataloaders(manifest_path, batch_size=batch_size, num_workers=num_workers, dataset_class=PairedCTCBCTDatasetNPY, train_size=train_size, val_size=val_size, test_size=test_size, augmentation=augmentation)
 

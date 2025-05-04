@@ -223,12 +223,12 @@ def collect_slice_stats(volumes, cbct_base, pred_base,
     return stats
 
 if __name__ == "__main__":
-    volumes_all = [3, 8, 12, 26, 32, 33, 35, 54, 59, 61, 106, 116, 129]
-    volumes = [3]
+    volumes = [3, 8, 12, 26, 32, 33, 35, 54, 59, 61, 106, 116, 129]
 
     cbct_base    = os.path.expanduser("~/thesis/training_data/CBCT/test")
     cbct490_base = os.path.expanduser("~/thesis/training_data/CBCT/scaled-490")
     pred_base    = os.path.expanduser("~/thesis/predictions/v1")
+    predspeed_base    = os.path.expanduser("~/thesis/predictions/v1_speed")
     pred490_base = os.path.expanduser("~/thesis/predictions/v1_490")
     pred490speed_base = os.path.expanduser("~/thesis/predictions/v1_490_speed")
 
@@ -239,9 +239,10 @@ if __name__ == "__main__":
     eval_sets = [
         # ("CBCT", cbct_base, True),
         # ("CBCT490", cbct490_base, True),
-        # ("Pred", pred_base, False),
-        ("Slow", pred490_base, False),
-        ("Fast", pred490speed_base, False),
+        ("Slow", pred_base, False),
+        ("Fast", predspeed_base, False),
+        # ("Slow", pred490_base, False),
+        # ("Fast", pred490speed_base, False),
     ]
 
     # ──────── 1) GLOBAL & REGION‐BASED EVAL ─────────────────────────────────

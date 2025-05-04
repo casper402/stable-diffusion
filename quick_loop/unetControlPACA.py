@@ -15,7 +15,7 @@ class UNetControlPaca(nn.Module):
     def __init__(self, 
                  in_channels=3, 
                  out_channels=3, 
-                 base_channels=128,
+                 base_channels=256,
                  dropout_rate=0.0):
         super().__init__()
         time_emb_dim = base_channels * 4

@@ -189,7 +189,6 @@ def train_dr_control_paca(
         factor=0.5,
         patience=patience,
         threshold=1e-4,
-        verbose=True,
         min_lr=min(1e-7, learning_rate)
     )
     diffusion = Diffusion(device, timesteps=1000)

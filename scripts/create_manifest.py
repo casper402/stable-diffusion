@@ -11,8 +11,8 @@ def create_manifest(data_root: str, output_csv: str):
     records = []
 
     for split in splits:
-        ct_dir   = os.path.join(data_root, 'CT_quick_loop',  split)
-        cbct_dir = os.path.join(data_root, 'CBCT_quick_loop', split)
+        ct_dir   = os.path.join(data_root, 'CT',  split)
+        cbct_dir = os.path.join(data_root, 'CBCT', split)
         # Gather all CT slice names
         ct_files = [f for f in os.listdir(ct_dir) if f.endswith('.npy')]
         
@@ -32,5 +32,5 @@ def create_manifest(data_root: str, output_csv: str):
     print(f"Manifest written to {output_csv} ({len(df)} entries)")
 
 if __name__ == '__main__':
-    root = '../data_quick_loop'
-    create_manifest(root, root + '/manifest.csv')
+    root = '../training_data'
+    create_manifest(root, root + '/manifest-full.csv')

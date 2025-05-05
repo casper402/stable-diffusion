@@ -6,7 +6,7 @@ import torchvision
 from utils.dataset import get_dataloaders, CTDatasetNPY, PairedCTCBCTDatasetNPY
 from models.diffusion import Diffusion
 from quick_loop.vae import load_vae, train_vae
-from quick_loop.unet import load_unet, train_unet
+from quick_loop.unet import load_unet, train_unet, train_joint
 from quick_loop.unetConditional import load_cond_unet, train_cond_unet
 from quick_loop.controlnet import load_controlnet
 from quick_loop.degradationRemoval import load_degradation_removal
@@ -16,8 +16,8 @@ from quick_loop.unetControlPACA import load_unet_control_paca, train_dr_control_
 train_size = None
 val_size = None
 test_size = 10
-batch_size = 32
-accumulation_steps = 1 # Effectively increases batch size to batch_size * accumulation_steps
+batch_size = 4
+accumulation_steps = 4 # Effectively increases batch size to batch_size * accumulation_steps
 num_workers = 8
 epochs = 2000
 early_stopping = 70
@@ -31,25 +31,27 @@ warmup_lr = 0
 warmup_epochs = 0
 
 # Load pretrained model paths
-#load_dir = "../pretrained_models"
-load_dir = "vae_new_weights"
-load_vae_path = os.path.join(load_dir, "vae.pth")
+load_dir = "../pretrained_models"
+load_vae_path = os.path.join(load_dir, "vae_joint.pth")
+load_unet_path = os.path.join(load_dir, "unet_joint.pth")
 
 # Save prediction / model directories
-save_dir = "vae_new_weights"
+save_dir = "controlnet_v2"
+# save_dir = "unet_base_channels_256_v2"
 os.makedirs(save_dir, exist_ok=True)
 vae_predict_dir = os.path.join(save_dir, "vae_predictions_v2")
 unet_predict_dir = os.path.join(save_dir, "unet_predictions")
 conditional_predict_dir = os.path.join(save_dir, "conditional_predictions")
-vae_save_path = os.path.join(save_dir, "vae_v2.pth")
-unet_save_path = os.path.join(save_dir, "unet.pth")
+vae_save_path = os.path.join(save_dir, "vae_joint_vae.pth")
+unet_save_path = os.path.join(save_dir, "unet_joint_unet.pth")
 controlnet_save_path = os.path.join(save_dir, "controlnet.pth")
 paca_layers_save_path = os.path.join(save_dir, "paca_layers.pth")
 degradation_removal_save_path = os.path.join(save_dir, "dr_module.pth")
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
-manifest_path = "../manifest-full.csv"
+# manifest_path = "../manifest-full.csv" # without CBCT
+manifest_path = "../manifest-cbct.csv" # with CBCT
 # manifest_path = "../data_quick_loop/manifest.csv" # Local config
 
 # --- VAE ---
@@ -92,6 +94,37 @@ train_vae(
 #            warmup_epochs=warmup_epochs
 # )
 
+# --- Joint UNET and VAE ---
+
+# vae = load_vae(save_path=vae_save_path, trainable=True)
+# unet = load_unet(save_path=unet_save_path, trainable=True, base_channels=base_channels, dropout_rate=dropout_rate)
+
+# Define your VAE‐loss weights:
+# vae_loss_weights = {
+#     'perceptual': 0.1,
+#     'ssim':       0.9,
+#     'mse':        0.0,
+#     'kl':         1e-5,
+#     'l1':         1.0,
+# }
+
+# train_joint(
+#     unet=unet,
+#     vae=vae,
+#     train_loader=train_loader,
+#     val_loader=val_loader,
+#     test_loader=test_loader,
+#     epochs=epochs,
+#     save_unet_path=unet_save_path,
+#     save_vae_path=vae_save_path,
+#     learning_rate=5e-6,
+#     weight_decay=1e-4,
+#     gradient_clip_val=1.0,
+#     early_stopping=early_stopping,
+#     vae_loss_weights=vae_loss_weights,
+# )
+
+# --- Conditional Unet ---
 # train_loader, val_loader, test_loader = get_dataloaders(manifest_path, batch_size=batch_size, num_workers=num_workers, dataset_class=PairedCTCBCTDatasetNPY, train_size=train_size, val_size=val_size, test_size=test_size, augmentation=augmentation)
 
 # unet = load_cond_unet(trainable=True, base_channels=base_channels, dropout_rate=dropout_rate)
@@ -109,27 +142,29 @@ train_vae(
 #     epochs_between_prediction=epochs_between_prediction,
 # )
 
-# vae = load_vae(save_path=vae_save_path, trainable=False)
-# unet = load_unet_control_paca(unet_save_path=unet_save_path, paca_trainable=True)
-# controlnet = load_controlnet(save_path=unet_save_path, trainable=True)
-# dr_module = load_degradation_removal(trainable=True)
-# unet = load_unet_control_paca(unet_save_path=unet_save_path, paca_trainable=True)
-# train_loader, val_loader, test_loader = get_dataloaders(manifest_path, batch_size=batch_size, num_workers=num_workers, dataset_class=PairedCTCBCTDatasetNPY, train_size=train_size, val_size=val_size, test_size=test_size)
-# train_dr_control_paca(
-#     vae=vae, 
-#     unet=unet, 
-#     controlnet=controlnet, 
-#     dr_module=dr_module, 
-#     train_loader=train_loader, 
-#     val_loader=val_loader, 
-#     epochs=epochs, 
-#     save_dir=save_dir, 
-#     predict_dir=conditional_predict_dir, 
-#     early_stopping=early_stopping, 
-#     patience=patience, 
-#     epochs_between_prediction=50, 
-#     accumulation_steps=accumulation_steps)
+# --- ControlNet ---
+vae = load_vae(save_path=vae_save_path, trainable=False)
+unet = load_unet_control_paca(unet_save_path=unet_save_path, paca_trainable=True)
+controlnet = load_controlnet(save_path=unet_save_path, trainable=True)
+dr_module = load_degradation_removal(trainable=True)
+unet = load_unet_control_paca(unet_save_path=unet_save_path, paca_trainable=True)
+train_loader, val_loader, test_loader = get_dataloaders(manifest_path, batch_size=batch_size, num_workers=num_workers, dataset_class=PairedCTCBCTDatasetNPY, train_size=train_size, val_size=val_size, test_size=test_size)
+train_dr_control_paca(
+    vae=vae, 
+    unet=unet, 
+    controlnet=controlnet, 
+    dr_module=dr_module, 
+    train_loader=train_loader, 
+    val_loader=val_loader, 
+    epochs=epochs, 
+    save_dir=save_dir, 
+    predict_dir=conditional_predict_dir, 
+    early_stopping=early_stopping, 
+    patience=patience, 
+    epochs_between_prediction=10, 
+    accumulation_steps=accumulation_steps)
 
+# --- Test ControlNet ---
 # _, _, test_loader = get_dataloaders(manifest_path, batch_size=batch_size, num_workers=num_workers, dataset_class=PairedCTCBCTDatasetNPY, train_size=train_size, val_size=val_size, test_size=test_size)
 # vae = load_vae(vae_save_path)
 # unet = load_unet_control_paca(unet_save_path=unet_save_path, paca_save_path=paca_layers_save_path)
@@ -145,25 +180,4 @@ train_vae(
 #     num_images_to_save=100
 # )
 
-# import numpy as np
-# import matplotlib.pyplot as plt
-# train_loader, val_loader, test_loader = get_dataloaders(manifest_path, batch_size=batch_size, num_workers=num_workers, dataset_class=PairedCTCBCTDatasetNPY, train_size=train_size, val_size=val_size, test_size=test_size, augmentation=augmentation)
-# for (ct, cbct) in train_loader:
-#     ct_image = ct[0].squeeze().numpy()  # Assuming ct and cbct are PyTorch tensors
-#     cbct_image = cbct[0].squeeze().numpy() # Assuming cbct had a typo: squueze -> squeeze
-
-#     fig, axes = plt.subplots(1, 2, figsize=(10, 5))  # Create a figure with 1 row and 2 columns
-
-#     # Display CT image in the first subplot
-#     im1 = axes[0].imshow(ct_image, cmap='gray', vmin=-1, vmax=1)
-#     axes[0].set_title('CT Image')
-#     axes[0].axis('off')
-
-#     # Display CBCT image in the second subplot
-#     im2 = axes[1].imshow(cbct_image, cmap='gray', vmin=-1, vmax=1)
-#     axes[1].set_title('CBCT Image')
-#     axes[1].axis('off')
-
-#     plt.tight_layout()  # Adjust layout to prevent overlapping titles
-#     plt.show()
 print("All trainings finished.")

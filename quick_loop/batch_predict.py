@@ -13,15 +13,16 @@ from quick_loop.unetControlPACA import load_unet_control_paca
 # ------------------------
 # Configuration Variables
 # ------------------------
-CBCT_DIR = '../training_data/CBCT/test/'
+CBCT_DIR = '../training_data/scaled-490/'
 # Possible volumes to process
-VOLUME_INDICES = [12, 26, 32, 33, 35, 54, 59, 61, 106, 116, 129] # 3 and 8 already done.
-OUT_DIR = '../predictions/'
+# VOLUME_INDICES = [3, 8, 12, 26, 32, 33, 35, 54, 59, 61, 106, 116, 129]
+VOLUME_INDICES = [3, 8]
+OUT_DIR = '../predictions490/'
 
 # Single guidance scale (set to 1.0)
 GUIDANCE_SCALE = 1.0
 # Number of slices to process in one batch (tune based on your GPU memory)
-BATCH_SIZE = 8
+BATCH_SIZE = 32
 
 MODELS_PATH = 'controlnet_training/v2/'
 VAE_SAVE_PATH = os.path.join(MODELS_PATH, 'vae.pth')

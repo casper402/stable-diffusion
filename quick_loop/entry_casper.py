@@ -27,8 +27,8 @@ base_channels = 256
 dropout_rate = 0.1
 augmentation = True # NOTE: Set augmentation parameters manually in dataset.py
 learning_rate = 1e-4
-warmup_lr = 1e-8
-warmup_epochs = 5
+warmup_lr = 0
+warmup_epochs = 0
 
 # Load pretrained model paths
 #load_dir = "../pretrained_models"

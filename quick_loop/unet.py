@@ -191,8 +191,6 @@ def train_unet(
         print("No warmup phase.")
         print(f"Main phase: Base LR={learning_rate:.2e}, ReduceLROnPlateau scheduler")
 
-
-
     for epoch in range(epochs):
         unet.train()
         train_loss = 0

@@ -82,7 +82,7 @@ class UNet(nn.Module):
 def noise_loss(pred_noise, true_noise):
     return F.mse_loss(pred_noise, true_noise)
     
-def load_cond_unet(save_path=None, trainable=False, base_channels=128, dropout_rate=0.1):
+def load_cond_unet(save_path=None, trainable=False, base_channels=256, dropout_rate=0.1):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     unet = UNet(base_channels=base_channels, dropout_rate=dropout_rate).to(device)
     print("UNET base channels:", base_channels)
@@ -166,11 +166,18 @@ def train_cond_unet(
     predict_dir=None, 
     early_stopping=None, 
     patience=None, 
-    epochs_between_prediction=50
+    epochs_between_prediction=50,
+    learning_rate=5e-5,
+    weight_decay_val=1e-4,
+    gradient_clip_val=1.0,
 ):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    optimizer = torch.optim.AdamW(unet.parameters(), lr=5.0e-5)
+    optimizer = torch.optim.AdamW(
+        unet.parameters(), 
+        lr=learning_rate,
+        weight_decay=weight_decay_val
+    )
     if patience is None:
         patience = epochs
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
@@ -180,7 +187,6 @@ def train_cond_unet(
         patience=patience,           
         threshold=1e-4,        
         min_lr=1e-6, 
-        verbose=True
     )
     diffusion = Diffusion(device)
 
@@ -215,6 +221,7 @@ def train_cond_unet(
             loss = noise_loss(pred_noise, noise)
             
             loss.backward()
+            torch.nn.utils.clip_grad_norm_(unet.parameters(), max_norm=gradient_clip_val)
             optimizer.step()
             optimizer.zero_grad()
             

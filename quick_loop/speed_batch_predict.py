@@ -16,7 +16,7 @@ from quick_loop.unetControlPACA import load_unet_control_paca
 # ------------------------
 CBCT_DIR = '../training_data/scaled-490/'
 VOLUME_INDICES = [3, 8]
-OUT_DIR = '../predictions490/'
+OUT_DIR = '../predictionsV2-490/'
 
 GUIDANCE_SCALE = 1.0
 BATCH_SIZE = 32  # tune as needed
@@ -25,9 +25,9 @@ DDIM_STEPS = 40     # total coarse sampling steps
 POWER_P = 2.0       # power-law exponent for smoothing
 FINE_CUTOFF = 9     # switch to single-step updates at t<=9 (last 10 steps)
 
-MODELS_PATH = 'controlnet_training/v2/'
-VAE_SAVE_PATH = os.path.join(MODELS_PATH, 'vae.pth')
-UNET_SAVE_PATH = os.path.join(MODELS_PATH, 'unet.pth')
+MODELS_PATH = 'controlnet_v2/'
+VAE_SAVE_PATH = os.path.join(MODELS_PATH, 'vae_joint_vae.pth')
+UNET_SAVE_PATH = os.path.join(MODELS_PATH, 'unet_joint_unet.pth')
 PACA_LAYERS_SAVE_PATH = os.path.join(MODELS_PATH, 'paca_layers.pth')
 CONTROLNET_SAVE_PATH = os.path.join(MODELS_PATH, 'controlnet.pth')
 DEGRADATION_REMOVAL_SAVE_PATH = os.path.join(MODELS_PATH, 'dr_module.pth')

@@ -86,15 +86,13 @@ def predict_volume(
     betas = diffusion.beta.to(device).half()
     alpha_cumprod = diffusion.alpha_cumprod.to(device).half()
     T = diffusion.timesteps
-    T_max = T - 1
-    schedule = make_mixed_schedule(T=T_max)
+    schedule = make_mixed_schedule(T=T)
 
-    # move models to device and convert to channels-last memory format for faster convolutions
-    vae = vae.to(device, memory_format=torch.channels_last).eval()
-    unet = unet.to(device, memory_format=torch.channels_last).eval()
-    controlnet = controlnet.to(device, memory_format=torch.channels_last).eval()
-    dr_module = dr_module.to(device, memory_format=torch.channels_last).eval()
-    if torch.cuda.device_count() > 1:() > 1:
+    vae = vae.to(device).eval()
+    unet = unet.to(device).eval()
+    controlnet = controlnet.to(device).eval()
+    dr_module = dr_module.to(device).eval()
+    if torch.cuda.device_count() > 1:
         unet = nn.DataParallel(unet)
         controlnet = nn.DataParallel(controlnet)
         dr_module = nn.DataParallel(dr_module)
@@ -104,7 +102,7 @@ def predict_volume(
 
     for batch_idx, (names, imgs) in enumerate(dataloader, start=1):
         batch_start = time.time()
-        imgs = imgs.to(device, memory_format=torch.channels_last).half()()
+        imgs = imgs.to(device).half()
         with torch.inference_mode(), torch.cuda.amp.autocast():
             control_inputs, _ = dr_module(imgs)
             mu, logvar = vae.encode(imgs)

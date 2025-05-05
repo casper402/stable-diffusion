@@ -25,7 +25,7 @@ DDIM_STEPS = 40     # total coarse sampling steps
 POWER_P = 2.0       # power-law exponent for smoothing
 FINE_CUTOFF = 9     # switch to single-step updates at t<=9 (last 10 steps)
 
-MODELS_PATH = 'controlnet_v2/'
+MODELS_PATH = 'controlnet_v2_inference/'
 VAE_SAVE_PATH = os.path.join(MODELS_PATH, 'vae_joint_vae.pth')
 UNET_SAVE_PATH = os.path.join(MODELS_PATH, 'unet_joint_unet.pth')
 PACA_LAYERS_SAVE_PATH = os.path.join(MODELS_PATH, 'paca_layers.pth')
@@ -86,7 +86,7 @@ def predict_volume(
     betas = diffusion.beta.to(device).half()
     alpha_cumprod = diffusion.alpha_cumprod.to(device).half()
     T = diffusion.timesteps
-    schedule = make_mixed_schedule(T=T)
+    schedule = make_mixed_schedule(T=T-1)
 
     vae = vae.to(device).eval()
     unet = unet.to(device).eval()

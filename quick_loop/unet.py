@@ -211,7 +211,7 @@ def train_unet(
             for param_group in optimizer.param_groups:
                 param_group['lr'] = current_epoch_lr
 
-        elif epoch == warmup_epochs:
+        elif warmup_epochs != 0 and epoch == warmup_epochs:
             print(f"Warmup finished. Setting LR precisely to {learning_rate:.2e}")
             current_epoch_lr = learning_rate
             for param_group in optimizer.param_groups:

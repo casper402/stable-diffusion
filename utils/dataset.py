@@ -156,26 +156,29 @@ class PreprocessedCBCTtoCTDataset(Dataset):
             return None
 
 class CTDatasetNPY(Dataset):
-    def __init__(self, manifest_csv: str, split: str, augmentation=False):
+    def __init__(self, manifest_csv: str, split: str, augmentation=None):
         self.df = pd.read_csv(manifest_csv)
         self.df = self.df[self.df['split'] == split].reset_index(drop=True)
         self.base_transform = transforms.Compose([
             transforms.Pad((0, 64, 0, 64), fill=-1),
             transforms.Resize((256, 256)),
         ])
-        if augmentation == True:
+        if augmentation != None:
+            degrees = augmentation.get('degrees', None)
+            translate = augmentation.get('translate', None)
+            scale = augmentation.get('scale', None)
+            shear = augmentation.get('shear', None)
             self.augmentation_transform = transforms.Compose([
                 transforms.RandomAffine(
-                    degrees=1,       # Random rotation between -rot..+rot degrees
-                    translate=(0.10, 0.10), # Random translation up to fraction% horizontally and vertically
-                    scale=(0.90, 1.10), # Add slight scaling
-                    # shear=5,           # Add slight shear
+                    degrees=degrees,       # Random rotation between -rot..+rot degrees
+                    translate=translate, # Random translation up to fraction% horizontally and vertically
+                    scale=scale, # Add slight scaling
+                    shear=shear,           # Add slight shear
                     fill=-1              # Fill new pixels with -1, consistent with Pad
                 ),
             ])
         else:
             self.augmentation_transform = None
-
 
     def __len__(self):
         return len(self.df)
@@ -248,10 +251,10 @@ class PairedCTCBCTDatasetNPY(Dataset):
 
         return ct, cbct
     
-def get_dataloaders(manifest_csv, batch_size, num_workers, dataset_class=PairedCTCBCTDatasetNPY, shuffle_train=True, drop_last=True, train_size=None, val_size=None, test_size=None, augmentation=False):
+def get_dataloaders(manifest_csv, batch_size, num_workers, dataset_class=PairedCTCBCTDatasetNPY, shuffle_train=True, drop_last=True, train_size=None, val_size=None, test_size=None, augmentation=None):
     train_dataset = dataset_class(manifest_csv=manifest_csv, split='train', augmentation=augmentation)
-    val_dataset = dataset_class(manifest_csv=manifest_csv, split='validation', augmentation=False)
-    test_dataset = dataset_class(manifest_csv=manifest_csv, split='test', augmentation=False)
+    val_dataset = dataset_class(manifest_csv=manifest_csv, split='validation', augmentation=None)
+    test_dataset = dataset_class(manifest_csv=manifest_csv, split='test', augmentation=None)
     if train_size:
         train_dataset, _ = random_split(train_dataset, [train_size, len(train_dataset) - train_size])
     if val_size:

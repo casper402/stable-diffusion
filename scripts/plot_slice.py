@@ -7,6 +7,22 @@ from PIL import Image
 from torchvision import transforms
 import random
 
+SLICE_RANGES = {
+    3: None,
+    8: (0, 354),
+    12: (0, 320),
+    26: None,
+    32: (69, 269),
+    33: (59, 249),
+    35: (91, 268),
+    54: (0, 330),
+    59: (0, 311),
+    61: (0, 315),
+    106: None,
+    116: None,
+    129: (5, 346)
+}
+
 # ──────── constants ───────────────────────────────────────────────────────────
 DATA_RANGE = 2000.0    # CT range -1000…1000
 ORIG_H, ORIG_W = 238, 366
@@ -133,21 +149,26 @@ def plot_multi_side_by_side(test_dirs, gt_dir, volume_idx, slice_num):
 
 def plot(volume_idx, slice_num):
     test_dirs = [
-        os.path.expanduser(f"/Users/Niklas/thesis/predictions/v1/volume-{volume_idx}"),
-        os.path.expanduser(f"/Users/Niklas/thesis/predictions/v1_speed/volume-{volume_idx}"),
+        # os.path.expanduser(f"/Users/Niklas/thesis/predictions/v1/volume-{volume_idx}"),
+        # os.path.expanduser(f"/Users/Niklas/thesis/predictions/v1_speed/volume-{volume_idx}"),
         # os.path.expanduser(f"/Users/Niklas/thesis/predictions/basic/volume-{volume_idx}"),
-        os.path.expanduser("/Users/Niklas/thesis/training_data/CBCT/test"),
+        # os.path.expanduser("/Users/Niklas/thesis/training_data/CBCT/test"),
         # os.path.expanduser(f"/Users/Niklas/thesis/predictions/v1_490/volume-{volume_idx}"),
         # os.path.expanduser(f"/Users/Niklas/thesis/predictions/v1_490_speed/volume-{volume_idx}"),
-        # os.path.expanduser("/Users/Niklas/thesis/training_data/CBCT/scaled-490"),
+        os.path.expanduser(f"/Users/Niklas/thesis/predictions/v2_490_speed/volume-{volume_idx}"),
+        os.path.expanduser(f"/Users/Niklas/thesis/predictions/v2_490_speed_100steps/volume-{volume_idx}"),
+        os.path.expanduser("/Users/Niklas/thesis/training_data/CBCT/scaled-490"),
     ]
     gt_dir = os.path.expanduser("/Users/Niklas/thesis/training_data/CT/test")
     
     plot_multi_side_by_side(test_dirs, gt_dir, volume_idx, slice_num)
 
 def plot_random_slice(volume_idx):
+    lb, ub = 0, 363
+    if volume_idx in SLICE_RANGES:
+        lb, ub = SLICE_RANGES[volume_idx]
     while True:
-        slice_num = random.randint(0, 363)
+        slice_num = random.randint(lb, ub)
         plot(volume_idx, slice_num)
 
 
@@ -157,5 +178,5 @@ def plot_specific():
     plot(volume_idx, slice_num)
 
 if __name__ == "__main__":
-    plot_specific()
-    # plot_random_slice(116)
+    # plot_specific()
+    plot_random_slice(8)

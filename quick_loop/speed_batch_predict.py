@@ -16,7 +16,7 @@ from quick_loop.unetControlPACA import load_unet_control_paca
 # ------------------------
 CBCT_DIR = '../training_data/scaled-490/'
 VOLUME_INDICES = [3, 8, 12, 26, 32, 33, 35, 54, 59, 61, 106, 116, 129]
-OUT_DIR = '../predictionsV2-490/'
+OUT_DIR = '../predictionsV2-490-stepsize20/'
 
 GUIDANCE_SCALE = 1.0
 BATCH_SIZE = 32  # tune as needed
@@ -24,6 +24,7 @@ BATCH_SIZE = 32  # tune as needed
 DDIM_STEPS = 40     # total coarse sampling steps
 POWER_P = 2.0       # power-law exponent for smoothing
 FINE_CUTOFF = 9     # switch to single-step updates at t<=9 (last 10 steps)
+STEP_SIZE = 20
 
 MODELS_PATH = 'controlnet_v2_inference/'
 VAE_SAVE_PATH = os.path.join(MODELS_PATH, 'vae_joint_vae.pth')
@@ -66,6 +67,21 @@ def make_mixed_schedule(T=1000, N=DDIM_STEPS, p=POWER_P, fine_cutoff=FINE_CUTOFF
     fine_ts = np.arange(fine_cutoff, -1, -1)
     return np.concatenate((smooth_ts, fine_ts))
 
+def make_linear_schedule(T: int, step_size: int = 10) -> np.ndarray:
+    """
+    Create a schedule of timesteps from T down to 0,
+    stepping by `step_size` each time.
+
+    E.g. make_linear_schedule(1000, 10)
+      -> [1000, 990, 980, ..., 10, 0]
+    """
+    # arange will include T, then go down by step_size until >= 0
+    ts = np.arange(T, -1, -step_size, dtype=int)
+    # ensure we always finish exactly at 0
+    if ts[-1] != 0:
+        ts = np.concatenate([ts, [0]])
+    return ts
+
 # ------------------------
 # Inference Function
 # ------------------------
@@ -87,6 +103,7 @@ def predict_volume(
     alpha_cumprod = diffusion.alpha_cumprod.to(device).half()
     T = diffusion.timesteps
     schedule = make_mixed_schedule(T=T-1)
+    schedule = make_linear_schedule(T=T-1, step_size=STEP_SIZE)
 
     vae = vae.to(device).eval()
     unet = unet.to(device).eval()

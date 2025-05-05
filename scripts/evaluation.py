@@ -40,7 +40,8 @@ SLICE_RANGES = {
 }
 
 # all volumes are valid; None means include all slices
-VALID_VOLUMES = list(SLICE_RANGES.keys())
+# VALID_VOLUMES = list(SLICE_RANGES.keys())
+VALID_VOLUMES = [3, 8, 35]
 
 # ──────── transforms & crops ──────────────────────────────────────────────────
 gt_transform = transforms.Compose([
@@ -217,18 +218,25 @@ if __name__ == "__main__":
 
     cbct_base           = os.path.expanduser("~/thesis/training_data/CBCT/test")
     cbct490_base        = os.path.expanduser("~/thesis/training_data/CBCT/scaled-490")
+
+    # v1 
     pred_base           = os.path.expanduser("~/thesis/predictions/v1")
     predspeed_base      = os.path.expanduser("~/thesis/predictions/v1_speed")
     pred490_base        = os.path.expanduser("~/thesis/predictions/v1_490")
     pred490speed_base   = os.path.expanduser("~/thesis/predictions/v1_490_speed")
+
+    # v2
+    v2_pred490speed_base   = os.path.expanduser("~/thesis/predictions/v2_490_speed")
+    v2_pred490speed100steps_base   = os.path.expanduser("~/thesis/predictions/v2_490_speed_100steps")
 
     gt_folder           = os.path.expanduser("~/thesis/training_data/CT/test")
     liver_mask_folder   = os.path.expanduser("~/thesis/training_data/liver/test")
     tumor_mask_folder   = os.path.expanduser("~/thesis/training_data/tumor/test")
 
     eval_sets = [
-        ("Slow",  pred_base,      False),
-        ("Fast",  predspeed_base, False),
+        ("V1",  pred_base, False),
+        ("V2-50",  v2_pred490speed_base, False),
+        ("V2-100", v2_pred490speed100steps_base , False),
     ]
 
     # ──────── 1) GLOBAL & REGION‑BASED EVAL ─────────────────────────────────
@@ -307,6 +315,8 @@ if __name__ == "__main__":
             )
             row_parts.append(part)
         print(f"{'ALL':>4} | {region:>6} | " + " | ".join(row_parts))
+
+    raise Exception("stopping early")
 
     # ──────── 2) PER-SLICE STATISTICS ───────────────────────────────────────────
     slice_stats = collect_slice_stats(

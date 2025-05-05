@@ -106,6 +106,10 @@ def predict_volume(
         with torch.inference_mode(), torch.cuda.amp.autocast():
             control_inputs, _ = dr_module(imgs)
             mu, logvar = vae.encode(imgs)
+
+            # Potentially do
+            # std = (0.5 * logvar).exp()
+            # z = mu + std * torch.randn_like(mu)
             z = torch.randn_like(mu)
 
             for i in range(len(schedule) - 1):

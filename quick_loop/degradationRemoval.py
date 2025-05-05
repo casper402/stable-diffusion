@@ -6,7 +6,7 @@ import torch.nn.functional as F
 from quick_loop.blocks import ZeroConv2d
 
 class DegradationRemoval(nn.Module):
-    def __init__(self, condition_channels=1, final_embedding_channels=128):
+    def __init__(self, condition_channels=1, final_embedding_channels=256):
         super().__init__()
         ch1 = 16
         ch2 = 32

@@ -16,8 +16,7 @@ from quick_loop.unetControlPACA import load_unet_control_paca, train_dr_control_
 train_size = None
 val_size = None
 test_size = 10
-batch_size = 16
-accumulation_steps = 1 # Effectively increases batch size to batch_size * accumulation_steps
+batch_size = 8
 num_workers = 8
 epochs = 2000
 early_stopping = 70
@@ -25,7 +24,6 @@ patience = 30
 epochs_between_prediction = 5
 base_channels = 256
 dropout_rate = 0.1
-augmentation = True # NOTE: Set augmentation parameters manually in dataset.py
 learning_rate = 5e-5
 warmup_lr = 0
 warmup_epochs = 0
@@ -46,7 +44,7 @@ kl_weight=0.000001
 l1_weight=0
 
 # Load pretrained model paths
-load_dir = "../vae_new_loss_term"
+load_dir = "../pretrained_models"
 load_vae_path = os.path.join(load_dir, "vae_new_loss_term.pth")
 load_unet_path = os.path.join(load_dir, "unet.pth")
 load_dr_module_path = os.path.join(load_dir, "dr_module-1819.pth")
@@ -70,24 +68,24 @@ manifest_path = "../manifest-full.csv" # without CBCT
 # manifest_path = "../data_quick_loop/manifest.csv" # Local config
 
 # --- VAE ---
-train_loader, val_loader, test_loader = get_dataloaders(manifest_path, batch_size=batch_size, num_workers=num_workers, dataset_class=CTDatasetNPY, train_size=train_size, val_size=val_size, test_size=test_size, augmentation=augmentation)
-vae = load_vae(load_vae_path, trainable=True)
-train_vae(
-    vae=vae, 
-    train_loader=train_loader, 
-    val_loader=val_loader, 
-    epochs=epochs, 
-    early_stopping=early_stopping, 
-    patience=patience, 
-    save_path=vae_save_path, 
-    predict_dir=vae_predict_dir,
-    perceptual_weight=perceptual_weight,
-    ssim_weight=ssim_weight,
-    mse_weight=mse_weight,
-    kl_weight=kl_weight,
-    l1_weight=l1_weight,
-    learning_rate=learning_rate
-)
+# train_loader, val_loader, test_loader = get_dataloaders(manifest_path, batch_size=batch_size, num_workers=num_workers, dataset_class=CTDatasetNPY, train_size=train_size, val_size=val_size, test_size=test_size, augmentation=augmentation)
+# vae = load_vae(load_vae_path, trainable=True)
+# train_vae(
+#     vae=vae, 
+#     train_loader=train_loader, 
+#     val_loader=val_loader, 
+#     epochs=epochs, 
+#     early_stopping=early_stopping, 
+#     patience=patience, 
+#     save_path=vae_save_path, 
+#     predict_dir=vae_predict_dir,
+#     perceptual_weight=perceptual_weight,
+#     ssim_weight=ssim_weight,
+#     mse_weight=mse_weight,
+#     kl_weight=kl_weight,
+#     l1_weight=l1_weight,
+#     learning_rate=learning_rate
+# )
 
 # --- UNET ---
 # train_loader, val_loader, test_loader = get_dataloaders(manifest_path, batch_size=batch_size, num_workers=num_workers, dataset_class=CTDatasetNPY, train_size=train_size, val_size=val_size, test_size=test_size, augmentation=augmentation)
@@ -171,25 +169,25 @@ train_vae(
 # )
 
 # --- ControlNet ---
-# vae = load_vae(save_path=load_vae_path, trainable=False)
-# unet = load_unet_control_paca(unet_save_path=load_unet_path, paca_trainable=True)
-# controlnet = load_controlnet(save_path=load_unet_path, trainable=True)
-# dr_module = load_degradation_removal(save_path=load_dr_module_path, trainable=True)
-# train_loader, val_loader, test_loader = get_dataloaders(manifest_path, batch_size=batch_size, num_workers=num_workers, dataset_class=PairedCTCBCTDatasetNPY, train_size=train_size, val_size=val_size, test_size=test_size, augmentation=augmentation)
-# train_dr_control_paca(
-#     vae=vae, 
-#     unet=unet, 
-#     controlnet=controlnet, 
-#     dr_module=dr_module, 
-#     train_loader=train_loader, 
-#     val_loader=val_loader, 
-#     epochs=epochs, 
-#     save_dir=save_dir, 
-#     predict_dir=conditional_predict_dir, 
-#     early_stopping=early_stopping, 
-#     patience=patience, 
-#     epochs_between_prediction=10, 
-#     accumulation_steps=accumulation_steps)
+vae = load_vae(save_path=load_vae_path, trainable=False)
+unet = load_unet_control_paca(unet_save_path=load_unet_path, paca_trainable=True)
+controlnet = load_controlnet(save_path=load_unet_path, trainable=True)
+dr_module = load_degradation_removal(save_path=load_dr_module_path, trainable=True)
+train_loader, val_loader, test_loader = get_dataloaders(manifest_path, batch_size=batch_size, num_workers=num_workers, dataset_class=PairedCTCBCTDatasetNPY, train_size=train_size, val_size=val_size, test_size=test_size, augmentation=augmentation)
+train_dr_control_paca(
+    vae=vae, 
+    unet=unet, 
+    controlnet=controlnet, 
+    dr_module=dr_module, 
+    train_loader=train_loader, 
+    val_loader=val_loader, 
+    epochs=epochs, 
+    save_dir=save_dir, 
+    predict_dir=conditional_predict_dir, 
+    early_stopping=early_stopping, 
+    patience=patience, 
+    epochs_between_prediction=10
+)
 
 # --- Test ControlNet ---
 # _, _, test_loader = get_dataloaders(manifest_path, batch_size=batch_size, num_workers=num_workers, dataset_class=PairedCTCBCTDatasetNPY, train_size=train_size, val_size=val_size, test_size=test_size)

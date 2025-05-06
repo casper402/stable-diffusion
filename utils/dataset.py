@@ -164,7 +164,7 @@ class CTDatasetNPY(Dataset):
             transforms.Resize((256, 256)),
         ])
         if augmentation != None:
-            degrees = augmentation.get('degrees', None)
+            degrees = augmentation.get('degrees', 0)
             translate = augmentation.get('translate', None)
             scale = augmentation.get('scale', None)
             shear = augmentation.get('shear', None)
@@ -231,7 +231,7 @@ class PairedCTCBCTDatasetNPY(Dataset):
         if self.augmentation:
             img_size = F.get_image_size(ct)
             affine_params = transforms.RandomAffine.get_params(
-                degrees = self.augmentation.get('degrees', None),
+                degrees = self.augmentation.get('degrees', 0),
                 translate = self.augmentation.get('translate', None),
                 scale_ranges = self.augmentation.get('scale', None),
                 shears = self.augmentation.get('shear', None),

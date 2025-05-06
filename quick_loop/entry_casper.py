@@ -49,7 +49,7 @@ l1_weight=0
 load_dir = "../pretrained_models"
 load_vae_path = os.path.join(load_dir, "vae_new_loss_term.pth")
 load_unet_path = os.path.join(load_dir, "unet.pth")
-load_dr_module_path = os.path(load_dir, "dr_module-1819.pth")
+load_dr_module_path = os.path.join(load_dir, "dr_module-1819.pth")
 
 # Save prediction / model directories
 save_dir = "conditional_new"
@@ -174,7 +174,7 @@ manifest_path = "../manifest-full.csv" # without CBCT
 vae = load_vae(save_path=vae_save_path, trainable=False)
 unet = load_unet_control_paca(unet_save_path=unet_save_path, paca_trainable=True)
 controlnet = load_controlnet(save_path=unet_save_path, trainable=True)
-dr_module = load_degradation_removal(trainable=True)
+dr_module = load_degradation_removal(save_path=load_dr_module_path, trainable=True)
 unet = load_unet_control_paca(unet_save_path=unet_save_path, paca_trainable=True)
 train_loader, val_loader, test_loader = get_dataloaders(manifest_path, batch_size=batch_size, num_workers=num_workers, dataset_class=PairedCTCBCTDatasetNPY, train_size=train_size, val_size=val_size, test_size=test_size, augmentation=augmentation)
 train_dr_control_paca(

@@ -156,7 +156,7 @@ class PreprocessedCBCTtoCTDataset(Dataset):
             return None
 
 class CTDatasetNPY(Dataset):
-    def __init__(self, manifest_csv: str, split: str, augmentation=None):
+    def __init__(self, manifest_csv: str, split: str, augmentation=None, use_cbct=False):
         self.df = pd.read_csv(manifest_csv)
         self.df = self.df[self.df['split'] == split].reset_index(drop=True)
         self.base_transform = transforms.Compose([
@@ -179,13 +179,19 @@ class CTDatasetNPY(Dataset):
             ])
         else:
             self.augmentation_transform = None
+        
+        self.use_cbct = use_cbct
 
     def __len__(self):
         return len(self.df)
 
     def __getitem__(self, idx):
         row = self.df.iloc[idx]
-        ct = np.load(row['ct_path']).astype(np.float32) / 1000.0
+        if self.use_cbct:
+            path = random.choice(['ct_path', 'cbct_path'])
+            ct = np.load(row[path]).astype(np.float32) / 1000.0
+        else:
+            ct = np.load(row['ct_path']).astype(np.float32) / 1000.0
         ct = torch.from_numpy(ct).unsqueeze(0)
         ct = self.base_transform(ct)
         if self.augmentation_transform:
@@ -252,9 +258,9 @@ class PairedCTCBCTDatasetNPY(Dataset):
         return ct, cbct
     
 def get_dataloaders(manifest_csv, batch_size, num_workers, dataset_class=PairedCTCBCTDatasetNPY, shuffle_train=True, drop_last=True, train_size=None, val_size=None, test_size=None, augmentation=None):
-    train_dataset = dataset_class(manifest_csv=manifest_csv, split='train', augmentation=augmentation)
-    val_dataset = dataset_class(manifest_csv=manifest_csv, split='validation', augmentation=None)
-    test_dataset = dataset_class(manifest_csv=manifest_csv, split='test', augmentation=None)
+    train_dataset = dataset_class(manifest_csv=manifest_csv, split='train', augmentation=augmentation, use_cbct=True)
+    val_dataset = dataset_class(manifest_csv=manifest_csv, split='validation', augmentation=None, use_cbct=True)
+    test_dataset = dataset_class(manifest_csv=manifest_csv, split='test', augmentation=None, use_cbct=True)
     if train_size:
         train_dataset, _ = random_split(train_dataset, [train_size, len(train_dataset) - train_size])
     if val_size:

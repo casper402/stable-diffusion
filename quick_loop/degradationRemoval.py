@@ -69,4 +69,3 @@ def load_degradation_removal(save_path=None, trainable=False):
             param.requires_grad = False
     degradation_removal.eval()
     return degradation_removal
-

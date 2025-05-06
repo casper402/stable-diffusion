@@ -233,8 +233,8 @@ class PairedCTCBCTDatasetNPY(Dataset):
             affine_params = transforms.RandomAffine.get_params(
                 degrees = self.augmentation.get('degrees', None),
                 translate = self.augmentation.get('translate', None),
-                scale = self.augmentation.get('scale', None),
-                shear = self.augmentation.get('shear', None),
+                scale_ranges = self.augmentation.get('scale', None),
+                shears = self.augmentation.get('shear', None),
                 img_size = img_size
             )
             ct = F.affine(ct, *affine_params, interpolation=transforms.InterpolationMode.BILINEAR, fill=-1)

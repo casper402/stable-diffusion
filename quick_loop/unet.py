@@ -431,3 +431,173 @@ def train_joint(
             if early_stopping and early_counter >= early_stopping:
                 print(f"➡︎ Early stopping after {early_stopping} epochs with no improvement.")
                 break
+
+def train_joint_v2(
+    unet,
+    vae,
+    train_loader,
+    val_loader,
+    test_loader=None,
+    epochs=1000,
+    save_unet_path='unet.pth',
+    save_vae_path='vae.pth',
+    learning_rate=5e-6,
+    weight_decay=1e-4,
+    gradient_clip_val=1.0,
+    early_stopping=None,
+    vae_loss_weights=None,      # dict with keys: perceptual, ssim, mse, kl, l1
+):
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    unet.to(device)
+    vae.to(device)
+
+    optimizer = AdamW(
+        list(unet.parameters()) + list(vae.parameters()),
+        lr=learning_rate,
+        weight_decay=weight_decay,
+    )
+
+    diffusion = Diffusion(device)
+    perceptual_loss = PerceptualLoss(device=device)
+    ssim_loss       = SsimLoss()
+
+    # unpack vae‐loss weights
+    perceptual_w = vae_loss_weights.get('perceptual', 0.1)
+    ssim_w       = vae_loss_weights.get('ssim',       0.8)
+    mse_w        = vae_loss_weights.get('mse',        0.0)
+    kl_w         = vae_loss_weights.get('kl',         1e-5)
+    l1_w         = vae_loss_weights.get('l1',         1.0)
+
+    best_val_loss = float('inf')
+    early_counter = 0
+
+    print("starting joint training")
+    for epoch in range(1, epochs + 1):
+        unet.train()
+        vae.train()
+
+        # accumulators
+        sum_unet_loss     = 0.0
+        sum_vae_ct_loss   = 0.0
+        sum_vae_cbct_loss = 0.0
+
+        for ct, cbct in train_loader:
+            ct   = ct.to(device)
+            cbct = cbct.to(device)
+            optimizer.zero_grad()
+
+            # === VAE paths ===
+            # CT
+            mu_ct, logvar_ct = vae.encode(ct)
+            z_ct = vae.reparameterize(mu_ct, logvar_ct)
+            recon_ct = vae.decode(z_ct)
+            loss_vae_ct = vae_loss(
+                recon_ct, ct, mu_ct, logvar_ct,
+                perceptual_loss, ssim_loss,
+                perceptual_w, ssim_w, mse_w, kl_w, l1_w
+            )
+
+            # CBCT
+            mu_cb, logvar_cb = vae.encode(cbct)
+            z_cb = vae.reparameterize(mu_cb, logvar_cb)
+            recon_cb = vae.decode(z_cb)
+            loss_vae_cb = vae_loss(
+                recon_cb, cbct, mu_cb, logvar_cb,
+                perceptual_loss, ssim_loss,
+                perceptual_w, ssim_w, mse_w, kl_w, l1_w
+            )
+
+            # === UNet path (CT only) ===
+            t = diffusion.sample_timesteps(z_ct.size(0))
+            noise = torch.randn_like(z_ct)
+            z_noisy_ct = diffusion.add_noise(z_ct, t, noise=noise)
+            pred_noise = unet(z_noisy_ct, t)
+            loss_unet = F.mse_loss(pred_noise, noise)
+
+            # combine & backward
+            total_loss = loss_unet + loss_vae_ct + loss_vae_cb
+            total_loss.backward()
+            torch.nn.utils.clip_grad_norm_(
+                list(unet.parameters()) + list(vae.parameters()),
+                max_norm=gradient_clip_val
+            )
+            optimizer.step()
+
+            # accumulate
+            sum_unet_loss     += loss_unet.item()
+            sum_vae_ct_loss   += loss_vae_ct.item()
+            sum_vae_cbct_loss += loss_vae_cb.item()
+
+        # compute averages
+        n_batches = len(train_loader)
+        avg_unet_train     = sum_unet_loss     / n_batches
+        avg_vae_ct_train   = sum_vae_ct_loss   / n_batches
+        avg_vae_cbct_train = sum_vae_cbct_loss / n_batches
+
+        # --- Validation ---
+        unet.eval()
+        vae.eval()
+        sum_unet_val     = 0.0
+        sum_vae_ct_val   = 0.0
+        sum_vae_cbct_val = 0.0
+
+        with torch.no_grad():
+            for ct, cbct in val_loader:
+                ct   = ct.to(device)
+                cbct = cbct.to(device)
+
+                # VAE CT
+                mu_ct, logvar_ct = vae.encode(ct)
+                z_ct = vae.reparameterize(mu_ct, logvar_ct)
+                recon_ct = vae.decode(z_ct)
+                l_vae_ct = vae_loss(
+                    recon_ct, ct, mu_ct, logvar_ct,
+                    perceptual_loss, ssim_loss,
+                    perceptual_w, ssim_w, mse_w, kl_w, l1_w
+                )
+
+                # VAE CBCT
+                mu_cb, logvar_cb = vae.encode(cbct)
+                z_cb = vae.reparameterize(mu_cb, logvar_cb)
+                recon_cb = vae.decode(z_cb)
+                l_vae_cb = vae_loss(
+                    recon_cb, cbct, mu_cb, logvar_cb,
+                    perceptual_loss, ssim_loss,
+                    perceptual_w, ssim_w, mse_w, kl_w, l1_w
+                )
+
+                # UNet CT
+                t = diffusion.sample_timesteps(z_ct.size(0))
+                noise = torch.randn_like(z_ct)
+                pred = unet(diffusion.add_noise(z_ct, t, noise), t)
+                l_unet = F.mse_loss(pred, noise)
+
+                sum_unet_val     += l_unet.item()
+                sum_vae_ct_val   += l_vae_ct.item()
+                sum_vae_cbct_val += l_vae_cb.item()
+
+        n_val = len(val_loader)
+        avg_unet_val     = sum_unet_val     / n_val
+        avg_vae_ct_val   = sum_vae_ct_val   / n_val
+        avg_vae_cbct_val = sum_vae_cbct_val / n_val
+        avg_comb_val     = avg_unet_val + avg_vae_ct_val + avg_vae_cbct_val
+
+        # Logging
+        print(
+            f"[Epoch {epoch}] "
+            f"TRAIN → UNet: {avg_unet_train:.4f}, VAE-CT: {avg_vae_ct_train:.4f}, VAE-CBCT: {avg_vae_cbct_train:.4f}  |  "
+            f"VAL   → UNet: {avg_unet_val:.4f}, VAE-CT: {avg_vae_ct_val:.4f}, VAE-CBCT: {avg_vae_cbct_val:.4f}"
+        )
+
+        # Save & early stopping on combined val loss
+        if avg_comb_val < best_val_loss:
+            best_val_loss = avg_comb_val
+            early_counter = 0
+            torch.save(unet.state_dict(), save_unet_path)
+            torch.save(vae.state_dict(), save_vae_path)
+            print(f"✔︎ Saved best models at epoch {epoch} (val_combined={avg_comb_val:.4f})")
+        else:
+            early_counter += 1
+            if early_stopping and early_counter >= early_stopping:
+                print(f"➡︎ Early stopping after {early_stopping} epochs with no improvement.")
+                break

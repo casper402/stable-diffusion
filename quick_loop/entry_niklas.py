@@ -6,7 +6,7 @@ import torchvision
 from utils.dataset import get_dataloaders, CTDatasetNPY, PairedCTCBCTDatasetNPY
 from models.diffusion import Diffusion
 from quick_loop.vae import load_vae, train_vae
-from quick_loop.unet import load_unet, train_unet, train_joint
+from quick_loop.unet import load_unet, train_unet, train_joint, train_joint_v2
 from quick_loop.unetConditional import load_cond_unet, train_cond_unet
 from quick_loop.controlnet import load_controlnet
 from quick_loop.degradationRemoval import load_degradation_removal
@@ -93,7 +93,7 @@ vae_loss_weights = {
 }
 
 # Jointly train UNet + VAE
-train_joint(
+train_joint_v2(
     unet=unet,
     vae=vae,
     train_loader=train_loader,

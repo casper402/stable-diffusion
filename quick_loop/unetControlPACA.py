@@ -3,7 +3,6 @@ os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:128"
 import torch
 import torch.nn as nn
 import torchvision
-from torch.cuda.amp import GradScaler, autocast ### AMP ###
 from tqdm import tqdm
 
 from models.diffusion import Diffusion
@@ -147,7 +146,6 @@ def train_dr_control_paca(
     guidance_scale=1.0, 
     epochs_between_prediction=50, 
     learning_rate=5.0e-5, 
-    accumulation_steps=1
 ):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     os.makedirs(save_dir, exist_ok=True)
@@ -177,12 +175,9 @@ def train_dr_control_paca(
     print(f"Trainable parameters in UNet:       {unet_param_count}")
     print(f"Total parameters to train:          {total_param_count}")
     
-    scaler = GradScaler(enabled=amp_enabled)
     optimizer = torch.optim.AdamW(params_to_train, lr=learning_rate) # Use AdamW
     if patience is None:
         patience = epochs
-    if accumulation_steps is None:
-        accumulation_steps = 1
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer,
         mode='min',
@@ -211,35 +206,29 @@ def train_dr_control_paca(
             cbct_img = cbct_img.to(device)
             ct_img = ct_img.to(device)
 
+            optimizer.zero_grad()
+
             with torch.no_grad():
                 ct_mu, ct_logvar = vae.encode(ct_img)
                 z_ct = vae.reparameterize(ct_mu, ct_logvar)
 
             # Forward pass
-            with autocast(enabled=amp_enabled):
-                controlnet_input, intermediate_preds = dr_module(cbct_img)
-                t = diffusion.sample_timesteps(z_ct.size(0))
-                noise = torch.randn_like(z_ct)
-                z_noisy_ct = diffusion.add_noise(z_ct, t, noise=noise)
-                down_res_samples, middle_res_sample = controlnet(z_noisy_ct, controlnet_input, t)
-                pred_noise = unet(z_noisy_ct, t, down_res_samples, middle_res_sample)
+            controlnet_input, intermediate_preds = dr_module(cbct_img)
+            t = diffusion.sample_timesteps(z_ct.size(0))
+            noise = torch.randn_like(z_ct)
+            z_noisy_ct = diffusion.add_noise(z_ct, t, noise=noise)
+            down_res_samples, middle_res_sample = controlnet(z_noisy_ct, controlnet_input, t)
+            pred_noise = unet(z_noisy_ct, t, down_res_samples, middle_res_sample)
 
-                # Compute losses
-                loss_dr = degradation_loss(intermediate_preds, ct_img)
-                loss_diff = noise_loss(pred_noise, noise)
-                total_loss = loss_diff + gamma * loss_dr
+            # Compute losses
+            loss_dr = degradation_loss(intermediate_preds, ct_img)
+            loss_diff = noise_loss(pred_noise, noise)
+            total_loss = loss_diff + gamma * loss_dr
 
-                # Gradient accumulation
-                scaled_loss = total_loss / accumulation_steps
+            total_loss.backward()
+            torch.nn.utils.clip_grad_norm_(params_to_train, max_norm=1.0)
 
-            scaler.scale(scaled_loss).backward() # Scale the loss for mixed precision
-
-            if (i + 1) % accumulation_steps == 0 or (i + 1) == len(train_loader):
-                scaler.unscale_(optimizer)
-                torch.nn.utils.clip_grad_norm_(params_to_train, max_norm=1.0) # Clip gradients
-                scaler.step(optimizer)
-                scaler.update()
-                optimizer.zero_grad()
+            optimizer.step()
 
             train_loss_total += total_loss.item()
             train_loss_diff += loss_diff.item()

@@ -25,7 +25,6 @@ patience = 10
 epochs_between_prediction = 5
 base_channels = 256
 dropout_rate = 0.1
-augmentation = True # NOTE: Set augmentation parameters manually in dataset.py
 learning_rate = 1e-4
 warmup_lr = 1e-8
 warmup_epochs = 5
@@ -53,6 +52,14 @@ print(f"Using device: {device}")
 # manifest_path = "../manifest-full.csv" # without CBCT
 manifest_path = "../manifest-cbct.csv" # with CBCT
 # manifest_path = "../data_quick_loop/manifest.csv" # Local config
+
+# Augmentation
+augmentation = {
+    'degrees': 1,
+    'translate': (0.1, 0.1),
+    'scale': (0.9, 1.1),
+    'shear': None,
+}
 
 # vae = load_vae(load_vae_path, trainable=False)
 

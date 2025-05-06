@@ -155,8 +155,9 @@ def plot(volume_idx, slice_num):
         # os.path.expanduser("/Users/Niklas/thesis/training_data/CBCT/test"),
         # os.path.expanduser(f"/Users/Niklas/thesis/predictions/v1_490/volume-{volume_idx}"),
         # os.path.expanduser(f"/Users/Niklas/thesis/predictions/v1_490_speed/volume-{volume_idx}"),
-        os.path.expanduser(f"/Users/Niklas/thesis/predictions/v2_490_speed/volume-{volume_idx}"),
-        os.path.expanduser(f"/Users/Niklas/thesis/predictions/v2_490_speed_100steps/volume-{volume_idx}"),
+        # os.path.expanduser(f"/Users/Niklas/thesis/predictions/v2_490_speed/volume-{volume_idx}"),
+        os.path.expanduser(f"/Users/Niklas/thesis/predictions/v2_490_speed_stepsize20/volume-{volume_idx}"),
+        os.path.expanduser(f"/Users/Niklas/thesis/predictions/v2_490_speed_stepsize20_v2/volume-{volume_idx}"),
         os.path.expanduser("/Users/Niklas/thesis/training_data/CBCT/scaled-490"),
     ]
     gt_dir = os.path.expanduser("/Users/Niklas/thesis/training_data/CT/test")
@@ -165,7 +166,7 @@ def plot(volume_idx, slice_num):
 
 def plot_random_slice(volume_idx):
     lb, ub = 0, 363
-    if volume_idx in SLICE_RANGES:
+    if volume_idx in SLICE_RANGES and SLICE_RANGES[volume_idx] is not None:
         lb, ub = SLICE_RANGES[volume_idx]
     while True:
         slice_num = random.randint(lb, ub)
@@ -179,4 +180,4 @@ def plot_specific():
 
 if __name__ == "__main__":
     # plot_specific()
-    plot_random_slice(8)
+    plot_random_slice(3)

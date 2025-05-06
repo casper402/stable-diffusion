@@ -16,7 +16,7 @@ from quick_loop.unetControlPACA import load_unet_control_paca
 # ------------------------
 CBCT_DIR = '../training_data/scaled-490/'
 VOLUME_INDICES = [3, 8, 12, 26, 32, 33, 35, 54, 59, 61, 106, 116, 129]
-OUT_DIR = '../predictionsV2-490-50steps_v2/'
+OUT_DIR = '../predictionsV2-490-50steps_v2_cbct/'
 
 GUIDANCE_SCALE = 1.0
 ALPHA_A = 0.2         # Mixing weight for CBCT signal at t0

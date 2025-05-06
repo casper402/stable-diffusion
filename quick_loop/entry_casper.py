@@ -171,11 +171,10 @@ manifest_path = "../manifest-full.csv" # without CBCT
 # )
 
 # --- ControlNet ---
-vae = load_vae(save_path=vae_save_path, trainable=False)
-unet = load_unet_control_paca(unet_save_path=unet_save_path, paca_trainable=True)
-controlnet = load_controlnet(save_path=unet_save_path, trainable=True)
+vae = load_vae(save_path=load_vae_path, trainable=False)
+unet = load_unet_control_paca(unet_save_path=load_unet_path, paca_trainable=True)
+controlnet = load_controlnet(save_path=load_unet_path, trainable=True)
 dr_module = load_degradation_removal(save_path=load_dr_module_path, trainable=True)
-unet = load_unet_control_paca(unet_save_path=unet_save_path, paca_trainable=True)
 train_loader, val_loader, test_loader = get_dataloaders(manifest_path, batch_size=batch_size, num_workers=num_workers, dataset_class=PairedCTCBCTDatasetNPY, train_size=train_size, val_size=val_size, test_size=test_size, augmentation=augmentation)
 train_dr_control_paca(
     vae=vae, 

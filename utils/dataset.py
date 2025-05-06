@@ -205,20 +205,13 @@ class CTDatasetWithMeta(CTDatasetNPY):
         return ct, volume_idx
 
 class PairedCTCBCTDatasetNPY(Dataset):
-    def __init__(self, manifest_csv: str, split: str, augmentation=False):
+    def __init__(self, manifest_csv: str, split: str, augmentation=None):
         self.df = pd.read_csv(manifest_csv)
-        # filter to only this split
         self.df = self.df[self.df['split'] == split].reset_index(drop=True)
         self.base_transform = transforms.Compose([
             transforms.Pad((0, 64, 0, 64), fill=-1),
             transforms.Resize((256, 256)),
         ])
-        if augmentation == True:
-                self.degrees=(-10, 10)       # Random rotation between -rot..+rot degrees
-                self.translate=(0.30, 0.30) # Random translation up to fraction% horizontally and vertically
-                self.scale=(0.70, 1.30) # Add slight scaling
-                self.shear=(-5, 5)           # Add slight shear
-                self.fill=-1              # Fill new pixels with -1, consistent with Pad
         self.augmentation = augmentation
 
     def __len__(self):
@@ -228,8 +221,6 @@ class PairedCTCBCTDatasetNPY(Dataset):
         row = self.df.iloc[idx]
         ct   = np.load(row['ct_path']).astype(np.float32)  / 1000.0
         cbct = np.load(row['cbct_path']).astype(np.float32)/ 1000.0
-
-        # add channel dim
         ct   = torch.from_numpy(ct).unsqueeze(0)
         cbct = torch.from_numpy(cbct).unsqueeze(0)
 
@@ -240,14 +231,14 @@ class PairedCTCBCTDatasetNPY(Dataset):
         if self.augmentation:
             img_size = F.get_image_size(ct)
             affine_params = transforms.RandomAffine.get_params(
-                self.degrees,
-                self.translate,
-                self.scale,
-                self.shear,
-                img_size # Pass image size [height, width]
+                degrees = self.augmentation.get('degrees', None),
+                translate = self.augmentation.get('translate', None),
+                scale = self.augmentation.get('scale', None),
+                shear = self.augmentation.get('shear', None),
+                img_size = img_size
             )
-            ct = F.affine(ct, *affine_params, interpolation=transforms.InterpolationMode.BILINEAR, fill=self.fill)
-            cbct = F.affine(cbct, *affine_params, interpolation=transforms.InterpolationMode.BILINEAR, fill=self.fill)
+            ct = F.affine(ct, *affine_params, interpolation=transforms.InterpolationMode.BILINEAR, fill=-1)
+            cbct = F.affine(cbct, *affine_params, interpolation=transforms.InterpolationMode.BILINEAR, fill=-1)
 
         return ct, cbct
     

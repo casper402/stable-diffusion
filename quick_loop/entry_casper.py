@@ -32,7 +32,7 @@ warmup_epochs = 0
 
 # Augmentation
 augmentation = {
-    'degrees': 1,
+    'degrees': (-1, 1),
     'translate': (0.1, 0.1),
     'scale': (0.9, 1.1),
     'shear': None,

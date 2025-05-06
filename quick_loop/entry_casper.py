@@ -16,7 +16,7 @@ from quick_loop.unetControlPACA import load_unet_control_paca, train_dr_control_
 train_size = None
 val_size = None
 test_size = 10
-batch_size = 16
+batch_size = 8
 num_workers = 8
 epochs = 2000
 early_stopping = 70
@@ -29,12 +29,13 @@ warmup_lr = 0
 warmup_epochs = 0
 
 # Augmentation
-augmentation = {
-    'degrees': (-1, 1),
-    'translate': (0.1, 0.1),
-    'scale': (0.9, 1.1),
-    'shear': None,
-}
+# augmentation = {
+#     'degrees': (-1, 1),
+#     'translate': (0.1, 0.1),
+#     'scale': (0.9, 1.1),
+#     'shear': None,
+# }
+augmentation = None
 
 # Vae Loss params
 perceptual_weight=0.05
@@ -50,7 +51,7 @@ load_unet_path = os.path.join(load_dir, "unet.pth")
 load_dr_module_path = os.path.join(load_dir, "dr_module-1819.pth")
 
 # Save prediction / model directories
-save_dir = "vae_new_loss_term_with_augmentation"
+save_dir = "controlnet_new_no_augmentation"
 os.makedirs(save_dir, exist_ok=True)
 vae_predict_dir = os.path.join(save_dir, "vae_predictions")
 unet_predict_dir = os.path.join(save_dir, "unet_predictions")
@@ -68,24 +69,24 @@ manifest_path = "../manifest-full.csv" # without CBCT
 # manifest_path = "../data_quick_loop/manifest.csv" # Local config
 
 # --- VAE ---
-train_loader, val_loader, test_loader = get_dataloaders(manifest_path, batch_size=batch_size, num_workers=num_workers, dataset_class=CTDatasetNPY, train_size=train_size, val_size=val_size, test_size=test_size, augmentation=augmentation)
-vae = load_vae(load_vae_path, trainable=True)
-train_vae(
-    vae=vae, 
-    train_loader=train_loader, 
-    val_loader=val_loader, 
-    epochs=epochs, 
-    early_stopping=early_stopping, 
-    patience=patience, 
-    save_path=vae_save_path, 
-    predict_dir=vae_predict_dir,
-    perceptual_weight=perceptual_weight,
-    ssim_weight=ssim_weight,
-    mse_weight=mse_weight,
-    kl_weight=kl_weight,
-    l1_weight=l1_weight,
-    learning_rate=learning_rate
-)
+# train_loader, val_loader, test_loader = get_dataloaders(manifest_path, batch_size=batch_size, num_workers=num_workers, dataset_class=CTDatasetNPY, train_size=train_size, val_size=val_size, test_size=test_size, augmentation=augmentation)
+# vae = load_vae(load_vae_path, trainable=True)
+# train_vae(
+#     vae=vae, 
+#     train_loader=train_loader, 
+#     val_loader=val_loader, 
+#     epochs=epochs, 
+#     early_stopping=early_stopping, 
+#     patience=patience, 
+#     save_path=vae_save_path, 
+#     predict_dir=vae_predict_dir,
+#     perceptual_weight=perceptual_weight,
+#     ssim_weight=ssim_weight,
+#     mse_weight=mse_weight,
+#     kl_weight=kl_weight,
+#     l1_weight=l1_weight,
+#     learning_rate=learning_rate
+# )
 
 # --- UNET ---
 # train_loader, val_loader, test_loader = get_dataloaders(manifest_path, batch_size=batch_size, num_workers=num_workers, dataset_class=CTDatasetNPY, train_size=train_size, val_size=val_size, test_size=test_size, augmentation=augmentation)
@@ -169,25 +170,25 @@ train_vae(
 # )
 
 # --- ControlNet ---
-# vae = load_vae(save_path=load_vae_path, trainable=False)
-# unet = load_unet_control_paca(unet_save_path=load_unet_path, paca_trainable=True)
-# controlnet = load_controlnet(save_path=load_unet_path, trainable=True)
-# dr_module = load_degradation_removal(save_path=load_dr_module_path, trainable=True)
-# train_loader, val_loader, test_loader = get_dataloaders(manifest_path, batch_size=batch_size, num_workers=num_workers, dataset_class=PairedCTCBCTDatasetNPY, train_size=train_size, val_size=val_size, test_size=test_size, augmentation=augmentation)
-# train_dr_control_paca(
-#     vae=vae, 
-#     unet=unet, 
-#     controlnet=controlnet, 
-#     dr_module=dr_module, 
-#     train_loader=train_loader, 
-#     val_loader=val_loader, 
-#     epochs=epochs, 
-#     save_dir=save_dir, 
-#     predict_dir=conditional_predict_dir, 
-#     early_stopping=early_stopping, 
-#     patience=patience, 
-#     epochs_between_prediction=10
-# )
+vae = load_vae(save_path=load_vae_path, trainable=False)
+unet = load_unet_control_paca(unet_save_path=load_unet_path, paca_trainable=True)
+controlnet = load_controlnet(save_path=load_unet_path, trainable=True)
+dr_module = load_degradation_removal(save_path=load_dr_module_path, trainable=True)
+train_loader, val_loader, test_loader = get_dataloaders(manifest_path, batch_size=batch_size, num_workers=num_workers, dataset_class=PairedCTCBCTDatasetNPY, train_size=train_size, val_size=val_size, test_size=test_size, augmentation=augmentation)
+train_dr_control_paca(
+    vae=vae, 
+    unet=unet, 
+    controlnet=controlnet, 
+    dr_module=dr_module, 
+    train_loader=train_loader, 
+    val_loader=val_loader, 
+    epochs=epochs, 
+    save_dir=save_dir, 
+    predict_dir=conditional_predict_dir, 
+    early_stopping=early_stopping, 
+    patience=patience, 
+    epochs_between_prediction=10
+)
 
 # --- Test ControlNet ---
 # _, _, test_loader = get_dataloaders(manifest_path, batch_size=batch_size, num_workers=num_workers, dataset_class=PairedCTCBCTDatasetNPY, train_size=train_size, val_size=val_size, test_size=test_size)
@@ -204,5 +205,53 @@ train_vae(
 #     guidance_scales=[1.0],
 #     num_images_to_save=100
 # )
+
+# import torch
+# import matplotlib.pyplot as plt
+# import numpy as np
+
+# try:
+#     batch_data = next(iter(train_loader))
+#     ct_images_batch = batch_data[0]
+#     cbct_images_batch = batch_data[1]
+# except StopIteration:
+#     print("Error: The test_loader is empty. Cannot retrieve a batch.")
+#     exit()
+# except IndexError:
+#     print("Error: Batch does not contain enough elements. Expected at least 2 for paired images.")
+#     exit()
+
+# if ct_images_batch.shape[0] == 0 or cbct_images_batch.shape[0] == 0:
+#     print("Batch is empty or one of the image tensors is empty.")
+#     exit()
+
+# for i in range(batch_size):
+#     ct_image_tensor = ct_images_batch[i]
+#     cbct_image_tensor = cbct_images_batch[i]
+
+#     ct_image_np = ct_image_tensor.cpu().numpy()
+#     ct_image_np = (ct_image_np + 1) / 2.0
+#     if ct_image_np.ndim == 3 and ct_image_np.shape[0] == 1:
+#         ct_image_np = ct_image_np.squeeze(0)
+
+#     cbct_image_np = cbct_image_tensor.cpu().numpy()
+#     cbct_image_np = (cbct_image_np + 1) / 2.0
+#     if cbct_image_np.ndim == 3 and cbct_image_np.shape[0] == 1:
+#         cbct_image_np = cbct_image_np.squeeze(0)
+
+#     fig, axes = plt.subplots(1, 2, figsize=(10, 5))
+
+#     axes[0].imshow(ct_image_np, cmap='gray', vmin=0, vmax=1)
+#     axes[0].set_title('CT Image')
+#     axes[0].axis('off')
+
+#     axes[1].imshow(cbct_image_np, cmap='gray', vmin=0, vmax=1)
+#     axes[1].set_title('CBCT Image')
+#     axes[1].axis('off')
+
+#     plt.tight_layout()
+#     plt.show()
+
+# print("Visualized one CT-CBCT pair from the batch.")
 
 print("All trainings finished.")

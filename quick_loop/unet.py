@@ -466,7 +466,7 @@ def train_unet_v2(
             log_str += f", perc={train_metrics['perceptual']:.4f}"
         log_str += f", combined={train_metrics['combined']:.4f} | "
         log_str += (
-            f"Val: noise={val_metrics['noise']:.4f}, mse={val_metrics['mpse']:.4f},"
+            f"Val: noise={val_metrics['noise']:.4f}, mse={val_metrics['mse']:.4f},"
             f" ssim={val_metrics['ssim']:.4f}"
         )
         if perceptual_loss:

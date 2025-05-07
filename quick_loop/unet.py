@@ -302,10 +302,12 @@ def train_unet_v2(
     gradient_clip_val=1.0,
     warmup_lr=0,
     warmup_epochs=0,
+    perceptual_loss=False,
+    perceptual_weight=0.025,
 ):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    optimizer = torch.optim.AdamW(
+    optimizer = AdamW(
         unet.parameters(),
         lr=learning_rate,
         weight_decay=weight_decay_val,
@@ -322,27 +324,26 @@ def train_unet_v2(
     )
     diffusion = Diffusion(device)
 
-    # Intuition: scale mse to being between 0 and 1, ssim is between 0 and 1
-    # take half of each and we have a total loss from this between 0 and 1.
+    # Loss weights
     mse_weight  = 0.25
     ssim_weight = 0.50
     ssim_loss   = SsimLoss()
 
+    # Perceptual setup
+    if perceptual_loss:
+        perc_loss_fn = PerceptualLoss(device=device)
+    
     best_val_loss = float('inf')
     es_counter    = 0
 
     print(f"Starting fine-tuning for {epochs} epochs. LR={learning_rate:.1e}")
-    print(f"MSE weight={mse_weight}, SSIM weight={ssim_weight}")
+    print(f"MSE weight={mse_weight}, SSIM weight={ssim_weight}, Perceptual={'enabled' if perceptual_loss else 'disabled'}")
 
     for epoch in range(epochs):
         unet.train()
-        # --- accumulators for train ---
-        noise_sum = 0.0
-        mse_sum   = 0.0
-        ssim_sum  = 0.0
-        total_sum = 0.0
+        noise_sum = mse_sum = ssim_sum = perc_sum = total_sum = 0.0
 
-        # Warmup LR if needed
+        # Warmup LR
         if epoch < warmup_epochs:
             warmup_factor = (epoch+1) / warmup_epochs
             lr = warmup_lr + warmup_factor * (learning_rate - warmup_lr)
@@ -352,58 +353,69 @@ def train_unet_v2(
             for g in optimizer.param_groups:
                 g['lr'] = learning_rate
 
+        # Training loop
         for x in train_loader:
             x = x.to(device)
             optimizer.zero_grad()
 
-            # encode
+            # VAE encode
             with torch.no_grad():
                 z_mu, z_lv = vae.encode(x)
                 z = vae.reparameterize(z_mu, z_lv)
 
-            # diffusion forward
+            # Diffusion forward
             t = diffusion.sample_timesteps(z.size(0))
             noise = torch.randn_like(z)
             z_noisy = diffusion.add_noise(z, t, noise=noise)
             pred_noise = unet(z_noisy, t)
 
-            # 1) latent denoising loss
+            # Noise loss
             noise_l = noise_loss(pred_noise, noise)
 
-            # 2) decode predicted clean latent
+            # Decode
             acp = diffusion.alpha_cumprod[t].view(-1,1,1,1)
             sa  = torch.sqrt(acp)
             sb  = torch.sqrt(1 - acp)
             z_hat = (z_noisy - sb*pred_noise) / sa
             x_recon = vae.decode(z_hat)
 
-            # 3) image losses
+            # Image losses
             mse_l  = F.mse_loss(x_recon, x)
             ssim_l = ssim_loss(x_recon, x)
 
-            # 4) combine
-            loss = noise_l + mse_weight * mse_l + ssim_weight * ssim_l
+            # Perceptual loss
+            perc_l = perc_loss_fn(x_recon, x) if perceptual_loss else 0.0
+
+            # Total loss
+            loss = (noise_l
+                    + mse_weight * mse_l
+                    + ssim_weight * ssim_l
+                    + (perceptual_weight * perc_l if perceptual_loss else 0))
 
             loss.backward()
             torch.nn.utils.clip_grad_norm_(unet.parameters(), gradient_clip_val)
             optimizer.step()
 
-            # accumulate
+            # Accumulate
             noise_sum += noise_l.item()
             mse_sum   += mse_l.item()
             ssim_sum  += ssim_l.item()
+            perc_sum  += (perc_l.item() if perceptual_loss else 0)
             total_sum += loss.item()
 
-        # compute train averages
-        n_avg   = noise_sum / len(train_loader)
-        mse_avg = mse_sum   / len(train_loader)
-        ssim_avg= ssim_sum  / len(train_loader)
-        vae_avg = mse_weight * mse_avg + ssim_weight * ssim_avg
-        comb_avg= total_sum / len(train_loader)
+        # Compute averages
+        n_batches = len(train_loader)
+        train_metrics = {
+            'noise': noise_sum/n_batches,
+            'mse': mse_sum/n_batches,
+            'ssim': ssim_sum/n_batches,
+            'perceptual': perc_sum/n_batches if perceptual_loss else None,
+            'combined': total_sum/n_batches,
+        }
 
-        # --- validation ---
+        # Validation
         unet.eval()
-        v_noise = v_mse = v_ssim = v_total = 0.0
+        v_noise = v_mse = v_ssim = v_perc = v_total = 0.0
         with torch.no_grad():
             for x in val_loader:
                 x = x.to(device)
@@ -416,54 +428,72 @@ def train_unet_v2(
                 pred_noise = unet(z_noisy, t)
 
                 noise_l = noise_loss(pred_noise, noise)
-
-                acp   = diffusion.alpha_cumprod[t].view(-1,1,1,1)
+                acp = diffusion.alpha_cumprod[t].view(-1,1,1,1)
                 z_hat = (z_noisy - torch.sqrt(1-acp)*pred_noise) / torch.sqrt(acp)
                 x_recon = vae.decode(z_hat)
-                x_recon = (x_recon / 2 + 0.5).clamp(0,1)
-                x_orig  = (x     / 2 + 0.5).clamp(0,1)
 
-                mse_l  = F.mse_loss(x_recon, x_orig)
-                ssim_l = ssim_loss(x_recon, x_orig)
+                mse_l  = F.mse_loss(x_recon, x)
+                ssim_l = ssim_loss(x_recon, x)
+                perc_l = perc_loss_fn(x_recon, x) if perceptual_loss else 0.0
 
-                loss_val = noise_l + mse_weight*mse_l + ssim_weight*ssim_l
+                loss_val = (noise_l
+                            + mse_weight*mse_l
+                            + ssim_weight*ssim_l
+                            + (perceptual_weight * perc_l if perceptual_loss else 0))
 
                 v_noise += noise_l.item()
                 v_mse   += mse_l.item()
                 v_ssim  += ssim_l.item()
+                v_perc  += (perc_l.item() if perceptual_loss else 0)
                 v_total += loss_val.item()
 
-        vn_avg   = v_noise / len(val_loader)
-        vmse_avg = v_mse   / len(val_loader)
-        vssim_avg= v_ssim  / len(val_loader)
-        vvae_avg = mse_weight * vmse_avg + ssim_weight * vssim_avg
-        vcomb_avg= v_total / len(val_loader)
+        # Averages
+        val_n = len(val_loader)
+        val_metrics = {
+            'noise': v_noise/val_n,
+            'mse': v_mse/val_n,
+            'ssim': v_ssim/val_n,
+            'perceptual': (v_perc/val_n if perceptual_loss else None),
+            'combined': v_total/val_n,
+        }
 
-        print(
-            f"[Epoch {epoch+1}] "
-            f"Train UNet: {n_avg:.4f}, VAE: {vae_avg:.4f}, Combined: {comb_avg:.4f}  |  "
-            f"Val UNet:   {vn_avg:.4f}, VAE:   {vvae_avg:.4f}, Combined: {vcomb_avg:.4f}"
+        # Logging
+        log_str = (
+            f"[Epoch {epoch+1}] Train: noise={train_metrics['noise']:.4f}, "
+            f"mse={train_metrics['mse']:.4f}, ssim={train_metrics['ssim']:.4f}"
         )
+        if perceptual_loss:
+            log_str += f", perc={train_metrics['perceptual']:.4f}"
+        log_str += f", combined={train_metrics['combined']:.4f} | "
+        log_str += (
+            f"Val: noise={val_metrics['noise']:.4f}, mse={val_metrics['mpse']:.4f},"
+            f" ssim={val_metrics['ssim']:.4f}"
+        )
+        if perceptual_loss:
+            log_str += f", perc={val_metrics['perceptual']:.4f}"
+        log_str += f", combined={val_metrics['combined']:.4f}"
+        print(log_str)
 
-        # scheduler & checkpoints
+        # Scheduler & early stop
         if epoch >= warmup_epochs:
-            scheduler.step(vcomb_avg)
+            scheduler.step(val_metrics['combined'])
 
-        if vcomb_avg < best_val_loss:
-            best_val_loss = vcomb_avg
+        if val_metrics['combined'] < best_val_loss:
+            best_val_loss = val_metrics['combined']
             es_counter = 0
             torch.save(unet.state_dict(), save_path)
-            print(f"✅ Saved best model (val combined loss {vcomb_avg:.4f})")
+            print(f"✅ Saved best model (val combined loss {best_val_loss:.4f})")
         else:
             es_counter += 1
             if early_stopping and es_counter >= early_stopping:
                 print(f"⏹ Early stopping after {early_stopping} epochs with no improvement.")
                 break
 
-        # optionally dump some predictions
+        # Optional predictions
         if predict_dir and (epoch+1) % epochs_between_prediction == 0:
             for i, x in enumerate(test_loader):
-                predict_unet(unet, vae, x, i, save_path=os.path.join(predict_dir, f"epoch_{epoch+1}"))
+                predict_unet(unet, vae, x, i,
+                             save_path=os.path.join(predict_dir, f"epoch_{epoch+1}"))
 
 def train_joint(
     unet,

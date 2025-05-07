@@ -162,8 +162,7 @@ train_unet_v2(unet=unet,
 #     predict_dir=conditional_predict_dir, 
 #     early_stopping=early_stopping, 
 #     patience=patience, 
-#     epochs_between_prediction=10, 
-#     accumulation_steps=accumulation_steps)
+#     epochs_between_prediction=10)
 
 # _, _, test_loader = get_dataloaders(manifest_path, batch_size=batch_size, num_workers=num_workers, dataset_class=PairedCTCBCTDatasetNPY, train_size=train_size, val_size=val_size, test_size=test_size)
 # vae = load_vae(vae_save_path)

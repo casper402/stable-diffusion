@@ -297,7 +297,7 @@ def train_unet_v2(
     early_stopping=None,
     patience=None,
     epochs_between_prediction=50,
-    learning_rate=1e-5,        # lower LR for fine-tuning
+    learning_rate=5e-5,
     weight_decay_val=1e-4,
     gradient_clip_val=1.0,
     warmup_lr=0,
@@ -442,7 +442,7 @@ def train_unet_v2(
         print(
             f"[Epoch {epoch+1}] "
             f"Train UNet: {n_avg:.4f}, VAE: {vae_avg:.4f}, Combined: {comb_avg:.4f}  |  "
-            f"Val UNet:   {vn_avg:.4f}, VAE:   {vvae_avg:.4f}, Combined: {vcomb_avg:.4f} | lr: {lr}"
+            f"Val UNet:   {vn_avg:.4f}, VAE:   {vvae_avg:.4f}, Combined: {vcomb_avg:.4f}"
         )
 
         # scheduler & checkpoints

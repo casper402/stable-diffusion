@@ -26,55 +26,56 @@ def create_manifest(data_root: str, output_csv: str):
     """
     splits = ['train', 'validation', 'test']
     records = []
+    total_processed = 0
 
     for split in splits:
         ct_dir    = os.path.join(data_root, 'CT',      split)
         liver_dir = os.path.join(data_root, 'liver',   split)
         tumor_dir = os.path.join(data_root, 'tumor',   split)
-        # CBCT dirs per version
         cbct_dirs = {ver: os.path.join(data_root, 'CBCT', ver, split)
                      for ver in CBCT_VERSIONS}
 
         ct_files = [f for f in os.listdir(ct_dir) if f.endswith('.npy')]
+        num_files = len(ct_files)
+        print(f"Starting split '{split}' - {num_files} files to process")
 
-        for fn in ct_files:
+        for idx, fn in enumerate(ct_files, start=1):
             ct_path    = os.path.join(ct_dir,    fn)
             liver_path = os.path.join(liver_dir, fn)
             tumor_path = os.path.join(tumor_dir, fn)
-            # Paths for each CBCT version
             cbct_paths = {ver: os.path.join(dirpath, fn)
                           for ver, dirpath in cbct_dirs.items()}
 
             # Ensure all files exist
-            for pth in [ct_path, liver_path, tumor_path] + list(cbct_paths.values()):
-                if not os.path.exists(pth):
-                    raise FileNotFoundError(f"Missing file for {fn} in split '{split}': {pth}")
+            missing = [pth for pth in [ct_path, liver_path, tumor_path] + list(cbct_paths.values())
+                       if not os.path.exists(pth)]
+            if missing:
+                raise FileNotFoundError(f"Missing file for {fn} in split '{split}': {missing}")
 
-            # Load CT once
+            # Load CT once and compute MAEs
             ct_img = np.load(ct_path)
-
-            # Compute MAE for each CBCT variant
             maes = {}
             for ver, cbct_path in cbct_paths.items():
                 cbct_img = np.load(cbct_path)
                 maes[ver] = compute_mae(ct_img, cbct_img)
 
             # Include only if all MAEs < threshold
-            if all(mae < MAE_THRESHOLD for mae in maes.values()):
-                record = {
-                    'ct_path':  ct_path,
-                    'liver_path': liver_path,
-                    'tumor_path': tumor_path,
-                    'split':    split
-                }
-                # add cbct paths per version
+            if all(m < MAE_THRESHOLD for m in maes.values()):
+                record = {'ct_path': ct_path, 'liver_path': liver_path,
+                          'tumor_path': tumor_path, 'split': split}
                 for ver in CBCT_VERSIONS:
                     record[f'cbct_{ver}_path'] = cbct_paths[ver]
                 records.append(record)
 
+            # Log progress every 100 files
+            if idx % 100 == 0 or idx == num_files:
+                print(f"  Processed {idx}/{num_files} files in split '{split}'")
+        total_processed += num_files
+        print(f"Finished split '{split}'. Total records so far: {len(records)}\n")
+
     df = pd.DataFrame.from_records(records)
     df.to_csv(output_csv, index=False)
-    print(f"Manifest written to {output_csv} ({len(df)} entries), excluded any pairs with MAE >= {MAE_THRESHOLD}")
+    print(f"Manifest written to {output_csv} ({len(df)} entries) out of {total_processed} processed files. Excluded CBCT MAE >= {MAE_THRESHOLD}.")
 
 
 if __name__ == '__main__':

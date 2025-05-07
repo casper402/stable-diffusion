@@ -40,8 +40,7 @@ SLICE_RANGES = {
 }
 
 # all volumes are valid; None means include all slices
-# VALID_VOLUMES = list(SLICE_RANGES.keys())
-VALID_VOLUMES = [3]
+VALID_VOLUMES = list(SLICE_RANGES.keys())
 
 # ──────── transforms & crops ──────────────────────────────────────────────────
 gt_transform = transforms.Compose([
@@ -230,7 +229,8 @@ if __name__ == "__main__":
     v2_pred490speed100steps_base   = os.path.expanduser("~/thesis/predictions/v2_490_speed_100steps")
     v2_pred490speedstepsize20_base   = os.path.expanduser("~/thesis/predictions/v2_490_speed_stepsize20")
     v2_pred490speedstepsize20v2_base   = os.path.expanduser("~/thesis/predictions/v2_490_speed_stepsize20_v2")
-    testpred   = os.path.expanduser("~/thesis/predictions/testpred")
+    v2_cbct   = os.path.expanduser("~/thesis/predictions/predictionsV2-490-50steps_v2_cbct")
+    
 
     gt_folder           = os.path.expanduser("~/thesis/training_data/CT/test")
     liver_mask_folder   = os.path.expanduser("~/thesis/training_data/liver/test")
@@ -238,7 +238,7 @@ if __name__ == "__main__":
 
     eval_sets = [
         ("noise",  v2_pred490speedstepsize20v2_base, False),
-        ("with cbct",  testpred, False),
+        ("with cbct",  v2_cbct, False),
     ]
 
     # ──────── 1) GLOBAL & REGION‑BASED EVAL ─────────────────────────────────

@@ -6,7 +6,7 @@ import torchvision
 from utils.dataset import get_dataloaders, CTDatasetNPY, PairedCTCBCTDatasetNPY
 from models.diffusion import Diffusion
 from quick_loop.vae import load_vae, train_vae
-from quick_loop.unet import load_unet, train_unet, train_joint, train_joint_v2
+from quick_loop.unet import load_unet, train_unet, train_unet_v2, train_joint, train_joint_v2
 from quick_loop.unetConditional import load_cond_unet, train_cond_unet
 from quick_loop.controlnet import load_controlnet
 from quick_loop.degradationRemoval import load_degradation_removal
@@ -36,7 +36,7 @@ load_unet_path = os.path.join(load_dir, "unet_joint.pth")
 
 # Save prediction / model directories
 # save_dir = "controlnet_v2"
-save_dir = "joint_with_cbct"
+save_dir = "unet_with_decoding_loss"
 os.makedirs(save_dir, exist_ok=True)
 vae_predict_dir = os.path.join(save_dir, "vae_predictions")
 unet_predict_dir = os.path.join(save_dir, "unet_predictions")
@@ -63,7 +63,7 @@ augmentation = {
 
 # vae = load_vae(load_vae_path, trainable=False)
 
-# train_loader, val_loader, test_loader = get_dataloaders(manifest_path, batch_size=batch_size, num_workers=num_workers, dataset_class=CTDatasetNPY, train_size=train_size, val_size=val_size, test_size=test_size, augmentation=augmentation)
+train_loader, val_loader, test_loader = get_dataloaders(manifest_path, batch_size=batch_size, num_workers=num_workers, dataset_class=CTDatasetNPY, train_size=train_size, val_size=val_size, test_size=test_size, augmentation=augmentation)
 # train_vae(vae=vae, train_loader=train_loader, val_loader=val_loader, epochs=epochs, early_stopping=early_stopping, patience=patience, save_path=vae_save_path, predict_dir=vae_predict_dir)
 
 # unet = load_unet(trainable=True, base_channels=base_channels, dropout_rate=dropout_rate)
@@ -80,37 +80,51 @@ augmentation = {
 #            epochs_between_prediction=epochs_between_prediction,
 # )
 
+# Unet v2
+unet = load_unet(trainable=True, base_channels=base_channels, dropout_rate=dropout_rate)
+train_unet_v2(unet=unet, 
+           vae=vae, 
+           train_loader=train_loader, 
+           val_loader=val_loader,
+           test_loader=test_loader, 
+           epochs=epochs, 
+           early_stopping=early_stopping, 
+           patience=patience, 
+           save_path=unet_save_path, 
+           predict_dir=unet_predict_dir,
+           epochs_between_prediction=epochs_between_prediction,
+)
 
-train_loader, val_loader, test_loader = get_dataloaders(manifest_path, batch_size=batch_size, num_workers=num_workers, dataset_class=PairedCTCBCTDatasetNPY, train_size=train_size, val_size=val_size, test_size=test_size, augmentation=augmentation)
+# train_loader, val_loader, test_loader = get_dataloaders(manifest_path, batch_size=batch_size, num_workers=num_workers, dataset_class=PairedCTCBCTDatasetNPY, train_size=train_size, val_size=val_size, test_size=test_size, augmentation=augmentation)
 
-vae = load_vae(save_path=vae_save_path, trainable=True)
-unet = load_unet(save_path=unet_save_path, trainable=True, base_channels=base_channels, dropout_rate=dropout_rate)
+# vae = load_vae(save_path=vae_save_path, trainable=True)
+# unet = load_unet(save_path=unet_save_path, trainable=True, base_channels=base_channels, dropout_rate=dropout_rate)
 
 # Define your VAE‐loss weights:
-vae_loss_weights = {
-    'perceptual': 0.1,
-    'ssim':       0.9,
-    'mse':        0.0,
-    'kl':         1e-5,
-    'l1':         1.0,
-}
+# vae_loss_weights = {
+#     'perceptual': 0.1,
+#     'ssim':       0.9,
+#     'mse':        0.0,
+#     'kl':         1e-5,
+#     'l1':         1.0,
+# }
 
 # Jointly train UNet + VAE
-train_joint_v2(
-    unet=unet,
-    vae=vae,
-    train_loader=train_loader,
-    val_loader=val_loader,
-    test_loader=test_loader,
-    epochs=epochs,
-    save_unet_path=unet_save_path,
-    save_vae_path=vae_save_path,
-    learning_rate=5e-6,
-    weight_decay=1e-4,
-    gradient_clip_val=1.0,
-    early_stopping=early_stopping,
-    vae_loss_weights=vae_loss_weights,
-)
+# train_joint_v2(
+#     unet=unet,
+#     vae=vae,
+#     train_loader=train_loader,
+#     val_loader=val_loader,
+#     test_loader=test_loader,
+#     epochs=epochs,
+#     save_unet_path=unet_save_path,
+#     save_vae_path=vae_save_path,
+#     learning_rate=5e-6,
+#     weight_decay=1e-4,
+#     gradient_clip_val=1.0,
+#     early_stopping=early_stopping,
+#     vae_loss_weights=vae_loss_weights,
+# )
 
 # train_loader, val_loader, test_loader = get_dataloaders(manifest_path, batch_size=batch_size, num_workers=num_workers, dataset_class=PairedCTCBCTDatasetNPY, train_size=train_size, val_size=val_size, test_size=test_size, augmentation=augmentation)
 

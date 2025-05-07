@@ -285,6 +285,186 @@ def train_unet(
             for i , x in enumerate(test_loader):
                 predict_unet(unet, vae, x, i, save_path=os.path.join(predict_dir, f"epoch_{epoch+1}"))
 
+def train_unet_v2(
+    unet,
+    vae,
+    train_loader,
+    val_loader,
+    test_loader,
+    epochs=1000,
+    save_path='unet.pth',
+    predict_dir=None,
+    early_stopping=None,
+    patience=None,
+    epochs_between_prediction=50,
+    learning_rate=1e-5,        # lower LR for fine-tuning
+    weight_decay_val=1e-4,
+    gradient_clip_val=1.0,
+    warmup_lr=0,
+    warmup_epochs=0,
+):
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    optimizer = torch.optim.AdamW(
+        unet.parameters(),
+        lr=learning_rate,
+        weight_decay=weight_decay_val,
+    )
+    if patience is None:
+        patience = epochs
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer,
+        mode='min',
+        factor=0.5,
+        patience=patience,
+        threshold=1e-4,
+        min_lr=1e-8,
+    )
+    diffusion = Diffusion(device)
+
+    # Intuition: scale mse to being between 0 and 1, ssim is between 0 and 1
+    # take half of each and we have a total loss from this between 0 and 1.
+    mse_weight  = 0.25
+    ssim_weight = 0.50
+    ssim_loss   = SsimLoss()
+
+    best_val_loss = float('inf')
+    es_counter    = 0
+
+    print(f"Starting fine-tuning for {epochs} epochs. LR={learning_rate:.1e}")
+    print(f"MSE weight={mse_weight}, SSIM weight={ssim_weight}")
+
+    for epoch in range(epochs):
+        unet.train()
+        # --- accumulators for train ---
+        noise_sum = 0.0
+        mse_sum   = 0.0
+        ssim_sum  = 0.0
+        total_sum = 0.0
+
+        # Warmup LR if needed
+        if epoch < warmup_epochs:
+            warmup_factor = (epoch+1) / warmup_epochs
+            lr = warmup_lr + warmup_factor * (learning_rate - warmup_lr)
+            for g in optimizer.param_groups:
+                g['lr'] = lr
+        elif epoch == warmup_epochs:
+            for g in optimizer.param_groups:
+                g['lr'] = learning_rate
+
+        for x in train_loader:
+            x = x.to(device)
+            optimizer.zero_grad()
+
+            # encode
+            with torch.no_grad():
+                z_mu, z_lv = vae.encode(x)
+                z = vae.reparameterize(z_mu, z_lv)
+
+            # diffusion forward
+            t = diffusion.sample_timesteps(z.size(0))
+            noise = torch.randn_like(z)
+            z_noisy = diffusion.add_noise(z, t, noise=noise)
+            pred_noise = unet(z_noisy, t)
+
+            # 1) latent denoising loss
+            noise_l = noise_loss(pred_noise, noise)
+
+            # 2) decode predicted clean latent
+            acp = diffusion.alpha_cumprod[t].view(-1,1,1,1)
+            sa  = torch.sqrt(acp)
+            sb  = torch.sqrt(1 - acp)
+            z_hat = (z_noisy - sb*pred_noise) / sa
+            x_recon = vae.decode(z_hat)
+
+            # 3) image losses
+            mse_l  = F.mse_loss(x_recon, x)
+            ssim_l = ssim_loss(x_recon, x)
+
+            # 4) combine
+            loss = noise_l + mse_weight * mse_l + ssim_weight * ssim_l
+
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(unet.parameters(), gradient_clip_val)
+            optimizer.step()
+
+            # accumulate
+            noise_sum += noise_l.item()
+            mse_sum   += mse_l.item()
+            ssim_sum  += ssim_l.item()
+            total_sum += loss.item()
+
+        # compute train averages
+        n_avg   = noise_sum / len(train_loader)
+        mse_avg = mse_sum   / len(train_loader)
+        ssim_avg= ssim_sum  / len(train_loader)
+        vae_avg = mse_weight * mse_avg + ssim_weight * ssim_avg
+        comb_avg= total_sum / len(train_loader)
+
+        # --- validation ---
+        unet.eval()
+        v_noise = v_mse = v_ssim = v_total = 0.0
+        with torch.no_grad():
+            for x in val_loader:
+                x = x.to(device)
+                z_mu, z_lv = vae.encode(x)
+                z = vae.reparameterize(z_mu, z_lv)
+
+                t = diffusion.sample_timesteps(z.size(0))
+                noise = torch.randn_like(z)
+                z_noisy = diffusion.add_noise(z, t, noise=noise)
+                pred_noise = unet(z_noisy, t)
+
+                noise_l = noise_loss(pred_noise, noise)
+
+                acp   = diffusion.alpha_cumprod[t].view(-1,1,1,1)
+                z_hat = (z_noisy - torch.sqrt(1-acp)*pred_noise) / torch.sqrt(acp)
+                x_recon = vae.decode(z_hat)
+                x_recon = (x_recon / 2 + 0.5).clamp(0,1)
+                x_orig  = (x     / 2 + 0.5).clamp(0,1)
+
+                mse_l  = F.mse_loss(x_recon, x_orig)
+                ssim_l = ssim_loss(x_recon, x_orig)
+
+                loss_val = noise_l + mse_weight*mse_l + ssim_weight*ssim_l
+
+                v_noise += noise_l.item()
+                v_mse   += mse_l.item()
+                v_ssim  += ssim_l.item()
+                v_total += loss_val.item()
+
+        vn_avg   = v_noise / len(val_loader)
+        vmse_avg = v_mse   / len(val_loader)
+        vssim_avg= v_ssim  / len(val_loader)
+        vvae_avg = mse_weight * vmse_avg + ssim_weight * vssim_avg
+        vcomb_avg= v_total / len(val_loader)
+
+        print(
+            f"[Epoch {epoch+1}] "
+            f"Train UNet: {n_avg:.4f}, VAE: {vae_avg:.4f}, Combined: {comb_avg:.4f}  |  "
+            f"Val UNet:   {vn_avg:.4f}, VAE:   {vvae_avg:.4f}, Combined: {vcomb_avg:.4f} | lr: {lr}"
+        )
+
+        # scheduler & checkpoints
+        if epoch >= warmup_epochs:
+            scheduler.step(vcomb_avg)
+
+        if vcomb_avg < best_val_loss:
+            best_val_loss = vcomb_avg
+            es_counter = 0
+            torch.save(unet.state_dict(), save_path)
+            print(f"✅ Saved best model (val combined loss {vcomb_avg:.4f})")
+        else:
+            es_counter += 1
+            if early_stopping and es_counter >= early_stopping:
+                print(f"⏹ Early stopping after {early_stopping} epochs with no improvement.")
+                break
+
+        # optionally dump some predictions
+        if predict_dir and (epoch+1) % epochs_between_prediction == 0:
+            for i, x in enumerate(test_loader):
+                predict_unet(unet, vae, x, i, save_path=os.path.join(predict_dir, f"epoch_{epoch+1}"))
+
 def train_joint(
     unet,
     vae,

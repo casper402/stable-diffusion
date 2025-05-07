@@ -203,7 +203,7 @@ class CTDatasetWithMeta(CTDatasetNPY):
         volume_part = filename.split('_')[0]          # "volume-59"
         volume_idx = int(volume_part.split('-')[1])   # 59
         return ct, volume_idx
-
+    
 class PairedCTCBCTDatasetNPY(Dataset):
     def __init__(self, manifest_csv: str, split: str, augmentation=None):
         self.df = pd.read_csv(manifest_csv)
@@ -239,6 +239,49 @@ class PairedCTCBCTDatasetNPY(Dataset):
             )
             ct = F.affine(ct, *affine_params, interpolation=transforms.InterpolationMode.BILINEAR, fill=-1)
             cbct = F.affine(cbct, *affine_params, interpolation=transforms.InterpolationMode.BILINEAR, fill=-1)
+
+        return ct, cbct
+    
+class PairedCTCBCTSegmentationDatasetNPY(Dataset):
+    def __init__(self, manifest_csv: str, split: str, augmentation=None):
+        self.df = pd.read_csv(manifest_csv)
+        self.df = self.df[self.df['split'] == split].reset_index(drop=True)
+        self.base_transform = transforms.Compose([
+            transforms.Pad((0, 64, 0, 64), fill=-1),
+            transforms.Resize((256, 256)),
+        ])
+        self.augmentation = augmentation
+
+    def __len__(self):
+        return len(self.df)
+
+    def __getitem__(self, idx):
+        row = self.df.iloc[idx]
+        ct   = np.load(row['ct_path']).astype(np.float32)  / 1000.0
+        cbct = np.load(row['cbct_path']).astype(np.float32) / 1000.0
+        segmentation = np.load(row['liver_path']).astype(np.float32) - np.load(row['tumor_patj']).astype(np.float32)
+        
+        ct   = torch.from_numpy(ct).unsqueeze(0)
+        cbct = torch.from_numpy(cbct).unsqueeze(0)
+        segmentation = torch.from_numpy(segmentation).unsqueeze(0)
+
+        if self.base_transform:
+            ct   = self.base_transform(ct)
+            cbct = self.base_transform(cbct)
+            segmentation = self.base_transform(segmentation)
+
+        if self.augmentation:
+            img_size = F.get_image_size(ct)
+            affine_params = transforms.RandomAffine.get_params(
+                degrees = self.augmentation.get('degrees', 0),
+                translate = self.augmentation.get('translate', None),
+                scale_ranges = self.augmentation.get('scale', None),
+                shears = self.augmentation.get('shear', None),
+                img_size = img_size
+            )
+            ct = F.affine(ct, *affine_params, interpolation=transforms.InterpolationMode.BILINEAR, fill=-1)
+            cbct = F.affine(cbct, *affine_params, interpolation=transforms.InterpolationMode.BILINEAR, fill=-1)
+            segmentation = F.affine(segmentation, *affine_params, interpolation=transforms.InterpolationMode.BILINEAR, fill=0)
 
         return ct, cbct
     

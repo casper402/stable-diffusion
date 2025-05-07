@@ -36,7 +36,7 @@ load_unet_path = os.path.join(load_dir, "unet_joint.pth")
 
 # Save prediction / model directories
 # save_dir = "controlnet_v2"
-save_dir = "unet_with_decoding_loss"
+save_dir = "unet_with_decoding_loss_perceptual"
 os.makedirs(save_dir, exist_ok=True)
 vae_predict_dir = os.path.join(save_dir, "vae_predictions")
 unet_predict_dir = os.path.join(save_dir, "unet_predictions")

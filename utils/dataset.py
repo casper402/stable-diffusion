@@ -8,6 +8,7 @@ import pandas as pd
 import torchvision.transforms.functional as F
 from torchvision import transforms
 from torchvision.transforms import InterpolationMode
+import random
 
 
 class CTDataset(Dataset):
@@ -221,9 +222,14 @@ class PairedCTCBCTDatasetNPY(Dataset):
 
     def __getitem__(self, idx):
         row = self.df.iloc[idx]
-        ct   = np.load(row['ct_path']).astype(np.float32)  / 1000.0
-        cbct = np.load(row['cbct_path']).astype(np.float32)/ 1000.0
-        ct   = torch.from_numpy(ct).unsqueeze(0)
+
+        ct = np.load(row['ct_path']).astype(np.float32) / 1000.0
+        ct = torch.from_numpy(ct).unsqueeze(0)
+
+        # randomly choose 256 vs 490 CBCT
+        size = random.choice([256, 490])
+        cbct_path = row[f'cbct_{size}_path']
+        cbct = np.load(cbct_path).astype(np.float32) / 1000.0
         cbct = torch.from_numpy(cbct).unsqueeze(0)
 
         if self.base_transform:

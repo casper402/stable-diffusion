@@ -302,6 +302,52 @@ class PairedCTCBCTSegmentationDatasetNPY(Dataset):
 
         return ct, cbct, segmentation_map, liver, tumor
     
+class SegmentationMaskDatasetNPY(Dataset):
+    def __init__(self, manifest_csv: str, split: str, augmentation=None):
+        self.df = pd.read_csv(manifest_csv)
+        self.df = self.df[self.df['split'] == split].reset_index(drop=True)
+        self.mask_transform = transforms.Compose([
+            transforms.Pad((0, 64, 0, 64), fill=0),
+            transforms.Resize((256, 256), interpolation=InterpolationMode.NEAREST_EXACT),
+        ])
+        self.augmentation = augmentation
+
+    def __len__(self):
+        return len(self.df)
+
+    def __getitem__(self, idx):
+        row = self.df.iloc[idx]
+
+        liver = np.load(row['liver_path']).astype(np.float32)
+        tumor = np.load(row['tumor_path']).astype(np.float32)
+
+        segmentation_map = liver - tumor
+
+        liver = torch.from_numpy(liver).unsqueeze(0)
+        tumor = torch.from_numpy(tumor).unsqueeze(0)
+        segmentation_map = torch.from_numpy(segmentation_map).unsqueeze(0)
+
+        if self.mask_transform:
+            liver = self.mask_transform(liver)
+            tumor = self.mask_transform(tumor)
+            segmentation_map = self.mask_transform(segmentation_map)
+
+        if self.augmentation:
+            img_size = F.get_image_size(liver)
+            affine_params = transforms.RandomAffine.get_params(
+                degrees=self.augmentation.get('degrees', 0),
+                translate=self.augmentation.get('translate', None),
+                scale_ranges=self.augmentation.get('scale', None),
+                shears=self.augmentation.get('shear', None),
+                img_size=img_size
+            )
+
+            segmentation_map = F.affine(segmentation_map, *affine_params, interpolation=InterpolationMode.NEAREST_EXACT, fill=0)
+            liver = F.affine(liver, *affine_params, interpolation=InterpolationMode.NEAREST_EXACT, fill=0)
+            tumor = F.affine(tumor, *affine_params, interpolation=InterpolationMode.NEAREST_EXACT, fill=0)
+
+        return segmentation_map, liver, tumor
+    
 def get_dataloaders(manifest_csv, batch_size, num_workers, dataset_class=PairedCTCBCTDatasetNPY, shuffle_train=True, drop_last=True, train_size=None, val_size=None, test_size=None, augmentation=None):
     train_dataset = dataset_class(manifest_csv=manifest_csv, split='train', augmentation=augmentation)
     val_dataset = dataset_class(manifest_csv=manifest_csv, split='validation', augmentation=None)

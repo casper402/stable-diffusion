@@ -3,7 +3,7 @@ os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:128"
 import torch
 import torchvision
 
-from utils.dataset import get_dataloaders, CTDatasetNPY, PairedCTCBCTDatasetNPY
+from utils.dataset import get_dataloaders, CTDatasetNPY, PairedCTCBCTDatasetNPY, PairedCTCBCTSegmentationDatasetNPY
 from models.diffusion import Diffusion
 from quick_loop.vae import load_vae, train_vae
 from quick_loop.unet import load_unet, train_unet, train_joint
@@ -64,7 +64,7 @@ degradation_removal_save_path = os.path.join(save_dir, "dr_module.pth")
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
-manifest_path = "../manifest-full.csv" # without CBCT
+manifest_path = "../training_data/manifest-filtered.csv" # without CBCT
 # manifest_path = "../manifest-cbct.csv" # with CBCT
 # manifest_path = "../data_quick_loop/manifest.csv" # Local config
 
@@ -170,25 +170,25 @@ manifest_path = "../manifest-full.csv" # without CBCT
 # )
 
 # --- ControlNet ---
-vae = load_vae(save_path=load_vae_path, trainable=False)
-unet = load_unet_control_paca(unet_save_path=load_unet_path, paca_trainable=True)
-controlnet = load_controlnet(save_path=load_unet_path, trainable=True)
-dr_module = load_degradation_removal(save_path=load_dr_module_path, trainable=True)
-train_loader, val_loader, test_loader = get_dataloaders(manifest_path, batch_size=batch_size, num_workers=num_workers, dataset_class=PairedCTCBCTDatasetNPY, train_size=train_size, val_size=val_size, test_size=test_size, augmentation=augmentation)
-train_dr_control_paca(
-    vae=vae, 
-    unet=unet, 
-    controlnet=controlnet, 
-    dr_module=dr_module, 
-    train_loader=train_loader, 
-    val_loader=val_loader, 
-    epochs=epochs, 
-    save_dir=save_dir, 
-    predict_dir=conditional_predict_dir, 
-    early_stopping=early_stopping, 
-    patience=patience, 
-    epochs_between_prediction=10
-)
+# vae = load_vae(save_path=load_vae_path, trainable=False)
+# unet = load_unet_control_paca(unet_save_path=load_unet_path, paca_trainable=True)
+# controlnet = load_controlnet(save_path=load_unet_path, trainable=True)
+# dr_module = load_degradation_removal(save_path=load_dr_module_path, trainable=True)
+# train_loader, val_loader, test_loader = get_dataloaders(manifest_path, batch_size=batch_size, num_workers=num_workers, dataset_class=PairedCTCBCTDatasetNPY, train_size=train_size, val_size=val_size, test_size=test_size, augmentation=augmentation)
+# train_dr_control_paca(
+#     vae=vae, 
+#     unet=unet, 
+#     controlnet=controlnet, 
+#     dr_module=dr_module, 
+#     train_loader=train_loader, 
+#     val_loader=val_loader, 
+#     epochs=epochs, 
+#     save_dir=save_dir, 
+#     predict_dir=conditional_predict_dir, 
+#     early_stopping=early_stopping, 
+#     patience=patience, 
+#     epochs_between_prediction=10
+# )
 
 # --- Test ControlNet ---
 # _, _, test_loader = get_dataloaders(manifest_path, batch_size=batch_size, num_workers=num_workers, dataset_class=PairedCTCBCTDatasetNPY, train_size=train_size, val_size=val_size, test_size=test_size)
@@ -206,52 +206,114 @@ train_dr_control_paca(
 #     num_images_to_save=100
 # )
 
-# import torch
-# import matplotlib.pyplot as plt
-# import numpy as np
 
-# try:
-#     batch_data = next(iter(train_loader))
-#     ct_images_batch = batch_data[0]
-#     cbct_images_batch = batch_data[1]
-# except StopIteration:
-#     print("Error: The test_loader is empty. Cannot retrieve a batch.")
-#     exit()
-# except IndexError:
-#     print("Error: Batch does not contain enough elements. Expected at least 2 for paired images.")
-#     exit()
+# --- Visualize PairedCTCBCTSegmentationDatasetNPY ---
+import torch
+import matplotlib.pyplot as plt
+import numpy as np
+import torchvision.transforms as transforms # Make sure you import transforms if not already
 
-# if ct_images_batch.shape[0] == 0 or cbct_images_batch.shape[0] == 0:
-#     print("Batch is empty or one of the image tensors is empty.")
-#     exit()
+# Assuming get_dataloaders, manifest_path, batch_size, num_workers,
+# PairedCTCBCTSegmentationDatasetNPY, train_size, val_size, test_size,
+# and augmentation are defined elsewhere in your code.
 
-# for i in range(batch_size):
-#     ct_image_tensor = ct_images_batch[i]
-#     cbct_image_tensor = cbct_images_batch[i]
+_, _, test_loader = get_dataloaders(manifest_path, batch_size=batch_size, num_workers=num_workers, dataset_class=PairedCTCBCTSegmentationDatasetNPY, train_size=train_size, val_size=val_size, test_size=test_size, augmentation=augmentation)
 
-#     ct_image_np = ct_image_tensor.cpu().numpy()
-#     ct_image_np = (ct_image_np + 1) / 2.0
-#     if ct_image_np.ndim == 3 and ct_image_np.shape[0] == 1:
-#         ct_image_np = ct_image_np.squeeze(0)
+try:
+    batch_data = next(iter(test_loader))
+    ct_images_batch = batch_data[0]
+    cbct_images_batch = batch_data[1]
+    segmentation_map_batch = batch_data[2]
+    liver_mask_batch = batch_data[3]
+    tumor_mask_batch = batch_data[4]
+except StopIteration:
+    print("Error: The test_loader is empty. Cannot retrieve a batch.")
+    exit()
+except IndexError:
+    print("Error: Batch does not contain enough elements. Expected at least 5.")
+    exit()
+except Exception as e:
+    print(f"An error occurred while retrieving batch data: {e}")
+    exit()
 
-#     cbct_image_np = cbct_image_tensor.cpu().numpy()
-#     cbct_image_np = (cbct_image_np + 1) / 2.0
-#     if cbct_image_np.ndim == 3 and cbct_image_np.shape[0] == 1:
-#         cbct_image_np = cbct_image_np.squeeze(0)
 
-#     fig, axes = plt.subplots(1, 2, figsize=(10, 5))
+if ct_images_batch.shape[0] == 0 or cbct_images_batch.shape[0] == 0 or segmentation_map_batch.shape[0] == 0 or liver_mask_batch.shape[0] == 0 or tumor_mask_batch.shape[0] == 0:
+    print("Batch is empty or one of the tensors is empty.")
+    exit()
 
-#     axes[0].imshow(ct_image_np, cmap='gray', vmin=0, vmax=1)
-#     axes[0].set_title('CT Image')
-#     axes[0].axis('off')
+# Determine the number of items to visualize (up to batch_size)
+num_items_to_visualize = min(batch_size, len(ct_images_batch)) # Ensure we don't exceed the actual batch size
 
-#     axes[1].imshow(cbct_image_np, cmap='gray', vmin=0, vmax=1)
-#     axes[1].set_title('CBCT Image')
-#     axes[1].axis('off')
+for i in range(num_items_to_visualize):
+    ct_image_tensor = ct_images_batch[i]
+    cbct_image_tensor = cbct_images_batch[i]
+    segmentation_map_tensor = segmentation_map_batch[i]
+    liver_mask_tensor = liver_mask_batch[i]
+    tumor_mask_tensor = tumor_mask_batch[i]
 
-#     plt.tight_layout()
-#     plt.show()
+    # Convert tensors to numpy arrays and move to CPU
+    ct_image_np = ct_image_tensor.cpu().numpy()
+    cbct_image_np = cbct_image_tensor.cpu().numpy()
+    segmentation_map_np = segmentation_map_tensor.cpu().numpy()
+    liver_mask_np = liver_mask_tensor.cpu().numpy()
+    tumor_mask_np = tumor_mask_tensor.cpu().numpy()
 
-# print("Visualized one CT-CBCT pair from the batch.")
+    # Normalize CT and CBCT images for visualization if they were in a different range (e.g., -1 to 1)
+    # Assuming the (data + 1) / 2.0 normalization is correct for your data range
+    ct_image_np = (ct_image_np + 1) / 2.0
+    cbct_image_np = (cbct_image_np + 1) / 2.0
+    segmentation_map_np = (segmentation_map_np + 1) / 2.0
+
+
+    # Remove channel dimension if it exists and is 1
+    if ct_image_np.ndim == 3 and ct_image_np.shape[0] == 1:
+        ct_image_np = ct_image_np.squeeze(0)
+    if cbct_image_np.ndim == 3 and cbct_image_np.shape[0] == 1:
+        cbct_image_np = cbct_image_np.squeeze(0)
+    # Masks and segmentation map might also have a channel dim of 1
+    if segmentation_map_np.ndim == 3 and segmentation_map_np.shape[0] == 1:
+        segmentation_map_np = segmentation_map_np.squeeze(0)
+    if liver_mask_np.ndim == 3 and liver_mask_np.shape[0] == 1:
+        liver_mask_np = liver_mask_np.squeeze(0)
+    if tumor_mask_np.ndim == 3 and tumor_mask_np.shape[0] == 1:
+        tumor_mask_np = tumor_mask_np.squeeze(0)
+
+
+    # Create a figure with 5 subplots
+    fig, axes = plt.subplots(1, 5, figsize=(20, 5)) # Increased figsize
+
+    # Display CT Image
+    axes[0].imshow(ct_image_np, cmap='gray', vmin=0, vmax=1)
+    axes[0].set_title('CT Image')
+    axes[0].axis('off')
+
+    # Display CBCT Image
+    axes[1].imshow(cbct_image_np, cmap='gray', vmin=0, vmax=1)
+    axes[1].set_title('CBCT Image')
+    axes[1].axis('off')
+
+    # Display Segmentation Map
+    # Use a colormap that distinguishes different integer labels
+    # You might need to adjust vmax based on the maximum class label in your segmentation map
+    axes[2].imshow(segmentation_map_np, cmap='gray', vmin=0, vmax=1)
+    axes[2].set_title('Segmentation Map')
+    axes[2].axis('off')
+
+    # Display Liver Mask
+    # Assuming liver mask is binary (0 or 1)
+    axes[3].imshow(liver_mask_np, cmap='gray', vmin=0, vmax=1)
+    axes[3].set_title('Liver Mask')
+    axes[3].axis('off')
+
+    # Display Tumor Mask
+    # Assuming tumor mask is binary (0 or 1)
+    axes[4].imshow(tumor_mask_np, cmap='gray', vmin=0, vmax=1)
+    axes[4].set_title('Tumor Mask')
+    axes[4].axis('off')
+
+    plt.tight_layout()
+    plt.show()
+
+print(f"Visualized {num_items_to_visualize} CT-CBCT pairs and their masks/segmentation from the batch.")
 
 print("All trainings finished.")

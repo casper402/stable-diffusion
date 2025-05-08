@@ -7,6 +7,8 @@ from PIL import Image
 import pandas as pd
 import torchvision.transforms.functional as F
 from torchvision import transforms
+from torchvision.transforms import InterpolationMode
+
 
 class CTDataset(Dataset):
     def __init__(self, CT_path, transform):
@@ -237,8 +239,8 @@ class PairedCTCBCTDatasetNPY(Dataset):
                 shears = self.augmentation.get('shear', None),
                 img_size = img_size
             )
-            ct = F.affine(ct, *affine_params, interpolation=transforms.InterpolationMode.BILINEAR, fill=-1)
-            cbct = F.affine(cbct, *affine_params, interpolation=transforms.InterpolationMode.BILINEAR, fill=-1)
+            ct = F.affine(ct, *affine_params, interpolation=InterpolationMode.BILINEAR, fill=-1)
+            cbct = F.affine(cbct, *affine_params, interpolation=InterpolationMode.BILINEAR, fill=-1)
 
         return ct, cbct
     
@@ -250,6 +252,10 @@ class PairedCTCBCTSegmentationDatasetNPY(Dataset):
             transforms.Pad((0, 64, 0, 64), fill=-1),
             transforms.Resize((256, 256)),
         ])
+        self.mask_transform = transforms.Compose([
+            transforms.Pad((0, 64, 0, 64), fill=0),
+            transforms.Resize((256, 256), interpolation=InterpolationMode.NEAREST_EXACT),
+        ])
         self.augmentation = augmentation
 
     def __len__(self):
@@ -258,17 +264,26 @@ class PairedCTCBCTSegmentationDatasetNPY(Dataset):
     def __getitem__(self, idx):
         row = self.df.iloc[idx]
         ct   = np.load(row['ct_path']).astype(np.float32)  / 1000.0
-        cbct = np.load(row['cbct_path']).astype(np.float32) / 1000.0
-        segmentation = np.load(row['liver_path']).astype(np.float32) - np.load(row['tumor_patj']).astype(np.float32)
+        cbct = np.load(row['cbct_490_path']).astype(np.float32) / 1000.0
+        liver = np.load(row['liver_path']).astype(np.float32)
+        tumor = np.load(row['tumor_path']).astype(np.float32)
+        segmentation_map = liver - tumor
         
         ct   = torch.from_numpy(ct).unsqueeze(0)
         cbct = torch.from_numpy(cbct).unsqueeze(0)
-        segmentation = torch.from_numpy(segmentation).unsqueeze(0)
+        liver = torch.from_numpy(cbct).unsqueeze(0)
+        tumor = torch.from_numpy(cbct).unsqueeze(0)
+        segmentation_map = torch.from_numpy(segmentation_map).unsqueeze(0)
 
         if self.base_transform:
             ct   = self.base_transform(ct)
             cbct = self.base_transform(cbct)
-            segmentation = self.base_transform(segmentation)
+
+        if self.mask_transform:
+            liver = self.mask_transform(liver)
+            tumor = self.mask_transform(tumor)
+            segmentation_map = self.mask_transform(segmentation_map)
+
 
         if self.augmentation:
             img_size = F.get_image_size(ct)
@@ -281,9 +296,11 @@ class PairedCTCBCTSegmentationDatasetNPY(Dataset):
             )
             ct = F.affine(ct, *affine_params, interpolation=transforms.InterpolationMode.BILINEAR, fill=-1)
             cbct = F.affine(cbct, *affine_params, interpolation=transforms.InterpolationMode.BILINEAR, fill=-1)
-            segmentation = F.affine(segmentation, *affine_params, interpolation=transforms.InterpolationMode.BILINEAR, fill=0)
+            segmentation_map = F.affine(segmentation_map, *affine_params, interpolation=transforms.InterpolationMode.NEAREST_EXACT, fill=0)
+            liver = F.affine(liver, *affine_params, interpolation=transforms.InterpolationMode.NEAREST_EXACT, fill=0)
+            tumor = F.affine(tumor, *affine_params, interpolation=transforms.InterpolationMode.NEAREST_EXACT, fill=0)
 
-        return ct, cbct
+        return ct, cbct, segmentation_map, liver, tumor
     
 def get_dataloaders(manifest_csv, batch_size, num_workers, dataset_class=PairedCTCBCTDatasetNPY, shuffle_train=True, drop_last=True, train_size=None, val_size=None, test_size=None, augmentation=None):
     train_dataset = dataset_class(manifest_csv=manifest_csv, split='train', augmentation=augmentation)

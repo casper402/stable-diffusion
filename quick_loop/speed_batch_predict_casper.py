@@ -16,7 +16,7 @@ from quick_loop.unetControlPACA import load_unet_control_paca
 # ------------------------
 CBCT_DIR = '../training_data/CBCT/490/test'
 VOLUME_INDICES = [3, 8, 12, 26, 32, 33, 35, 54, 59, 61, 106, 116, 129]
-OUT_DIR = '../predictions/controlnet'
+OUT_DIR = '../predictions/controlnet_augmentation'
 
 GUIDANCE_SCALE = 1.0
 ALPHA_A = 0.2         # Mixing weight for CBCT signal at t0
@@ -27,7 +27,7 @@ POWER_P = 2.0         # power-law exponent for smoothing
 FINE_CUTOFF = 9       # switch to single-step updates at t<=9 (last 10 steps)
 STEP_SIZE = 20
 
-MODELS_PATH = 'controlnet_new_no_augmentation'
+MODELS_PATH = 'controlnet_new'
 VAE_SAVE_PATH = os.path.join(MODELS_PATH, 'vae.pth')
 UNET_SAVE_PATH = os.path.join(MODELS_PATH, 'unet.pth')
 PACA_LAYERS_SAVE_PATH = os.path.join(MODELS_PATH, 'paca_layers.pth')

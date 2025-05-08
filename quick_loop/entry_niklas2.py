@@ -30,13 +30,13 @@ warmup_lr = 1e-8
 warmup_epochs = 5
 
 # Load pretrained model paths
-load_dir = "../pretrained_models"
+load_dir = "unet_with_decoding_loss_perceptual_lower"
 load_vae_path = os.path.join(load_dir, "vae_joint.pth")
 load_unet_path = os.path.join(load_dir, "unet_joint.pth")
 
 # Save prediction / model directories
 # save_dir = "controlnet_v2"
-save_dir = "controlnet_with_decoding_loss_perceptual_lower"
+save_dir = "unet_with_decoding_loss_perceptual_lower_v2"
 os.makedirs(save_dir, exist_ok=True)
 vae_predict_dir = os.path.join(save_dir, "vae_predictions")
 unet_predict_dir = os.path.join(save_dir, "unet_predictions")
@@ -49,7 +49,7 @@ degradation_removal_save_path = os.path.join(save_dir, "dr_module.pth")
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
-# manifest_path = "../manifest-full.csv" # without CBCT
+manifest_no_cbct_path = "../manifest-full.csv" # without CBCT
 # manifest_path = "../manifest-cbct.csv" # with CBCT
 # manifest_path = "../data_quick_loop/manifest.csv" # Local config
 manifest_path = "../training_data/manifest-filtered.csv"
@@ -82,21 +82,22 @@ augmentation = {
 # )
 
 # Unet v2
-# vae = load_vae(vae_save_path, trainable=False)
-# unet = load_unet(save_path=unet_save_path, trainable=True, base_channels=base_channels, dropout_rate=dropout_rate)
-# train_unet_v2(unet=unet, 
-#            vae=vae, 
-#            train_loader=train_loader, 
-#            val_loader=val_loader,
-#            test_loader=test_loader, 
-#            epochs=epochs, 
-#            early_stopping=early_stopping, 
-#            patience=patience, 
-#            save_path=unet_save_path, 
-#            predict_dir=unet_predict_dir,
-#            epochs_between_prediction=epochs_between_prediction,
-#            perceptual_loss=True,
-# )
+train_loader, val_loader, test_loader = get_dataloaders(manifest_no_cbct_path, batch_size=batch_size, num_workers=num_workers, dataset_class=CTDatasetNPY, train_size=train_size, val_size=val_size, test_size=test_size, augmentation=augmentation)
+vae = load_vae(load_vae_path, trainable=False)
+unet = load_unet(save_path=load_unet_path, trainable=True, base_channels=base_channels, dropout_rate=dropout_rate)
+train_unet_v2(unet=unet, 
+           vae=vae, 
+           train_loader=train_loader, 
+           val_loader=val_loader,
+           test_loader=test_loader, 
+           epochs=epochs, 
+           early_stopping=early_stopping, 
+           patience=patience, 
+           save_path=unet_save_path, 
+           predict_dir=unet_predict_dir,
+           epochs_between_prediction=epochs_between_prediction,
+           perceptual_loss=True,
+)
 
 # train_loader, val_loader, test_loader = get_dataloaders(manifest_path, batch_size=batch_size, num_workers=num_workers, dataset_class=PairedCTCBCTDatasetNPY, train_size=train_size, val_size=val_size, test_size=test_size, augmentation=augmentation)
 
@@ -167,25 +168,25 @@ augmentation = {
 #     epochs_between_prediction=10)
 
 # Controlnet v2
-vae = load_vae(save_path=vae_save_path, trainable=False)
-unet = load_unet_control_paca(unet_save_path=unet_save_path, paca_trainable=True)
-controlnet = load_controlnet(save_path=unet_save_path, trainable=True)
-dr_module = load_degradation_removal(trainable=True)
-unet = load_unet_control_paca(unet_save_path=unet_save_path, paca_trainable=True)
-train_loader, val_loader, test_loader = get_dataloaders(manifest_path, batch_size=batch_size, num_workers=num_workers, dataset_class=PairedCTCBCTDatasetNPY, train_size=train_size, val_size=val_size, test_size=test_size, augmentation=augmentation)
-train_dr_control_paca_v2(
-    vae=vae, 
-    unet=unet, 
-    controlnet=controlnet, 
-    dr_module=dr_module, 
-    train_loader=train_loader, 
-    val_loader=val_loader, 
-    epochs=epochs, 
-    save_dir=save_dir, 
-    predict_dir=conditional_predict_dir, 
-    early_stopping=early_stopping, 
-    patience=patience, 
-    epochs_between_prediction=10)
+# vae = load_vae(save_path=vae_save_path, trainable=False)
+# unet = load_unet_control_paca(unet_save_path=unet_save_path, paca_trainable=True)
+# controlnet = load_controlnet(save_path=unet_save_path, trainable=True)
+# dr_module = load_degradation_removal(trainable=True)
+# unet = load_unet_control_paca(unet_save_path=unet_save_path, paca_trainable=True)
+# train_loader, val_loader, test_loader = get_dataloaders(manifest_path, batch_size=batch_size, num_workers=num_workers, dataset_class=PairedCTCBCTDatasetNPY, train_size=train_size, val_size=val_size, test_size=test_size, augmentation=augmentation)
+# train_dr_control_paca_v2(
+#     vae=vae, 
+#     unet=unet, 
+#     controlnet=controlnet, 
+#     dr_module=dr_module, 
+#     train_loader=train_loader, 
+#     val_loader=val_loader, 
+#     epochs=epochs, 
+#     save_dir=save_dir, 
+#     predict_dir=conditional_predict_dir, 
+#     early_stopping=early_stopping, 
+#     patience=patience, 
+#     epochs_between_prediction=10)
 
 # _, _, test_loader = get_dataloaders(manifest_path, batch_size=batch_size, num_workers=num_workers, dataset_class=PairedCTCBCTDatasetNPY, train_size=train_size, val_size=val_size, test_size=test_size)
 # vae = load_vae(vae_save_path)

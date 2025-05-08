@@ -303,7 +303,7 @@ def train_unet_v2(
     warmup_lr=0,
     warmup_epochs=0,
     perceptual_loss=False,
-    perceptual_weight=0.025,
+    perceptual_weight=0.01,
 ):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -337,7 +337,7 @@ def train_unet_v2(
     es_counter = 0
 
     print(f"Starting fine-tuning for {epochs} epochs. LR={learning_rate:.1e}")
-    print(f"MSE weight={mse_weight}, SSIM weight={ssim_weight}, Perceptual={'enabled' if perceptual_loss else 'disabled'}")
+    print(f"MSE weight={mse_weight}, SSIM weight={ssim_weight}, Perceptual={perceptual_weight if perceptual_loss else 'disabled'}")
 
     for epoch in range(epochs):
         unet.train()

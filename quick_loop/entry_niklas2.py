@@ -10,7 +10,7 @@ from quick_loop.unet import load_unet, train_unet, train_unet_v2, train_joint, t
 from quick_loop.unetConditional import load_cond_unet, train_cond_unet
 from quick_loop.controlnet import load_controlnet
 from quick_loop.degradationRemoval import load_degradation_removal
-from quick_loop.unetControlPACA import load_unet_control_paca, train_dr_control_paca, test_dr_control_paca
+from quick_loop.unetControlPACA import load_unet_control_paca, train_dr_control_paca, train_dr_control_paca_v2,test_dr_control_paca
 
 ### CONFIG ###
 train_size = None
@@ -173,7 +173,7 @@ controlnet = load_controlnet(save_path=unet_save_path, trainable=True)
 dr_module = load_degradation_removal(trainable=True)
 unet = load_unet_control_paca(unet_save_path=unet_save_path, paca_trainable=True)
 train_loader, val_loader, test_loader = get_dataloaders(manifest_path, batch_size=batch_size, num_workers=num_workers, dataset_class=PairedCTCBCTDatasetNPY, train_size=train_size, val_size=val_size, test_size=test_size)
-train_dr_control_paca(
+train_dr_control_paca_v2(
     vae=vae, 
     unet=unet, 
     controlnet=controlnet, 

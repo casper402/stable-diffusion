@@ -384,7 +384,7 @@ def train_dr_control_paca(
 
     print("Training finished.")
 
-def train_dr_control_paca(
+def train_dr_control_paca_v2(
     vae,
     unet,
     controlnet,

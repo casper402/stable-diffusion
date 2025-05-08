@@ -196,7 +196,7 @@ def conditional_unet_predict_volume(
             for i in range(len(schedule) - 1):
                 t, t_prev = int(schedule[i]), int(schedule[i + 1])
                 t_tensor   = torch.full((z.size(0),), t, device=device, dtype=torch.long)
-                eps = unet(z, imgs, t_tensor)
+                eps = unet(z, mu, t_tensor)
 
                 a_t      = alpha_cumprod[t]
                 a_prev   = alpha_cumprod[t_prev]

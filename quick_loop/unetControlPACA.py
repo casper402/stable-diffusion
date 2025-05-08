@@ -932,7 +932,7 @@ def train_segmentation_control(
             saved_count = 0
 
             with torch.no_grad():
-                for i, (ct, cbct, segmentation, _, _) in enumerate(val_loader):
+                for i, (ct, cbct, segmentation, _, _) in enumerate(test_loader):
                     ct = ct.to(device)
                     cbct = cbct.to(device)
 

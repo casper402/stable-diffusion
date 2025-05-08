@@ -209,6 +209,7 @@ train_segmentation_control(
     dr_module_seg=dr_module_seg,
     train_loader=train_loader, 
     val_loader=val_loader, 
+    test_loader=test_loader,
     epochs=epochs, 
     save_dir=save_dir, 
     early_stopping=early_stopping, 

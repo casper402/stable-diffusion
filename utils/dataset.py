@@ -366,6 +366,7 @@ def get_dataloaders(manifest_csv, batch_size, num_workers, dataset_class=PairedC
         test_dataset, _ = random_split(test_dataset, [test_size, len(test_dataset) - test_size])
 
     print(f"Dataset sizes - Train: {len(train_dataset)}, Validation: {len(val_dataset)}, Test: {len(test_dataset)}")
+    print("has augmentation:", augmentation)
 
     # Train loader
     train_loader = DataLoader(

@@ -172,7 +172,7 @@ unet = load_unet_control_paca(unet_save_path=unet_save_path, paca_trainable=True
 controlnet = load_controlnet(save_path=unet_save_path, trainable=True)
 dr_module = load_degradation_removal(trainable=True)
 unet = load_unet_control_paca(unet_save_path=unet_save_path, paca_trainable=True)
-train_loader, val_loader, test_loader = get_dataloaders(manifest_path, batch_size=batch_size, num_workers=num_workers, dataset_class=PairedCTCBCTDatasetNPY, train_size=train_size, val_size=val_size, test_size=test_size)
+train_loader, val_loader, test_loader = get_dataloaders(manifest_path, batch_size=batch_size, num_workers=num_workers, dataset_class=PairedCTCBCTDatasetNPY, train_size=train_size, val_size=val_size, test_size=test_size, augmentation=augmentation)
 train_dr_control_paca_v2(
     vae=vae, 
     unet=unet, 

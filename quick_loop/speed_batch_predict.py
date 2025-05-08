@@ -190,6 +190,8 @@ def predict_clinic():
     ds = CBCTDatasetNPY(CBCT_CLINIC_DIR, clinic_transform)
     loader = DataLoader(ds, batch_size=BATCH_SIZE, num_workers=4, pin_memory=True)
 
+    print("ready to predict for:", CBCT_CLINIC_DIR)
+
     predict_volume(vae, unet, controlnet, dr_module, loader, OUT_DIR, GUIDANCE_SCALE)
 
 # ------------------------

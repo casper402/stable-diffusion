@@ -16,7 +16,7 @@ from quick_loop.unetControlPACA import load_unet_control_paca
 # ------------------------
 CBCT_DIR = '../training_data/CBCT/490/test'
 VOLUME_INDICES = [3, 8, 12, 26, 32, 33, 35, 54, 59, 61, 106, 116, 129]
-OUT_DIR = '../predictions/controlnet_augmentation'
+OUT_DIR = '../predictions/controlnet'
 
 GUIDANCE_SCALE = 1.0
 ALPHA_A = 0.2         # Mixing weight for CBCT signal at t0
@@ -88,13 +88,10 @@ def predict_volume(
     guidance_scale: float
 ):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    torch.backends.cudnn.benchmark = True
-    torch.backends.cuda.matmul.allow_tf32 = True
-    torch.backends.cudnn.allow_tf32 = True
 
     diffusion = Diffusion(device)
-    betas = diffusion.beta.to(device).half()
-    alpha_cumprod = diffusion.alpha_cumprod.to(device).half()
+    betas = diffusion.beta.to(device)
+    alpha_cumprod = diffusion.alpha_cumprod.to(device)
     T = diffusion.timesteps
 
     # Choose sampling schedule
@@ -115,8 +112,8 @@ def predict_volume(
 
     for batch_idx, (names, imgs) in enumerate(dataloader, start=1):
         batch_start = time.time()
-        imgs = imgs.to(device).half()
-        with torch.inference_mode(), torch.cuda.amp.autocast():
+        imgs = imgs.to(device)
+        with torch.inference_mode():
             control_inputs, _ = dr_module(imgs)
             mu, logvar = vae.encode(imgs)
 
@@ -163,10 +160,10 @@ if __name__ == '__main__':
         transforms.Pad((0, 64, 0, 64), fill=-1),
         transforms.Resize((256, 256)),
     ])
-    vae = load_vae(VAE_SAVE_PATH).half()
-    unet = load_unet_control_paca(UNET_SAVE_PATH, PACA_LAYERS_SAVE_PATH).half()
-    controlnet = load_controlnet(CONTROLNET_SAVE_PATH).half()
-    dr_module = load_degradation_removal(DEGRADATION_REMOVAL_SAVE_PATH).half()
+    vae = load_vae(VAE_SAVE_PATH)
+    unet = load_unet_control_paca(UNET_SAVE_PATH, PACA_LAYERS_SAVE_PATH)
+    controlnet = load_controlnet(CONTROLNET_SAVE_PATH)
+    dr_module = load_degradation_removal(DEGRADATION_REMOVAL_SAVE_PATH)
 
     for vol in VOLUME_INDICES:
         cbct_folder = os.path.join(CBCT_DIR, f"volume-{vol}")

@@ -775,14 +775,15 @@ def train_segmentation_control(
             with torch.no_grad():
                 controlnet_input_cbct, _ = dr_module_cbct(cbct_img)
                 down_res_samples_cbct, middle_res_sample_cbct = controlnet_cbct(z_noisy_ct, controlnet_input_cbct, t)
-                pred_noise = unet(
-                    z_noisy_ct, 
-                    t, 
-                    down_res_samples_cbct, 
-                    middle_res_sample_cbct,
-                    down_res_samples_seg,
-                    middle_res_sample_seg
-                )
+            
+            pred_noise = unet(
+                z_noisy_ct, 
+                t, 
+                down_res_samples_cbct, 
+                middle_res_sample_cbct,
+                down_res_samples_seg,
+                middle_res_sample_seg
+            )
 
             # Compute losses
             loss_diff = noise_loss(pred_noise, noise)
@@ -793,8 +794,7 @@ def train_segmentation_control(
             sqrt_one_minus_alpha_cumprod = torch.sqrt(1 - alpha_cumprod_t)
             z_hat = (z_noisy_ct - sqrt_one_minus_alpha_cumprod * pred_noise) / (sqrt_alpha_cumprod + 1e-8) # Added epsilon for stability
             
-            with torch.no_grad():
-                x_recon = vae.decode(z_hat)
+            x_recon = vae.decode(z_hat)
 
             # Compute MSE loss between x_recon and ct_img within the liver mask
             x_recon_liver_masked = x_recon * liver

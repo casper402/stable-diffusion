@@ -230,8 +230,6 @@ class PairedCTCBCTDatasetNPY(Dataset):
         size = random.choice([256, 490])
         cbct_path = row[f'cbct_{size}_path']
         cbct = np.load(cbct_path).astype(np.float32) / 1000.0
-        
-        ct   = torch.from_numpy(ct).unsqueeze(0)
         cbct = torch.from_numpy(cbct).unsqueeze(0)
 
         if self.base_transform:

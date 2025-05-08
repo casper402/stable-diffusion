@@ -1,4 +1,5 @@
 import os
+import random
 import numpy as np
 import csv
 import torch
@@ -221,8 +222,15 @@ class PairedCTCBCTDatasetNPY(Dataset):
 
     def __getitem__(self, idx):
         row = self.df.iloc[idx]
-        ct   = np.load(row['ct_path']).astype(np.float32)  / 1000.0
-        cbct = np.load(row['cbct_path']).astype(np.float32)/ 1000.0
+
+        ct = np.load(row['ct_path']).astype(np.float32) / 1000.0
+        ct = torch.from_numpy(ct).unsqueeze(0)
+
+        # randomly choose 256 vs 490 CBCT
+        size = random.choice([256, 490])
+        cbct_path = row[f'cbct_{size}_path']
+        cbct = np.load(cbct_path).astype(np.float32) / 1000.0
+        
         ct   = torch.from_numpy(ct).unsqueeze(0)
         cbct = torch.from_numpy(cbct).unsqueeze(0)
 
@@ -271,18 +279,19 @@ class PairedCTCBCTSegmentationDatasetNPY(Dataset):
         liver_path = row.get('liver_path')
         if liver_path and os.path.exists(liver_path):
             liver = np.load(liver_path).astype(np.float32)
-            liver = torch.from_numpy(liver).unsqueeze(0) # Add channel dim (C, H, W)
         else:
             liver = torch.zeros(1, ct.shape[0], dtype=torch.float32)
 
         tumor_path = row.get('tumor_path')
         if tumor_path and os.path.exists(tumor_path):
             tumor = np.load(tumor_path).astype(np.float32)
-            tumor = torch.from_numpy(tumor).unsqueeze(0) # Add channel dim (C, H, W)
         else:
             tumor = torch.zeros(1, ct.shape[0], dtype=torch.float32)
         
         segmentation_map = liver - tumor
+
+        tumor = torch.from_numpy(tumor).unsqueeze(0) # Add channel dim (C, H, W)
+        liver = torch.from_numpy(liver).unsqueeze(0) # Add channel dim (C, H, W)
         segmentation_map = torch.from_numpy(segmentation_map).unsqueeze(0)
 
         if self.base_transform:

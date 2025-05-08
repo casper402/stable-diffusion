@@ -4,6 +4,7 @@ import numpy as np
 import nibabel as nib
 
 DEBUG = False
+ROTATE = True
 
 def process_nifti_file(folder_path, nifty_file_name, output_dir):
     """
@@ -69,9 +70,12 @@ def process_nifti_file(folder_path, nifty_file_name, output_dir):
             global_max_idx = i
 
         # Rotate the clipped slice 90° clockwise (k=-1) and save it.
-        rotated_data = np.rot90(data_clipped[:, :, i], k=-1)
+        output = data_clipped[:, :, i]
+        if ROTATE:
+            output = np.rot90(output, k=-1)
         slice_file = os.path.join(output_dir, f"{base_name}_slice_{i:03d}.npy")
-        np.save(slice_file, rotated_data)
+        np.save(slice_file, output)
+            
         if DEBUG:
             print(f"Saved rotated slice {i} as: {slice_file}")
 
@@ -84,11 +88,12 @@ def process_nifti_file(folder_path, nifty_file_name, output_dir):
 
 def process(volume_idx):
     # Change these paths as needed.
-    folder_path = os.path.expanduser("/Volumes/Lenovo PS8/Casper/kaggle_dataset/TRAINCBCTSimulated/490")
+    folder_path = os.path.expanduser("/Users/Niklas/thesis/training_data/Casper-klinik")
     # For CBCT volumes, files are named like "REC-0.nii". The renaming in process_nifti_file
     # will ensure that the output base name is similar to "volume-0".
-    nifty_file_name = f"REC-{volume_idx}.nii"
-    output_dir = os.path.expanduser("/Users/Niklas/thesis/training_data/CBCT")
+    # nifty_file_name = f"REC-{volume_idx}.nii"
+    nifty_file_name = "CBCT.nii.gz"
+    output_dir = os.path.expanduser("/Users/Niklas/thesis/training_data/clinic")
     
     return process_nifti_file(folder_path, nifty_file_name, output_dir)
 

@@ -15,8 +15,9 @@ from quick_loop.unetControlPACA import load_unet_control_paca
 # Configuration Variables
 # ------------------------
 CBCT_DIR = '../training_data/scaled-490/'
+CBCT_CLINIC_DIR = '../training_data/clinic/'
 VOLUME_INDICES = [3, 8, 12, 26, 32, 33, 35, 54, 59, 61, 106, 116, 129]
-OUT_DIR = '../predictionsV2-490-50steps_v2_cbct/'
+OUT_DIR = '../prediction-clinic-20stepsize/'
 
 GUIDANCE_SCALE = 1.0
 ALPHA_A = 0.2         # Mixing weight for CBCT signal at t0
@@ -155,10 +156,9 @@ def predict_volume(
     print(f"Vol {os.path.basename(save_dir)} done in {time.time() - volume_start:.2f}s")
 
 # ------------------------
-# Main
+# Predict
 # ------------------------
-
-if __name__ == '__main__':
+def predict_test_data():
     transform = transforms.Compose([
         transforms.Pad((0, 64, 0, 64), fill=-1),
         transforms.Resize((256, 256)),
@@ -175,3 +175,28 @@ if __name__ == '__main__':
         loader = DataLoader(ds, batch_size=BATCH_SIZE, num_workers=4, pin_memory=True)
         predict_volume(vae, unet, controlnet, dr_module, loader, save_folder, GUIDANCE_SCALE)
     print("All volumes processed.")
+
+
+def predict_clinic():
+    clinic_transform = transforms.Compose([
+        transforms.Resize((256, 256)),
+    ])
+
+    vae = load_vae(VAE_SAVE_PATH).half()
+    unet = load_unet_control_paca(UNET_SAVE_PATH, PACA_LAYERS_SAVE_PATH).half()
+    controlnet = load_controlnet(CONTROLNET_SAVE_PATH).half()
+    dr_module = load_degradation_removal(DEGRADATION_REMOVAL_SAVE_PATH).half()
+
+    ds = CBCTDatasetNPY(CBCT_CLINIC_DIR, clinic_transform)
+    loader = DataLoader(ds, batch_size=BATCH_SIZE, num_workers=4, pin_memory=True)
+
+    predict_volume(vae, unet, controlnet, dr_module, loader, OUT_DIR, GUIDANCE_SCALE)
+
+# ------------------------
+# Main
+# ------------------------
+
+if __name__ == '__main__':
+    # predict_test_data()
+    
+    predict_clinic()

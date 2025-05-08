@@ -121,15 +121,8 @@ def predict_volume(
             control_inputs, _ = dr_module(imgs)
             mu, logvar = vae.encode(imgs)
 
-            # -----------------------------------------------------------------
-            # New init: mix CBCT signal (mu) with noise at t0 using ALPHA_A
-            # -----------------------------------------------------------------
-            alpha_bar_t0 = alpha_cumprod[t0]
-            alpha_eff    = ALPHA_A * alpha_bar_t0
-            s_alpha      = torch.sqrt(alpha_eff)
-            s_noise      = torch.sqrt(1.0 - alpha_eff)
-            noise        = torch.randn_like(mu)
-            z            = s_alpha * mu + s_noise * noise
+            # Tried with CBCT injected noise, but returned to random noise for now
+            z = torch.randn_like(mu
 
             # PACA control diffusion loop
             for i in range(len(schedule) - 1):

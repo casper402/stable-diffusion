@@ -156,8 +156,9 @@ def plot(volume_idx, slice_num):
         # os.path.expanduser(f"/Users/Niklas/thesis/predictions/v1_490/volume-{volume_idx}"),
         # os.path.expanduser(f"/Users/Niklas/thesis/predictions/v1_490_speed/volume-{volume_idx}"),
         # os.path.expanduser(f"/Users/Niklas/thesis/predictions/v2_490_speed/volume-{volume_idx}"),
-        os.path.expanduser(f"/Users/Niklas/thesis/predictions/v2_490_speed_stepsize20/volume-{volume_idx}"),
+        # os.path.expanduser(f"/Users/Niklas/thesis/predictions/v2_490_speed_stepsize20/volume-{volume_idx}"),
         os.path.expanduser(f"/Users/Niklas/thesis/predictions/v2_490_speed_stepsize20_v2/volume-{volume_idx}"),
+        os.path.expanduser(f"/Users/Niklas/thesis/predictions/casper/volume-{volume_idx}"),
         os.path.expanduser("/Users/Niklas/thesis/training_data/CBCT/scaled-490"),
     ]
     gt_dir = os.path.expanduser("/Users/Niklas/thesis/training_data/CT/test")

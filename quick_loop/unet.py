@@ -325,16 +325,16 @@ def train_unet_v2(
     diffusion = Diffusion(device)
 
     # Loss weights
-    mse_weight  = 0.25
+    mse_weight = 0.25
     ssim_weight = 0.50
-    ssim_loss   = SsimLoss()
+    ssim_loss = SsimLoss()
 
     # Perceptual setup
     if perceptual_loss:
         perc_loss_fn = PerceptualLoss(device=device)
-    
+
     best_val_loss = float('inf')
-    es_counter    = 0
+    es_counter = 0
 
     print(f"Starting fine-tuning for {epochs} epochs. LR={learning_rate:.1e}")
     print(f"MSE weight={mse_weight}, SSIM weight={ssim_weight}, Perceptual={'enabled' if perceptual_loss else 'disabled'}")
@@ -345,7 +345,7 @@ def train_unet_v2(
 
         # Warmup LR
         if epoch < warmup_epochs:
-            warmup_factor = (epoch+1) / warmup_epochs
+            warmup_factor = (epoch + 1) / warmup_epochs
             lr = warmup_lr + warmup_factor * (learning_rate - warmup_lr)
             for g in optimizer.param_groups:
                 g['lr'] = lr
@@ -373,44 +373,51 @@ def train_unet_v2(
             noise_l = noise_loss(pred_noise, noise)
 
             # Decode
-            acp = diffusion.alpha_cumprod[t].view(-1,1,1,1)
-            sa  = torch.sqrt(acp)
-            sb  = torch.sqrt(1 - acp)
-            z_hat = (z_noisy - sb*pred_noise) / sa
+            acp = diffusion.alpha_cumprod[t].view(-1, 1, 1, 1)
+            sa = torch.sqrt(acp)
+            sb = torch.sqrt(1 - acp)
+            z_hat = (z_noisy - sb * pred_noise) / sa
             x_recon = vae.decode(z_hat)
 
             # Image losses
-            mse_l  = F.mse_loss(x_recon, x)
+            mse_l = F.mse_loss(x_recon, x)
             ssim_l = ssim_loss(x_recon, x)
 
             # Perceptual loss
             perc_l = perc_loss_fn(x_recon, x) if perceptual_loss else 0.0
 
             # Total loss
-            loss = (noise_l
-                    + mse_weight * mse_l
-                    + ssim_weight * ssim_l
-                    + (perceptual_weight * perc_l if perceptual_loss else 0))
+            loss = (
+                noise_l
+                + mse_weight * mse_l
+                + ssim_weight * ssim_l
+                + (perceptual_weight * perc_l if perceptual_loss else 0)
+            )
 
             loss.backward()
             torch.nn.utils.clip_grad_norm_(unet.parameters(), gradient_clip_val)
             optimizer.step()
 
             # Accumulate
-            noise_sum += noise_l.item()
-            mse_sum   += mse_l.item()
-            ssim_sum  += ssim_l.item()
-            perc_sum  += (perc_l.item() if perceptual_loss else 0)
-            total_sum += loss.item()
+            new_noise = noise_l.item()
+            new_mse = mse_l.item() * mse_weight
+            new_ssim = ssim_l.item() * ssim_weight
+            new_perc = (perc_l.item() * perceptual_weight if perceptual_loss else 0)
+
+            noise_sum += new_noise
+            mse_sum += new_mse
+            ssim_sum += new_ssim
+            perc_sum += new_perc
+            total_sum += new_noise + new_mse + new_ssim + new_perc
 
         # Compute averages
         n_batches = len(train_loader)
         train_metrics = {
-            'noise': noise_sum/n_batches,
-            'mse': mse_sum/n_batches,
-            'ssim': ssim_sum/n_batches,
-            'perceptual': perc_sum/n_batches if perceptual_loss else None,
-            'combined': total_sum/n_batches,
+            'noise': noise_sum / n_batches,
+            'mse': mse_sum / n_batches,
+            'ssim': ssim_sum / n_batches,
+            'perceptual': perc_sum / n_batches if perceptual_loss else None,
+            'combined': total_sum / n_batches,
         }
 
         # Validation
@@ -428,33 +435,41 @@ def train_unet_v2(
                 pred_noise = unet(z_noisy, t)
 
                 noise_l = noise_loss(pred_noise, noise)
-                acp = diffusion.alpha_cumprod[t].view(-1,1,1,1)
-                z_hat = (z_noisy - torch.sqrt(1-acp)*pred_noise) / torch.sqrt(acp)
+                acp = diffusion.alpha_cumprod[t].view(-1, 1, 1, 1)
+                z_hat = (z_noisy - torch.sqrt(1 - acp) * pred_noise) / torch.sqrt(acp)
                 x_recon = vae.decode(z_hat)
 
-                mse_l  = F.mse_loss(x_recon, x)
+                mse_l = F.mse_loss(x_recon, x)
                 ssim_l = ssim_loss(x_recon, x)
                 perc_l = perc_loss_fn(x_recon, x) if perceptual_loss else 0.0
 
-                loss_val = (noise_l
-                            + mse_weight*mse_l
-                            + ssim_weight*ssim_l
-                            + (perceptual_weight * perc_l if perceptual_loss else 0))
+                loss_val = (
+                    noise_l
+                    + mse_weight * mse_l
+                    + ssim_weight * ssim_l
+                    + (perceptual_weight * perc_l if perceptual_loss else 0)
+                )
 
-                v_noise += noise_l.item()
-                v_mse   += mse_l.item()
-                v_ssim  += ssim_l.item()
-                v_perc  += (perc_l.item() if perceptual_loss else 0)
-                v_total += loss_val.item()
+                # Accumulate
+                new_noise = noise_l.item()
+                new_mse = mse_l.item() * mse_weight
+                new_ssim = ssim_l.item() * ssim_weight
+                new_perc = (perc_l.item() * perceptual_weight if perceptual_loss else 0)
+
+                v_noise += new_noise
+                v_mse += new_mse
+                v_ssim += new_ssim
+                v_perc += new_perc
+                v_total += new_noise + new_mse + new_ssim + new_perc
 
         # Averages
         val_n = len(val_loader)
         val_metrics = {
-            'noise': v_noise/val_n,
-            'mse': v_mse/val_n,
-            'ssim': v_ssim/val_n,
-            'perceptual': (v_perc/val_n if perceptual_loss else None),
-            'combined': v_total/val_n,
+            'noise': v_noise / val_n,
+            'mse': v_mse / val_n,
+            'ssim': v_ssim / val_n,
+            'perceptual': v_perc / val_n if perceptual_loss else None,
+            'combined': v_total / val_n,
         }
 
         # Logging

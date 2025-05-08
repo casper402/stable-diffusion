@@ -237,8 +237,8 @@ if __name__ == "__main__":
     tumor_mask_folder   = os.path.expanduser("~/thesis/training_data/tumor/test")
 
     eval_sets = [
-        ("noise",  v2_pred490speedstepsize20v2_base, False),
-        ("with cbct",  v2_cbct, False),
+        ("CBCT", cbct490_base, True),
+        ("sCT",  v2_pred490speedstepsize20v2_base, False),
     ]
 
     # ──────── 1) GLOBAL & REGION‑BASED EVAL ─────────────────────────────────

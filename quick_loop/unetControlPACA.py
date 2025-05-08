@@ -5,10 +5,14 @@ import torch.nn as nn
 import torchvision
 from tqdm import tqdm
 
+import torch.nn.functional as F
+
 from models.diffusion import Diffusion
 from quick_loop.blocks import nonlinearity, Normalize, TimestepEmbedding, DownBlock, MiddleBlock, ControlNetPACAUpBlock
 from quick_loop.degradationRemoval import degradation_loss
 from quick_loop.unet import noise_loss
+from utils.losses import PerceptualLoss, SsimLoss
+from torch.optim import AdamW
 
 class UNetControlPaca(nn.Module):
     def __init__(self, 
@@ -377,6 +381,286 @@ def train_dr_control_paca(
                     if saved_count >= num_images_to_save:
                         break
             print(f"Saved {num_images_to_save} images for epoch {epoch+1} to {predict_dir}")
+
+    print("Training finished.")
+
+def train_dr_control_paca(
+    vae,
+    unet,
+    controlnet,
+    dr_module,
+    train_loader,
+    val_loader,
+    epochs=1000,
+    save_dir='.',
+    predict_dir="predictions",
+    early_stopping=None,
+    patience=None,
+    gamma=1.0,
+    guidance_scale=1.0,
+    epochs_between_prediction=10,
+    learning_rate=5.0e-5,
+    # Reconstruction loss weights
+    mse_weight=0.25,
+    ssim_weight=0.50,
+    perceptual_weight=0.01,
+):
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    os.makedirs(save_dir, exist_ok=True)
+    os.makedirs(predict_dir, exist_ok=True)
+    amp_enabled = torch.cuda.is_available()
+    print(f"AMP Enabled: {amp_enabled}")
+
+    # Move models to device
+    vae.to(device)
+    unet.to(device)
+    controlnet.to(device)
+    dr_module.to(device)
+
+    # Initialize loss functions
+    ssim_loss = SsimLoss()
+    perc_loss_fn = PerceptualLoss(device=device)
+
+    # Collect trainable parameters
+    controlnet_params = [p for p in controlnet.parameters() if p.requires_grad]
+    dr_module_params = [p for p in dr_module.parameters() if p.requires_grad]
+    unet_params = [p for _, p in unet.named_parameters() if p.requires_grad]
+    params_to_train = controlnet_params + dr_module_params + unet_params
+
+    optimizer = AdamW(params_to_train, lr=learning_rate)
+    if patience is None:
+        patience = epochs
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer,
+        mode='min',
+        factor=0.5,
+        patience=patience,
+        threshold=1e-4,
+        min_lr=min(1e-7, learning_rate)
+    )
+    diffusion = Diffusion(device, timesteps=1000)
+
+    # Tracking best validation loss
+    best_val_loss = float('inf')
+    es_counter = 0
+
+    print(f"Starting training for {epochs} epochs. LR={learning_rate:.1e}")
+    print(f"Loss weights -> MSE: {mse_weight}, SSIM: {ssim_weight}, Perceptual: {perceptual_weight}, Gamma: {gamma}")
+
+    for epoch in range(epochs):
+        unet.train(); controlnet.train(); dr_module.train()
+        train_metrics = {k: 0.0 for k in ['noise','dr','mse','ssim','perceptual','total']}
+
+        # Training loop
+        for ct_img, cbct_img in train_loader:
+            ct_img = ct_img.to(device)
+            cbct_img = cbct_img.to(device)
+            optimizer.zero_grad()
+
+            # VAE encoding
+            with torch.no_grad():
+                ct_mu, ct_logvar = vae.encode(ct_img)
+                z_ct = vae.reparameterize(ct_mu, ct_logvar)
+
+            # Degradation and noise prediction
+            controlnet_input, intermediate_preds = dr_module(cbct_img)
+            t = diffusion.sample_timesteps(z_ct.size(0))
+            noise = torch.randn_like(z_ct)
+            z_noisy = diffusion.add_noise(z_ct, t, noise=noise)
+            down_res, mid_res = controlnet(z_noisy, controlnet_input, t)
+            pred_noise = unet(z_noisy, t, down_res, mid_res)
+
+            # Compute losses
+            loss_diff = noise_loss(pred_noise, noise)
+            loss_dr   = degradation_loss(intermediate_preds, ct_img)
+
+            # Reconstruct image for reconstruction losses
+            alpha_cumprod_t = diffusion.alpha_cumprod[t].view(-1,1,1,1)
+            sqrt_alpha_cumprod = torch.sqrt(alpha_cumprod_t)
+            sqrt_one_minus_alpha_cumprod = torch.sqrt(1 - alpha_cumprod_t)
+            z_hat = (z_noisy - sqrt_one_minus_alpha_cumprod * pred_noise) / sqrt_alpha_cumprod
+            x_recon = vae.decode(z_hat)
+
+            mse_l = F.mse_loss(x_recon, ct_img)
+            ssim_l = ssim_loss(x_recon, ct_img)
+            perc_l = perc_loss_fn(x_recon, ct_img)
+
+            # Compute weighted components for accurate reporting
+            new_noise = loss_diff.item()
+            new_dr    = loss_dr.item() * gamma
+            new_mse   = mse_l.item() * mse_weight
+            new_ssim  = ssim_l.item() * ssim_weight
+            new_perc  = perc_l.item() * perceptual_weight
+
+            # Total combined loss
+            total_loss = (
+                loss_diff
+                + gamma * loss_dr
+                + mse_weight * mse_l
+                + ssim_weight * ssim_l
+                + perceptual_weight * perc_l
+            )
+
+            # Backpropagation
+            total_loss.backward()
+            torch.nn.utils.clip_grad_norm_(params_to_train, max_norm=1.0)
+            optimizer.step()
+
+            # Accumulate metrics using weighted values
+            train_metrics['noise']      += new_noise
+            train_metrics['dr']         += new_dr
+            train_metrics['mse']        += new_mse
+            train_metrics['ssim']       += new_ssim
+            train_metrics['perceptual'] += new_perc
+            train_metrics['total']      += (new_noise + new_dr + new_mse + new_ssim + new_perc)
+
+        # Average training metrics
+        for k in train_metrics:
+            train_metrics[k] /= len(train_loader)
+
+        # Validation loop
+        unet.eval(); controlnet.eval(); dr_module.eval()
+        val_metrics = {k: 0.0 for k in train_metrics}
+        with torch.no_grad():
+            for ct_img, cbct_img in val_loader:
+                ct_img = ct_img.to(device)
+                cbct_img = cbct_img.to(device)
+
+                ct_mu, ct_logvar = vae.encode(ct_img)
+                z_ct = vae.reparameterize(ct_mu, ct_logvar)
+
+                controlnet_input, intermediate_preds = dr_module(cbct_img)
+                loss_dr = degradation_loss(intermediate_preds, ct_img)
+
+                t = diffusion.sample_timesteps(z_ct.size(0))
+                noise = torch.randn_like(z_ct)
+                z_noisy = diffusion.add_noise(z_ct, t, noise=noise)
+                down_res, mid_res = controlnet(z_noisy, controlnet_input, t)
+                pred_noise = unet(z_noisy, t, down_res, mid_res)
+                loss_diff = noise_loss(pred_noise, noise)
+
+                alpha_cumprod_t = diffusion.alpha_cumprod[t].view(-1,1,1,1)
+                sqrt_alpha_cumprod = torch.sqrt(alpha_cumprod_t)
+                sqrt_one_minus_alpha_cumprod = torch.sqrt(1 - alpha_cumprod_t)
+                z_hat = (z_noisy - sqrt_one_minus_alpha_cumprod * pred_noise) / sqrt_alpha_cumprod
+                x_recon = vae.decode(z_hat)
+
+                mse_l  = F.mse_loss(x_recon, ct_img)
+                ssim_l = ssim_loss(x_recon, ct_img)
+                perc_l = perc_loss_fn(x_recon, ct_img)
+
+                # Compute weighted components
+                new_noise = loss_diff.item()
+                new_dr    = loss_dr.item() * gamma
+                new_mse   = mse_l.item() * mse_weight
+                new_ssim  = ssim_l.item() * ssim_weight
+                new_perc  = perc_l.item() * perceptual_weight
+
+                # Accumulate validation metrics
+                val_metrics['noise']      += new_noise
+                val_metrics['dr']         += new_dr
+                val_metrics['mse']        += new_mse
+                val_metrics['ssim']       += new_ssim
+                val_metrics['perceptual'] += new_perc
+                val_metrics['total']      += (new_noise + new_dr + new_mse + new_ssim + new_perc)
+
+        # Average validation metrics
+        for k in val_metrics:
+            val_metrics[k] /= len(val_loader)
+
+        # Update LR and check for best
+        scheduler.step(val_metrics['total'])
+        print(
+            f"Epoch {epoch+1} | "
+            f"Train total={train_metrics['total']:.4f} (noise={train_metrics['noise']:.4f}, dr={train_metrics['dr']:.4f}, "
+            f"mse={train_metrics['mse']:.4f}, ssim={train_metrics['ssim']:.4f}, perc={train_metrics['perceptual']:.4f}) | "
+            f"Val total={val_metrics['total']:.4f} (noise={val_metrics['noise']:.4f}, dr={val_metrics['dr']:.4f}, "
+            f"mse={val_metrics['mse']:.4f}, ssim={val_metrics['ssim']:.4f}, perc={val_metrics['perceptual']:.4f})"
+        )
+
+        if val_metrics['total'] < best_val_loss:
+            best_val_loss = val_metrics['total']
+            es_counter = 0
+            torch.save(controlnet.state_dict(), os.path.join(save_dir, "controlnet.pth"))
+            torch.save(dr_module.state_dict(), os.path.join(save_dir, "dr_module.pth"))
+            paca_sd = {k: v for k, v in unet.state_dict().items() if 'paca' in k.lower()}
+            if paca_sd:
+                torch.save(paca_sd, os.path.join(save_dir, "paca_layers.pth"))
+            print(f"✅ Saved best model at epoch {epoch+1} (val={best_val_loss:.4f})")
+        else:
+            es_counter += 1
+            if early_stopping and es_counter >= early_stopping:
+                print(f"⏹ Early stopping after {early_stopping} epochs")
+                break
+
+        # Inference/Saving Test Images
+        if (epoch + 1) % epochs_between_prediction == 0:
+            print(f"--- Saving prediction for epoch {epoch+1} ---")
+
+            unet.eval()
+            controlnet.eval()
+            dr_module.eval()
+            vae.eval()
+
+            num_images_to_save = 5
+            saved_count = 0
+
+            with torch.no_grad():
+                for i, (ct, cbct) in enumerate(val_loader):
+                    ct = ct.to(device)
+                    cbct = cbct.to(device)
+
+                    controlnet_input, _ = dr_module(cbct)
+
+                    # Start from random noise for generation
+                    z_t = torch.randn_like(vae.encode(ct)[0])
+                    T = diffusion.timesteps
+
+                    for t_int in range(T - 1, -1, -1):
+                        t = torch.full((z_t.size(0),), t_int, device=device, dtype=torch.long)
+
+                        # CFG: Conditional and unconditional noise predictions
+                        down_res, mid_res = controlnet(z_t, controlnet_input, t)
+                        pred_noise_cond   = unet(z_t, t, down_res, mid_res)
+                        pred_noise_uncond = unet(z_t, t, None, None)
+                        # Guided noise
+                        pred_noise = pred_noise_uncond + guidance_scale * (pred_noise_cond - pred_noise_uncond)
+
+                        # DDPM sampling step
+                        beta_t = diffusion.beta[t_int].view(-1, 1, 1, 1)
+                        alpha_t = diffusion.alpha[t_int].view(-1, 1, 1, 1)
+                        alpha_cumprod_t = diffusion.alpha_cumprod[t_int].view(-1, 1, 1, 1)
+                        sqrt_one_minus_acp = torch.sqrt(1.0 - alpha_cumprod_t)
+                        sqrt_recip_alpha = torch.sqrt(1.0 / alpha_t)
+
+                        model_mean_coef = beta_t / sqrt_one_minus_acp
+                        model_mean = sqrt_recip_alpha * (z_t - model_mean_coef * pred_noise)
+
+                        if t_int > 0:
+                            noise_term = torch.randn_like(z_t)
+                            z_t = model_mean + torch.sqrt(beta_t) * noise_term
+                        else:
+                            z_t = model_mean
+
+                    # Decode final latent back to image
+                    z_0 = z_t
+                    generated_batch = vae.decode(z_0)
+
+                    # Save a few samples
+                    for j in range(generated_batch.size(0)):
+                        gen_img = generated_batch[j]
+                        cbct_vis = (cbct[j] / 2 + 0.5).clamp(0,1)
+                        gen_vis  = (gen_img / 2 + 0.5).clamp(0,1)
+                        ct_vis   = (ct[j] / 2 + 0.5).clamp(0,1)
+
+                        save_path = os.path.join(predict_dir, f"batch_{i}_img_{j}_guidance_{guidance_scale}.png")
+                        torchvision.utils.save_image([cbct_vis, gen_vis, ct_vis], save_path, nrow=3)
+                        saved_count += 1
+                        if saved_count >= num_images_to_save:
+                            break
+                    if saved_count >= num_images_to_save:
+                        break
+            print(f"Saved {saved_count} images for epoch {epoch+1} to {predict_dir}")
 
     print("Training finished.")
 

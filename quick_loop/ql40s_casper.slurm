@@ -25,6 +25,6 @@ source ../venvs/pytorch-l40s-env/bin/activate
 which python
 python -c "import torch; print('PyTorch version:', torch.__version__); print('CUDA available:', torch.cuda.is_available()); print('CUDA version:', torch.version.cuda)"
 export PYTHONPATH=$PYTHONPATH:$(pwd)
-python scripts/create_manifest.py
+python scripts/entry_casper.py
 
 echo "========= Job finished at $(date) =========="

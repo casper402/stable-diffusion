@@ -51,11 +51,15 @@ class UNetControlPaca(nn.Module):
         self.final_norm = Normalize(ch1)
         self.final_conv = nn.Conv2d(ch1, out_channels, kernel_size=3, stride=1, padding=1)
 
-    def forward(self, x, t, down_additional_residuals=None, middle_additional_residual=None):
-        control = True if down_additional_residuals is not None else False
+    def forward(self, x, t, down_paca_control_residuals=None, middle_paca_control_residual=None, down_control_residuals=None, middle_control_residual=None):
+        control_paca = True if down_paca_control_residuals is not None else False
+        extra_control = True if down_control_residuals is not None else False
 
-        if control:
-            additional_down_res_1_1, additional_down_res_1_2, additional_down_res_2_1, additional_down_res_2_2, additional_down_res_3_1, additional_down_res_3_2, additional_down_res_4_1, additional_down_res_4_2 = down_additional_residuals
+        if control_paca:
+            additional_down_res_1_1, additional_down_res_1_2, additional_down_res_2_1, additional_down_res_2_2, additional_down_res_3_1, additional_down_res_3_2, additional_down_res_4_1, additional_down_res_4_2 = down_paca_control_residuals
+
+        if extra_control:
+            extra_additional_down_res_1_1, extra_additional_down_res_1_2, extra_additional_down_res_2_1, extra_additional_down_res_2_2, extra_additional_down_res_3_1, extra_additional_down_res_3_2, extra_additional_down_res_4_1, extra_additional_down_res_4_2 = down_control_residuals
 
         t_emb = self.time_embedding(t)
         h = self.init_conv(x)         
@@ -65,7 +69,7 @@ class UNetControlPaca(nn.Module):
         h, (down_res_3_1, down_res_3_2) = self.down3(h, t_emb)
         h, (down_res_4_1, down_res_4_2) = self.down4(h, t_emb)
 
-        if control:
+        if control_paca:
             down_res_1_1 += additional_down_res_1_1
             down_res_1_2 += additional_down_res_1_2
             down_res_2_1 += additional_down_res_2_1
@@ -75,16 +79,26 @@ class UNetControlPaca(nn.Module):
             down_res_4_1 += additional_down_res_4_1
             down_res_4_2 += additional_down_res_4_2
 
+        if extra_control:
+            down_res_1_1 += extra_additional_down_res_1_1
+            down_res_1_2 += extra_additional_down_res_1_2
+            down_res_2_1 += extra_additional_down_res_2_1
+            down_res_2_2 += extra_additional_down_res_2_2
+            down_res_3_1 += extra_additional_down_res_3_1
+            down_res_3_2 += extra_additional_down_res_3_2
+            down_res_4_1 += extra_additional_down_res_4_1
+            down_res_4_2 += extra_additional_down_res_4_2
+
         h = self.middle(h, t_emb)
 
-        if control:
-            h = h + middle_additional_residual
+        if control_paca:
+            h = h + middle_paca_control_residual
             h = self.up4(h, (down_res_4_1, down_res_4_2), (additional_down_res_4_1, additional_down_res_4_2), t_emb)
             h = self.up3(h, (down_res_3_1, down_res_3_2), (additional_down_res_3_1, additional_down_res_3_2), t_emb)
             h = self.up2(h, (down_res_2_1, down_res_2_2), (additional_down_res_2_1, additional_down_res_2_2), t_emb)
             h = self.up1(h, (down_res_1_1, down_res_1_2), (additional_down_res_1_1, additional_down_res_1_2), t_emb)
         
-        if not control:
+        if not control_paca:
             h = self.up4(h, (down_res_4_1, down_res_4_2), None, t_emb)
             h = self.up3(h, (down_res_3_1, down_res_3_2), None, t_emb)
             h = self.up2(h, (down_res_2_1, down_res_2_2), None, t_emb)
@@ -368,7 +382,7 @@ def train_dr_control_paca(
                         ct_image_vis = (ct_image / 2 + 0.5).clamp(0, 1)
 
                         images_to_save = [cbct_image_vis, generated_image_vis, ct_image_vis]
-                        save_filename = f"{predict_dir}/batch_{i}_img_{j}_guidance_scale_{guidance_scale}.png"
+                        save_filename = f"{predict_dir}/epoch_{epoch}_batch_{i}_img_{j}_guidance_scale_{guidance_scale}.png"
 
                         torchvision.utils.save_image(
                             images_to_save,
@@ -653,7 +667,7 @@ def train_dr_control_paca_v2(
                         gen_vis  = (gen_img / 2 + 0.5).clamp(0,1)
                         ct_vis   = (ct[j] / 2 + 0.5).clamp(0,1)
 
-                        save_path = os.path.join(predict_dir, f"batch_{i}_img_{j}_guidance_{guidance_scale}.png")
+                        save_path = os.path.join(predict_dir, f"epoch_{epoch}_batch_{i}_img_{j}_guidance_{guidance_scale}.png")
                         torchvision.utils.save_image([cbct_vis, gen_vis, ct_vis], save_path, nrow=3)
                         saved_count += 1
                         if saved_count >= num_images_to_save:
@@ -662,6 +676,325 @@ def train_dr_control_paca_v2(
                         break
             print(f"Saved {saved_count} images for epoch {epoch+1} to {predict_dir}")
 
+    print("Training finished.")
+
+def train_segmentation_control(
+    vae, 
+    unet, 
+    controlnet_cbct, 
+    dr_module_cbct,
+    controlnet_seg,
+    dr_module_seg, 
+    train_loader, 
+    val_loader,
+    test_loader, 
+    epochs=1000, 
+    save_dir='.', 
+    predict_dir="predictions", 
+    early_stopping=None, 
+    patience=None, 
+    gamma=1.0, 
+    guidance_scale=1.0, 
+    epochs_between_prediction=50, 
+    learning_rate=5.0e-5, 
+):
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    os.makedirs(save_dir, exist_ok=True)
+    os.makedirs(predict_dir, exist_ok=True)
+    amp_enabled = torch.cuda.is_available()
+    vae.to(device)
+    unet.to(device)
+    controlnet_cbct.to(device)
+    dr_module_cbct.to(device)
+    controlnet_seg.to(device)
+    dr_module_seg.to(device)
+
+    # Collect trainable parameters per model
+    controlnet_params = [p for p in controlnet_seg.parameters() if p.requires_grad]
+    dr_module_params = [p for p in dr_module_seg.parameters() if p.requires_grad]
+    params_to_train = controlnet_params + dr_module_params
+
+    # Count them
+    controlnet_param_count = sum(p.numel() for p in controlnet_params)
+    dr_module_param_count = sum(p.numel() for p in dr_module_params)
+    total_param_count = controlnet_param_count + dr_module_param_count
+
+    # Print summary
+    print(f"Trainable parameters in ControlNet: {controlnet_param_count}")
+    print(f"Trainable parameters in DR Module:  {dr_module_param_count}")
+    print(f"Total parameters to train:          {total_param_count}")
+    
+    optimizer = torch.optim.AdamW(params_to_train, lr=learning_rate) # Use AdamW
+    if patience is None:
+        patience = epochs
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer,
+        mode='min',
+        factor=0.5,
+        patience=patience,
+        threshold=1e-4,
+        min_lr=min(1e-7, learning_rate)
+    )
+    diffusion = Diffusion(device, timesteps=1000)
+
+    # --- Training Loop ---
+    best_val_loss = float('inf')
+    early_stopping_counter = 0
+
+    optimizer.zero_grad()
+
+    for epoch in range(epochs):
+        controlnet_seg.train()
+        dr_module_seg.train()
+        train_loss_total = 0
+        train_loss_diff = 0
+        train_loss_liver = 0
+        train_loss_tumor = 0
+
+        for i, (ct, cbct, segmentation, liver, tumor) in enumerate(train_loader):
+            cbct_img = cbct.to(device)
+            ct_img = ct.to(device)
+            segmentation = segmentation.to(device)
+            liver = liver.to(device)
+            tumor = tumor.to(device)
+
+            optimizer.zero_grad()
+            
+            with torch.no_grad():
+                ct_mu, ct_logvar = vae.encode(ct_img)
+                z_ct = vae.reparameterize(ct_mu, ct_logvar)
+
+            # Forward pass
+            t = diffusion.sample_timesteps(z_ct.size(0))
+            noise = torch.randn_like(z_ct)
+            z_noisy_ct = diffusion.add_noise(z_ct, t, noise=noise)
+
+            controlnet_input_seg, _ = dr_module_seg(segmentation)
+            down_res_samples_seg, middle_res_sample_seg = controlnet_seg(z_noisy_ct, controlnet_input_seg, t)
+            
+            with torch.no_grad():
+                controlnet_input_cbct, _ = dr_module_cbct(cbct_img)
+                down_res_samples_cbct, middle_res_sample_cbct = controlnet_cbct(z_noisy_ct, controlnet_input_cbct, t)
+                pred_noise = unet(
+                    z_noisy_ct, 
+                    t, 
+                    down_res_samples_cbct, 
+                    middle_res_sample_cbct,
+                    down_res_samples_seg,
+                    middle_res_sample_seg
+                )
+
+            # Compute losses
+            loss_diff = noise_loss(pred_noise, noise)
+
+            # Reconstruct image for segmentation losses
+            alpha_cumprod_t = diffusion.alpha_cumprod[t].view(-1,1,1,1)
+            sqrt_alpha_cumprod = torch.sqrt(alpha_cumprod_t)
+            sqrt_one_minus_alpha_cumprod = torch.sqrt(1 - alpha_cumprod_t)
+            z_hat = (z_noisy_ct - sqrt_one_minus_alpha_cumprod * pred_noise) / (sqrt_alpha_cumprod + 1e-8) # Added epsilon for stability
+            
+            with torch.no_grad():
+                x_recon = vae.decode(z_hat)
+
+            # Compute MSE loss between x_recon and ct_img within the liver mask
+            x_recon_liver_masked = x_recon * liver
+            ct_img_liver_masked = ct_img * liver
+            liver_loss = F.mse_loss(x_recon_liver_masked, ct_img_liver_masked)
+
+            # Compute MSE loss between x_recon and ct_img within the tumor mask
+            x_recon_tumor_masked = x_recon * tumor
+            ct_img_tumor_masked = ct_img * tumor
+            tumor_loss = F.mse_loss(x_recon_tumor_masked, ct_img_tumor_masked)
+
+            # Combine losses
+            total_loss = loss_diff + liver_loss + tumor_loss
+
+            total_loss.backward()
+            torch.nn.utils.clip_grad_norm_(params_to_train, max_norm=1.0)
+
+            optimizer.step()
+
+            train_loss_total += total_loss.item()
+            train_loss_diff += loss_diff.item()
+            train_loss_liver += liver_loss.item()
+            train_loss_tumor += tumor_loss.item()
+            
+        avg_train_loss_total = train_loss_total / len(train_loader)
+        avg_train_loss_diff = train_loss_diff / len(train_loader)
+        avg_train_loss_liver = train_loss_liver / len(train_loader)
+        avg_train_loss_tumor = train_loss_tumor / len(train_loader)
+
+        # --- Validation Loop ---
+        controlnet_seg.eval()
+        dr_module_seg.eval()
+        val_loss_total = 0
+        val_loss_diff = 0
+        val_loss_liver = 0
+        val_loss_tumor = 0
+
+        with torch.no_grad():
+            for ct_img, cbct_img, segmentation, liver, tumor in val_loader:
+                # Move data to the appropriate device
+                cbct_img = cbct_img.to(device)
+                ct_img = ct_img.to(device)
+                segmentation = segmentation.to(device)
+                liver = liver.to(device)
+                tumor = tumor.to(device)
+
+                # Encode CT image to latent space
+                ct_mu, ct_logvar = vae.encode(ct_img)
+                z_ct = vae.reparameterize(ct_mu, ct_logvar)
+
+                # Forward pass for diffusion and ControlNets (same as training)
+                t = diffusion.sample_timesteps(z_ct.size(0)).to(device)
+                noise = torch.randn_like(z_ct).to(device)
+                z_noisy_ct = diffusion.add_noise(z_ct, t, noise=noise)
+
+                # Process segmentation input
+                controlnet_input_seg, _ = dr_module_seg(segmentation)
+                down_res_samples_seg, middle_res_sample_seg = controlnet_seg(z_noisy_ct, controlnet_input_seg, t)
+
+                # Process CBCT input
+                controlnet_input_cbct, _ = dr_module_cbct(cbct_img)
+                down_res_samples_cbct, middle_res_sample_cbct = controlnet_cbct(z_noisy_ct, controlnet_input_cbct, t)
+
+                # Predict noise
+                pred_noise = unet(
+                    z_noisy_ct,
+                    t,
+                    down_res_samples_cbct,
+                    middle_res_sample_cbct,
+                    down_res_samples_seg,
+                    middle_res_sample_seg
+                )
+
+                # Compute diffusion noise loss
+                loss_diff = noise_loss(pred_noise, noise)
+
+                # Reconstruct latent and image for segmentation losses
+                alpha_cumprod_t = diffusion.alpha_cumprod[t].view(-1,1,1,1)
+                sqrt_alpha_cumprod = torch.sqrt(alpha_cumprod_t)
+                sqrt_one_minus_alpha_cumprod = torch.sqrt(1 - alpha_cumprod_t)
+                z_hat = (z_noisy_ct - sqrt_one_minus_alpha_cumprod * pred_noise) / (sqrt_alpha_cumprod + 1e-8) # Added epsilon for stability
+
+                x_recon = vae.decode(z_hat)
+
+                # Compute masked reconstruction losses
+                x_recon_liver_masked = x_recon * liver
+                ct_img_liver_masked = ct_img * liver
+                liver_loss = F.mse_loss(x_recon_liver_masked, ct_img_liver_masked)
+
+                x_recon_tumor_masked = x_recon * tumor
+                ct_img_tumor_masked = ct_img * tumor
+                tumor_loss = F.mse_loss(x_recon_tumor_masked, ct_img_tumor_masked)
+
+
+                # Combine losses for validation
+                total_loss = loss_diff + liver_loss + tumor_loss
+
+                # Accumulate validation losses
+                val_loss_total += total_loss.item()
+                val_loss_diff += loss_diff.item()
+                val_loss_liver += liver_loss.item()
+                val_loss_tumor += tumor_loss.item()
+
+        avg_val_loss_total = val_loss_total / len(val_loader)
+        avg_val_loss_diff = val_loss_diff / len(val_loader)
+        avg_val_loss_liver = val_loss_liver / len(val_loader)
+        avg_val_loss_tumor = val_loss_tumor / len(val_loader)
+            
+        scheduler.step(avg_val_loss_total)
+        early_stopping_counter += 1
+
+        current_lr = optimizer.param_groups[0]['lr']
+         # Print epoch statistics (updated to include liver and tumor losses)
+        print(f"Epoch {epoch+1} | Train Loss: {avg_train_loss_total:.4f} (Diff: {avg_train_loss_diff:.4f}, Liver: {avg_train_loss_liver:.4f}, Tumor: {avg_train_loss_tumor:.4f}) | Val Loss: {avg_val_loss_total:.4f} (Diff: {avg_val_loss_diff:.4f}, Liver: {avg_val_loss_liver:.4f}, Tumor: {avg_val_loss_tumor:.4f}) | LR: {current_lr:.1e}")
+        
+        if avg_val_loss_total < best_val_loss:
+            best_val_loss = avg_val_loss_total
+            early_stopping_counter = 0
+            torch.save(controlnet_seg.state_dict(), os.path.join(save_dir, "controlnet_seg.pth"))
+            torch.save(dr_module_seg.state_dict(), os.path.join(save_dir, "dr_module_seg.pth"))
+            print(f"✅ Saved new best models at epoch {epoch+1} with val loss {avg_val_loss_total:.4f}")
+
+        if early_stopping and early_stopping_counter >= early_stopping:
+            print(f"Early stopped after {early_stopping} epochs with no improvement.")
+            break
+
+        # --- Inference/Saving Test Images ---
+        if ((epoch + 1) % epochs_between_prediction == 0): # Save every 10 epochs
+            print(f"--- Saving prediction for epoch {epoch+1} ---")
+
+            controlnet_seg.eval()
+            dr_module_seg.eval()
+
+            num_images_to_save = 5
+            saved_count = 0
+
+            with torch.no_grad():
+                for i, (ct, cbct, segmentation, _, _) in enumerate(val_loader):
+                    ct = ct.to(device)
+                    cbct = cbct.to(device)
+
+                    controlnet_input_cbct, _ = dr_module_cbct(cbct)
+                    controlnet_input_seg, _ = dr_module_seg(segmentation)
+
+                    z_t = torch.randn_like(vae.encode(ct)[0])
+                    T = diffusion.timesteps
+
+                    for t_int in range(T - 1, -1, -1): 
+                        t = torch.full((z_t.size(0),), t_int, device=device, dtype=torch.long)
+
+                        # CFG: Predict noise twice
+                        down_res_samples_cbct, middle_res_sample_cbct = controlnet_cbct(z_t, controlnet_input_cbct, t)
+                        down_res_samples_seg, middle_res_sample_seg = controlnet_seg(z_t, controlnet_input_cbct, t)
+                        pred_noise = unet(z_t, t, down_res_samples_cbct, middle_res_sample_cbct, down_res_samples_seg, middle_res_sample_seg)
+
+                        # DDPM
+                        beta_t = diffusion.beta[t_int].view(-1, 1, 1, 1)
+                        alpha_t = diffusion.alpha[t_int].view(-1, 1, 1, 1)
+                        alpha_cumprod_t = diffusion.alpha_cumprod[t_int].view(-1, 1, 1, 1)
+                        sqrt_one_minus_alpha_cumprod_t = torch.sqrt(1.0 - alpha_cumprod_t)
+                        sqrt_reciprocal_alpha_t = torch.sqrt(1.0 / alpha_t)
+
+                        model_mean_coef2 = beta_t / sqrt_one_minus_alpha_cumprod_t
+                        model_mean = sqrt_reciprocal_alpha_t * (z_t - model_mean_coef2 * pred_noise)
+
+                        if t_int > 0:
+                            variance = diffusion.beta[t_int].view(-1, 1, 1, 1) # Use posterior variance beta_t
+                            noise = torch.randn_like(z_t)
+                            z_t_minus_1 = model_mean + torch.sqrt(variance) * noise
+                        else:
+                            z_t_minus_1 = model_mean
+                        z_t = z_t_minus_1
+
+                    # Decode final latent
+                    z_0 = z_t
+                    generated_image_batch = vae.decode(z_0)
+
+                    for j in range(generated_image_batch.size(0)):
+                        generated_image = generated_image_batch[j]
+                        cbct_image = cbct[j]
+                        ct_image = ct[j]
+
+                        generated_image_vis = (generated_image / 2 + 0.5).clamp(0, 1)
+                        cbct_image_vis = (cbct_image / 2 + 0.5).clamp(0, 1)
+                        ct_image_vis = (ct_image / 2 + 0.5).clamp(0, 1)
+
+                        images_to_save = [cbct_image_vis, generated_image_vis, ct_image_vis]
+                        save_filename = f"{predict_dir}/epoch_{epoch}_batch_{i}_img_{j}_guidance_scale_{guidance_scale}.png"
+
+                        torchvision.utils.save_image(
+                            images_to_save,
+                            save_filename,
+                            nrow=len(images_to_save),
+                        )
+                        saved_count += 1
+                        if saved_count >= num_images_to_save:
+                            break
+                    if saved_count >= num_images_to_save:
+                        break
+            print(f"Saved {num_images_to_save} images for epoch {epoch+1} to {predict_dir}")
     print("Training finished.")
 
 def test_dr_control_paca(

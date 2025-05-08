@@ -8,7 +8,6 @@ import pandas as pd
 import torchvision.transforms.functional as F
 from torchvision import transforms
 from torchvision.transforms import InterpolationMode
-import random
 
 
 class CTDataset(Dataset):
@@ -222,14 +221,9 @@ class PairedCTCBCTDatasetNPY(Dataset):
 
     def __getitem__(self, idx):
         row = self.df.iloc[idx]
-
-        ct = np.load(row['ct_path']).astype(np.float32) / 1000.0
-        ct = torch.from_numpy(ct).unsqueeze(0)
-
-        # randomly choose 256 vs 490 CBCT
-        size = random.choice([256, 490])
-        cbct_path = row[f'cbct_{size}_path']
-        cbct = np.load(cbct_path).astype(np.float32) / 1000.0
+        ct   = np.load(row['ct_path']).astype(np.float32)  / 1000.0
+        cbct = np.load(row['cbct_path']).astype(np.float32)/ 1000.0
+        ct   = torch.from_numpy(ct).unsqueeze(0)
         cbct = torch.from_numpy(cbct).unsqueeze(0)
 
         if self.base_transform:
@@ -271,14 +265,24 @@ class PairedCTCBCTSegmentationDatasetNPY(Dataset):
         row = self.df.iloc[idx]
         ct   = np.load(row['ct_path']).astype(np.float32)  / 1000.0
         cbct = np.load(row['cbct_490_path']).astype(np.float32) / 1000.0
-        liver = np.load(row['liver_path']).astype(np.float32)
-        tumor = np.load(row['tumor_path']).astype(np.float32)
-        segmentation_map = liver - tumor
-        
         ct   = torch.from_numpy(ct).unsqueeze(0)
         cbct = torch.from_numpy(cbct).unsqueeze(0)
-        liver = torch.from_numpy(cbct).unsqueeze(0)
-        tumor = torch.from_numpy(cbct).unsqueeze(0)
+        
+        liver_path = row.get('liver_path')
+        if liver_path and os.path.exists(liver_path):
+            liver = np.load(liver_path).astype(np.float32)
+            liver = torch.from_numpy(liver).unsqueeze(0) # Add channel dim (C, H, W)
+        else:
+            liver = torch.zeros(1, ct.shape[0], dtype=torch.float32)
+
+        tumor_path = row.get('tumor_path')
+        if tumor_path and os.path.exists(tumor_path):
+            tumor = np.load(tumor_path).astype(np.float32)
+            tumor = torch.from_numpy(tumor).unsqueeze(0) # Add channel dim (C, H, W)
+        else:
+            tumor = torch.zeros(1, ct.shape[0], dtype=torch.float32)
+        
+        segmentation_map = liver - tumor
         segmentation_map = torch.from_numpy(segmentation_map).unsqueeze(0)
 
         if self.base_transform:
@@ -366,7 +370,6 @@ def get_dataloaders(manifest_csv, batch_size, num_workers, dataset_class=PairedC
         test_dataset, _ = random_split(test_dataset, [test_size, len(test_dataset) - test_size])
 
     print(f"Dataset sizes - Train: {len(train_dataset)}, Validation: {len(val_dataset)}, Test: {len(test_dataset)}")
-    print("has augmentation:", augmentation)
 
     # Train loader
     train_loader = DataLoader(

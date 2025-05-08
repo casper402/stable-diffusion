@@ -10,17 +10,17 @@ from quick_loop.unet import load_unet, train_unet, train_joint
 from quick_loop.unetConditional import load_cond_unet, train_cond_unet
 from quick_loop.controlnet import load_controlnet
 from quick_loop.degradationRemoval import load_degradation_removal
-from quick_loop.unetControlPACA import load_unet_control_paca, train_dr_control_paca, test_dr_control_paca
+from quick_loop.unetControlPACA import load_unet_control_paca, train_dr_control_paca, test_dr_control_paca, train_segmentation_control
 
 ### CONFIG ###
-train_size = 10
+train_size = None
 val_size = None
 test_size = 10
 batch_size = 8
 num_workers = 8
 epochs = 2000
-early_stopping = 70
-patience = 30
+early_stopping = 50
+patience = 20
 epochs_between_prediction = 5
 base_channels = 256
 dropout_rate = 0.1
@@ -29,12 +29,12 @@ warmup_lr = 0
 warmup_epochs = 0
 
 # Augmentation
-augmentation = {
-    'degrees': (-1, 1),
-    'translate': (0.1, 0.1),
-    'scale': (0.9, 1.1),
-    'shear': None,
-}
+# augmentation = {
+#     'degrees': (-1, 1),
+#     'translate': (0.1, 0.1),
+#     'scale': (0.9, 1.1),
+#     'shear': None,
+# }
 augmentation = None
 
 # Vae Loss params
@@ -45,22 +45,24 @@ kl_weight=0.000001
 l1_weight=0
 
 # Load pretrained model paths
-load_dir = "../pretrained_models"
-load_vae_path = os.path.join(load_dir, "vae_new_loss_term.pth")
-load_unet_path = os.path.join(load_dir, "unet.pth")
-load_dr_module_path = os.path.join(load_dir, "dr_module-1819.pth")
+load_dir = "../best_model"
+load_vae_path = os.path.join(load_dir, "vae_joint_vae.pth")
+load_unet_path = os.path.join(load_dir, "unet_joint_unet.pth")
+load_dr_module_path = os.path.join(load_dir, "dr_module.pth")
+load_controlnet_path = os.path.join(load_dir, "controlenet.pth")
+load_paca_layers_path = os.path.join(load_dir, "paca_layers.pth")
 
 # Save prediction / model directories
-save_dir = "controlnet_new_no_augmentation"
+save_dir = "segmentation_controlnet"
 os.makedirs(save_dir, exist_ok=True)
 vae_predict_dir = os.path.join(save_dir, "vae_predictions")
 unet_predict_dir = os.path.join(save_dir, "unet_predictions")
 conditional_predict_dir = os.path.join(save_dir, "conditional_predictions")
 vae_save_path = os.path.join(save_dir, "vae.pth")
 unet_save_path = os.path.join(save_dir, "unet.pth")
-controlnet_save_path = os.path.join(save_dir, "controlnet.pth")
+controlnet_save_path = os.path.join(save_dir, "segmentation_controlnet.pth")
 paca_layers_save_path = os.path.join(save_dir, "paca_layers.pth")
-degradation_removal_save_path = os.path.join(save_dir, "dr_module.pth")
+dr_module_save_path = os.path.join(save_dir, "segmentation_dr_module.pth")
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
@@ -189,6 +191,31 @@ manifest_path = "../training_data/manifest-filtered.csv" # without CBCT
 #     patience=patience, 
 #     epochs_between_prediction=10
 # )
+
+# --- Segmentation ControlNet ---
+vae = load_vae(load_vae_path)
+unet = load_unet_control_paca(load_unet_path, load_paca_layers_path)
+controlnet_cbct = load_controlnet(load_controlnet_path)
+dr_module_cbct = load_degradation_removal(load_dr_module_path)
+controlnet_seg = load_controlnet(load_unet_path, True)
+dr_module_seg = load_degradation_removal(None, True)
+train_loader, val_loader, test_loader = get_dataloaders(manifest_path, batch_size=batch_size, num_workers=num_workers, dataset_class=PairedCTCBCTSegmentationDatasetNPY, train_size=train_size, val_size=val_size, test_size=test_size, augmentation=augmentation)
+train_segmentation_control(
+    vae=vae, 
+    unet=unet, 
+    controlnet_cbct=controlnet_cbct, 
+    dr_module_cbct=dr_module_cbct,
+    controlnet_seg=controlnet_seg, 
+    dr_module_seg=dr_module_seg,
+    train_loader=train_loader, 
+    val_loader=val_loader, 
+    epochs=epochs, 
+    save_dir=save_dir, 
+    early_stopping=early_stopping, 
+    patience=patience, 
+    epochs_between_prediction=5,
+    learning_rate=learning_rate
+)
 
 # --- Test ControlNet ---
 # _, _, test_loader = get_dataloaders(manifest_path, batch_size=batch_size, num_workers=num_workers, dataset_class=PairedCTCBCTDatasetNPY, train_size=train_size, val_size=val_size, test_size=test_size)

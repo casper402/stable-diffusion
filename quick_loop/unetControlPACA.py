@@ -298,8 +298,8 @@ def train_dr_control_paca(
         early_stopping_counter += 1
 
         current_lr = optimizer.param_groups[0]['lr']
-        print(f"Epoch {epoch+1} | Train Loss: {avg_train_loss_total:.4f} (Diff: {avg_train_loss_diff:.4f}, DR: {avg_train_loss_dr:.4f}) | "
-            f"Val Loss: {avg_val_loss_total:.4f} (Diff: {avg_val_loss_diff:.4f}, DR: {avg_val_loss_dr:.4f}) | LR: {current_lr:.1e}")
+        print(f"Epoch {epoch+1} | Train Loss: {avg_train_loss_total:.6f} (Diff: {avg_train_loss_diff:.6f}, DR: {avg_train_loss_dr:.6f}) | "
+            f"Val Loss: {avg_val_loss_total:.6f} (Diff: {avg_val_loss_diff:.6f}, DR: {avg_val_loss_dr:.6f}) | LR: {current_lr:.1e}")
         
         if avg_val_loss_total < best_val_loss:
             best_val_loss = avg_val_loss_total
@@ -311,9 +311,9 @@ def train_dr_control_paca(
             paca_state_dict = {k: v for k, v in unet.state_dict().items() if 'paca' in k.lower()}
             if paca_state_dict: # Save only if PACA layers exist
                 torch.save(paca_state_dict, os.path.join(save_dir, "paca_layers.pth"))
-                print(f"✅ Saved new best ControlNet+PACA model at epoch {epoch+1} with val loss {avg_val_loss_total:.4f}")
+                print(f"✅ Saved new best ControlNet+PACA model at epoch {epoch+1} with val loss {avg_val_loss_total:.6f}")
             else:
-                print(f"✅ Saved new best ControlNet+DR model (no PACA found/saved) at epoch {epoch+1} with val loss {avg_val_loss_total:.4f}")
+                print(f"✅ Saved new best ControlNet+DR model (no PACA found/saved) at epoch {epoch+1} with val loss {avg_val_loss_total:.6f}")
 
         if early_stopping and early_stopping_counter >= early_stopping:
             print(f"Early stopped after {early_stopping} epochs with no improvement.")
@@ -586,10 +586,10 @@ def train_dr_control_paca_v2(
         scheduler.step(val_metrics['total'])
         print(
             f"Epoch {epoch+1} | "
-            f"Train total={train_metrics['total']:.4f} (noise={train_metrics['noise']:.4f}, dr={train_metrics['dr']:.4f}, "
-            f"mse={train_metrics['mse']:.4f}, ssim={train_metrics['ssim']:.4f}, perc={train_metrics['perceptual']:.4f}) | "
-            f"Val total={val_metrics['total']:.4f} (noise={val_metrics['noise']:.4f}, dr={val_metrics['dr']:.4f}, "
-            f"mse={val_metrics['mse']:.4f}, ssim={val_metrics['ssim']:.4f}, perc={val_metrics['perceptual']:.4f})"
+            f"Train total={train_metrics['total']:.6f} (noise={train_metrics['noise']:.6f}, dr={train_metrics['dr']:.6f}, "
+            f"mse={train_metrics['mse']:.6f}, ssim={train_metrics['ssim']:.6f}, perc={train_metrics['perceptual']:.6f}) | "
+            f"Val total={val_metrics['total']:.6f} (noise={val_metrics['noise']:.6f}, dr={val_metrics['dr']:.6f}, "
+            f"mse={val_metrics['mse']:.6f}, ssim={val_metrics['ssim']:.6f}, perc={val_metrics['perceptual']:.6f})"
         )
 
         if val_metrics['total'] < best_val_loss:
@@ -600,7 +600,7 @@ def train_dr_control_paca_v2(
             paca_sd = {k: v for k, v in unet.state_dict().items() if 'paca' in k.lower()}
             if paca_sd:
                 torch.save(paca_sd, os.path.join(save_dir, "paca_layers.pth"))
-            print(f"✅ Saved best model at epoch {epoch+1} (val={best_val_loss:.4f})")
+            print(f"✅ Saved best model at epoch {epoch+1} (val={best_val_loss:.6f})")
         else:
             es_counter += 1
             if early_stopping and es_counter >= early_stopping:
@@ -930,10 +930,10 @@ def train_segmentation_control(
         current_lr = optimizer.param_groups[0]['lr']
 
         print(f"Epoch {epoch+1} | "
-              f"Train Total Loss: {avg_train_loss_total:.4f}, Train Liver MSE: {avg_train_liver_mse_loss:.4f}, Train Tumor MSE: {avg_train_tumor_mse_loss:.4f}, Train Liver SSIM: {avg_train_liver_ssim_loss:.4f}, Train Tumor SSIM: {avg_train_tumor_ssim_loss:.4f} | "
-              f"Train Diff Loss: {avg_train_diff_loss:.4f}, Train Global SSIM: {avg_train_global_ssim_loss:.4f}, Train Global MSE: {avg_train_global_mse_loss:.4f} | "
-              f"Val Total Loss: {avg_val_loss_total:.4f}, Val Liver MSE: {avg_val_liver_mse_loss:.4f}, Val Tumor MSE: {avg_val_tumor_mse_loss:.4f}, Val Liver SSIM: {avg_val_liver_ssim_loss:.4f}, Val Tumor SSIM: {avg_val_tumor_ssim_loss:.4f} | "
-              f"Val Diff Loss: {avg_val_diff_loss:.4f}, Val Global SSIM: {avg_val_global_ssim_loss:.4f}, Val Global MSE: {avg_val_global_mse_loss:.4f} | "
+              f"Train Total Loss: {avg_train_loss_total:.6f}, Train Liver MSE: {avg_train_liver_mse_loss:.6f}, Train Tumor MSE: {avg_train_tumor_mse_loss:.6f}, Train Liver SSIM: {avg_train_liver_ssim_loss:.6f}, Train Tumor SSIM: {avg_train_tumor_ssim_loss:.6f} | "
+              f"Train Diff Loss: {avg_train_diff_loss:.6f}, Train Global SSIM: {avg_train_global_ssim_loss:.6f}, Train Global MSE: {avg_train_global_mse_loss:.6f} | "
+              f"Val Total Loss: {avg_val_loss_total:.6f}, Val Liver MSE: {avg_val_liver_mse_loss:.6f}, Val Tumor MSE: {avg_val_tumor_mse_loss:.6f}, Val Liver SSIM: {avg_val_liver_ssim_loss:.6f}, Val Tumor SSIM: {avg_val_tumor_ssim_loss:.6f} | "
+              f"Val Diff Loss: {avg_val_diff_loss:.6f}, Val Global SSIM: {avg_val_global_ssim_loss:.6f}, Val Global MSE: {avg_val_global_mse_loss:.6f} | "
               f"LR: {current_lr:.1e}")
             
         scheduler.step(avg_val_loss_total)
@@ -944,7 +944,7 @@ def train_segmentation_control(
             early_stopping_counter = 0
             torch.save(controlnet_seg.state_dict(), os.path.join(save_dir, "controlnet_seg.pth"))
             torch.save(dr_module_seg.state_dict(), os.path.join(save_dir, "dr_module_seg.pth"))
-            print(f"✅ Saved new best models at epoch {epoch+1} with val loss {avg_val_loss_total:.4f}")
+            print(f"✅ Saved new best models at epoch {epoch+1} with val loss {avg_val_loss_total:.6f}")
 
         if early_stopping and early_stopping_counter >= early_stopping:
             print(f"Early stopped after {early_stopping} epochs with no improvement.")

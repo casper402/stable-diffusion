@@ -92,8 +92,8 @@ def process(volume_idx):
     # For CBCT volumes, files are named like "REC-0.nii". The renaming in process_nifti_file
     # will ensure that the output base name is similar to "volume-0".
     # nifty_file_name = f"REC-{volume_idx}.nii"
-    nifty_file_name = "CBCT.nii.gz"
-    output_dir = os.path.expanduser("/Users/Niklas/thesis/training_data/clinic")
+    nifty_file_name = "CT.nii.gz"
+    output_dir = os.path.expanduser("/Users/Niklas/thesis/training_data/clinic_ct")
     
     return process_nifti_file(folder_path, nifty_file_name, output_dir)
 

@@ -67,13 +67,14 @@ def plot_multi_side_by_side(test_dirs, gt_dir, volume_idx, slice_num):
     base_name = f"volume-{volume_idx}"
     filename = f"{base_name}_slice_{slice_num:03d}.npy" # for normal training dat
     filename = f"CBCT_slice_{slice_num:03d}.npy" # for clinical data
+    gt_filename = f"CT_slice_{(170 - slice_num):03d}.npy" # for clinical data
 
     # Load ground truth
-    gt_file = os.path.join(gt_dir, filename)
+    gt_file = os.path.join(gt_dir, gt_filename)
     if not os.path.exists(gt_file):
         raise FileNotFoundError(f"Ground truth file not found: {gt_file}")
 
-    gt_image = np.load(os.path.join(gt_dir, filename))
+    gt_image = np.load(os.path.join(gt_dir, gt_filename))
     # TODO souhld be uncommented for actual GT!
     gt_image = apply_transform(gt_image)
     # gt_image = crop_back(gt_image)
@@ -83,7 +84,7 @@ def plot_multi_side_by_side(test_dirs, gt_dir, volume_idx, slice_num):
     for idx, test_dir in enumerate(test_dirs):
         img = np.load(os.path.join(test_dir, filename))
 
-        cbct_names = ["test", "scaled-490"]
+        cbct_names = ["clinic", "scaled-490"]
         if os.path.basename(test_dir) in cbct_names:
             img = apply_transform(img)
 
@@ -162,9 +163,10 @@ def plot(volume_idx, slice_num):
         # os.path.expanduser(f"/Users/Niklas/thesis/predictions/casper/volume-{volume_idx}"),
         # os.path.expanduser("/Users/Niklas/thesis/training_data/CBCT/scaled-490"),
         os.path.expanduser("/Users/Niklas/thesis/predictions/prediction-clinic-20stepsize"),
+        os.path.expanduser("/Users/Niklas/thesis/training_data/clinic")
     ]
     # gt_dir = os.path.expanduser("/Users/Niklas/thesis/training_data/CT/test") # normal GT
-    gt_dir = os.path.expanduser("/Users/Niklas/thesis/training_data/clinic")
+    gt_dir = os.path.expanduser("/Users/Niklas/thesis/training_data/clinic_ct")
     
     plot_multi_side_by_side(test_dirs, gt_dir, volume_idx, slice_num)
 
@@ -184,5 +186,5 @@ def plot_specific():
     plot(volume_idx, slice_num)
 
 if __name__ == "__main__":
-    plot_specific()
-    # plot_random_slice(3)
+    # plot_specific()
+    plot_random_slice(3)

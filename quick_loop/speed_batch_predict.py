@@ -27,7 +27,7 @@ BATCH_SIZE = 16 # Can probably be 32
 DDIM_STEPS = 40
 POWER_P = 2.0
 FINE_CUTOFF = 9
-STEP_SIZE = 1
+STEP_SIZE = 20
 
 # MODELS_PATH = 'controlnet_v2_inference_v2/'
 MODELS_PATH = 'controlnet_with_decoding_loss_perceptual_lower'

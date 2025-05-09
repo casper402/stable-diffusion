@@ -14,11 +14,13 @@ from quick_loop.unetControlPACA import load_unet_control_paca
 # ------------------------
 # Configuration Variables
 # ------------------------
+PREDICT_CLINIC = True
+
 CBCT_DIR = '../training_data/scaled-490/'
 CBCT_CLINIC_DIR = '../training_data/clinic/'
 VOLUME_INDICES = [3, 8, 12, 26, 32, 33, 35, 54, 59, 61, 106, 116, 129]
-# OUT_DIR = '../prediction-clinic-20stepsize/'
-OUT_DIR = '../prediction-490-stepsize20-perceptual/'
+OUT_DIR = '../prediction-clinic-20stepsize/'
+# OUT_DIR = '../prediction-490-stepsize20-perceptual/'
 
 GUIDANCE_SCALE = 1.0
 ALPHA_A = 0.2         # Mixing weight for CBCT signal at t0
@@ -27,7 +29,7 @@ BATCH_SIZE = 32       # tune as needed
 DDIM_STEPS = 40       # total coarse sampling steps
 POWER_P = 2.0         # power-law exponent for smoothing
 FINE_CUTOFF = 9       # switch to single-step updates at t<=9 (last 10 steps)
-STEP_SIZE = 1
+STEP_SIZE = 20
 
 MODELS_PATH = 'controlnet_v2_inference_v2/'
 VAE_SAVE_PATH = os.path.join(MODELS_PATH, 'vae_joint_vae.pth')
@@ -193,6 +195,7 @@ def predict_clinic():
 # ------------------------
 
 if __name__ == '__main__':
-    predict_test_data()
-    
-    # predict_clinic()
+    if PREDICT_CLINIC:
+        predict_clinic()
+    else:
+        predict_test_data()

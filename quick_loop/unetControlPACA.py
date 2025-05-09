@@ -4,8 +4,8 @@ import torch
 import torch.nn as nn
 import torchvision
 from tqdm import tqdm
-
 import torch.nn.functional as F
+from skimage.metrics import structural_similarity as ssim
 
 from models.diffusion import Diffusion
 from quick_loop.blocks import nonlinearity, Normalize, TimestepEmbedding, DownBlock, MiddleBlock, ControlNetPACAUpBlock
@@ -678,6 +678,20 @@ def train_dr_control_paca_v2(
 
     print("Training finished.")
 
+def segmentation_losses(x_recon, ct_img, liver, tumor, ssim_map):    
+    x_recon_liver_masked = x_recon * liver
+    ct_img_liver_masked = ct_img * liver
+    liver_mse_loss = F.mse_loss(x_recon_liver_masked, ct_img_liver_masked)
+    liver_ssim_loss = 1 - torch.mean(ssim_map * liver)
+
+    x_recon_tumor_masked = x_recon * tumor
+    ct_img_tumor_masked = ct_img * tumor
+    tumor_mse_loss = F.mse_loss(x_recon_tumor_masked, ct_img_tumor_masked)
+    tumor_ssim_loss = 1 - torch.mean(ssim_map * tumor)
+    
+    return liver_mse_loss, tumor_mse_loss, liver_ssim_loss, tumor_ssim_loss
+
+
 def train_segmentation_control(
     vae, 
     unet, 
@@ -746,10 +760,17 @@ def train_segmentation_control(
     for epoch in range(epochs):
         controlnet_seg.train()
         dr_module_seg.train()
+
+        train_liver_mse_loss = 0
+        train_tumor_mse_loss = 0
+        train_liver_ssim_loss = 0
+        train_tumor_ssim_loss = 0
         train_loss_total = 0
-        train_loss_diff = 0
-        train_loss_liver = 0
-        train_loss_tumor = 0
+
+        # Monitoring losses
+        train_diff_loss = 0
+        train_global_ssim_loss = 0
+        train_global_mse_loss = 0
 
         for i, (ct, cbct, segmentation, liver, tumor) in enumerate(train_loader):
             cbct_img = cbct.to(device)
@@ -785,130 +806,138 @@ def train_segmentation_control(
                 middle_res_sample_seg
             )
 
-            # Compute losses
-            loss_diff = noise_loss(pred_noise, noise)
-
             # Reconstruct image for segmentation losses
             alpha_cumprod_t = diffusion.alpha_cumprod[t].view(-1,1,1,1)
             sqrt_alpha_cumprod = torch.sqrt(alpha_cumprod_t)
             sqrt_one_minus_alpha_cumprod = torch.sqrt(1 - alpha_cumprod_t)
             z_hat = (z_noisy_ct - sqrt_one_minus_alpha_cumprod * pred_noise) / (sqrt_alpha_cumprod + 1e-8) # Added epsilon for stability
-            
             x_recon = vae.decode(z_hat)
 
-            # Compute MSE loss between x_recon and ct_img within the liver mask
-            x_recon_liver_masked = x_recon * liver
-            ct_img_liver_masked = ct_img * liver
-            liver_loss = F.mse_loss(x_recon_liver_masked, ct_img_liver_masked)
-
-            # Compute MSE loss between x_recon and ct_img within the tumor mask
-            x_recon_tumor_masked = x_recon * tumor
-            ct_img_tumor_masked = ct_img * tumor
-            tumor_loss = F.mse_loss(x_recon_tumor_masked, ct_img_tumor_masked)
-
-            # Combine losses
-            total_loss = loss_diff + liver_loss + tumor_loss
+            # Compute losses
+            g_ssim, ssim_map = ssim(ct_img, x_recon, data_range=2.0, full=True)
+            liver_mse_loss, tumor_mse_loss, liver_ssim_loss, tumor_ssim_loss = segmentation_losses(x_recon, ct_img, liver, tumor, ssim_map)
+            total_loss = liver_mse_loss + liver_ssim_loss + tumor_mse_loss + tumor_ssim_loss
 
             total_loss.backward()
             torch.nn.utils.clip_grad_norm_(params_to_train, max_norm=1.0)
-
             optimizer.step()
 
+            train_liver_mse_loss += liver_mse_loss.item()
+            train_tumor_mse_loss += tumor_mse_loss.item()
+            train_liver_ssim_loss += liver_ssim_loss.item()
+            train_tumor_ssim_loss += tumor_ssim_loss.item()
             train_loss_total += total_loss.item()
-            train_loss_diff += loss_diff.item()
-            train_loss_liver += liver_loss.item()
-            train_loss_tumor += tumor_loss.item()
-            
+
+            # Compute monitoring losses
+            diff_loss = noise_loss(pred_noise, noise)
+            global_ssim_loss = 1 - g_ssim
+            global_mse_loss = F.mse_loss(x_recon, ct_img)
+
+            train_diff_loss += diff_loss.item()
+            train_global_ssim_loss += global_ssim_loss.item()
+            train_global_mse_loss += global_mse_loss.item()
+        
+        # Average losses
         avg_train_loss_total = train_loss_total / len(train_loader)
-        avg_train_loss_diff = train_loss_diff / len(train_loader)
-        avg_train_loss_liver = train_loss_liver / len(train_loader)
-        avg_train_loss_tumor = train_loss_tumor / len(train_loader)
+        avg_train_liver_mse_loss = train_liver_mse_loss / len(train_loader)
+        avg_train_tumor_mse_loss = train_tumor_mse_loss / len(train_loader)
+        avg_train_liver_ssim_loss = train_liver_ssim_loss / len(train_loader)
+        avg_train_tumor_ssim_loss = train_tumor_ssim_loss / len(train_loader)
+
+        # Average monitoring losses
+        avg_train_diff_loss = train_diff_loss / len(train_loader)
+        avg_train_global_ssim_loss = train_global_ssim_loss / len(train_loader)
+        avg_train_global_mse_loss = train_global_mse_loss / len(train_loader)
 
         # --- Validation Loop ---
         controlnet_seg.eval()
         dr_module_seg.eval()
+        
+        val_liver_mse_loss = 0
+        val_tumor_mse_loss = 0
+        val_liver_ssim_loss = 0
+        val_tumor_ssim_loss = 0
         val_loss_total = 0
-        val_loss_diff = 0
-        val_loss_liver = 0
-        val_loss_tumor = 0
 
+        val_diff_loss = 0
+        val_global_ssim_loss = 0
+        val_global_mse_loss = 0
+        
         with torch.no_grad():
-            for ct_img, cbct_img, segmentation, liver, tumor in val_loader:
-                # Move data to the appropriate device
-                cbct_img = cbct_img.to(device)
-                ct_img = ct_img.to(device)
+            for i, (ct, cbct, segmentation, liver, tumor) in enumerate(val_loader):
+                cbct_img = cbct.to(device)
+                ct_img = ct.to(device)
                 segmentation = segmentation.to(device)
                 liver = liver.to(device)
                 tumor = tumor.to(device)
 
-                # Encode CT image to latent space
                 ct_mu, ct_logvar = vae.encode(ct_img)
                 z_ct = vae.reparameterize(ct_mu, ct_logvar)
 
-                # Forward pass for diffusion and ControlNets (same as training)
-                t = diffusion.sample_timesteps(z_ct.size(0)).to(device)
-                noise = torch.randn_like(z_ct).to(device)
+                t = diffusion.sample_timesteps(z_ct.size(0))
+                noise = torch.randn_like(z_ct)
                 z_noisy_ct = diffusion.add_noise(z_ct, t, noise=noise)
 
-                # Process segmentation input
                 controlnet_input_seg, _ = dr_module_seg(segmentation)
                 down_res_samples_seg, middle_res_sample_seg = controlnet_seg(z_noisy_ct, controlnet_input_seg, t)
-
-                # Process CBCT input
+                
                 controlnet_input_cbct, _ = dr_module_cbct(cbct_img)
                 down_res_samples_cbct, middle_res_sample_cbct = controlnet_cbct(z_noisy_ct, controlnet_input_cbct, t)
-
-                # Predict noise
+            
                 pred_noise = unet(
-                    z_noisy_ct,
-                    t,
-                    down_res_samples_cbct,
+                    z_noisy_ct, 
+                    t, 
+                    down_res_samples_cbct, 
                     middle_res_sample_cbct,
                     down_res_samples_seg,
                     middle_res_sample_seg
                 )
 
-                # Compute diffusion noise loss
-                loss_diff = noise_loss(pred_noise, noise)
-
-                # Reconstruct latent and image for segmentation losses
                 alpha_cumprod_t = diffusion.alpha_cumprod[t].view(-1,1,1,1)
                 sqrt_alpha_cumprod = torch.sqrt(alpha_cumprod_t)
                 sqrt_one_minus_alpha_cumprod = torch.sqrt(1 - alpha_cumprod_t)
-                z_hat = (z_noisy_ct - sqrt_one_minus_alpha_cumprod * pred_noise) / (sqrt_alpha_cumprod + 1e-8) # Added epsilon for stability
-
+                z_hat = (z_noisy_ct - sqrt_one_minus_alpha_cumprod * pred_noise) / (sqrt_alpha_cumprod + 1e-8)
                 x_recon = vae.decode(z_hat)
 
-                # Compute masked reconstruction losses
-                x_recon_liver_masked = x_recon * liver
-                ct_img_liver_masked = ct_img * liver
-                liver_loss = F.mse_loss(x_recon_liver_masked, ct_img_liver_masked)
+                g_ssim, ssim_map = ssim(ct_img, x_recon, data_range=2.0, full=True)
+                liver_mse_loss, tumor_mse_loss, liver_ssim_loss, tumor_ssim_loss = segmentation_losses(x_recon, ct_img, liver, tumor, ssim_map)
+                total_loss = liver_mse_loss + liver_ssim_loss + tumor_mse_loss + tumor_ssim_loss
 
-                x_recon_tumor_masked = x_recon * tumor
-                ct_img_tumor_masked = ct_img * tumor
-                tumor_loss = F.mse_loss(x_recon_tumor_masked, ct_img_tumor_masked)
-
-
-                # Combine losses for validation
-                total_loss = loss_diff + liver_loss + tumor_loss
-
-                # Accumulate validation losses
+                val_liver_mse_loss += liver_mse_loss.item()
+                val_tumor_mse_loss += tumor_mse_loss.item()
+                val_liver_ssim_loss += liver_ssim_loss.item()
+                val_tumor_ssim_loss += tumor_ssim_loss.item()
                 val_loss_total += total_loss.item()
-                val_loss_diff += loss_diff.item()
-                val_loss_liver += liver_loss.item()
-                val_loss_tumor += tumor_loss.item()
+
+                diff_loss = noise_loss(pred_noise, noise)
+                global_ssim_loss = 1 - g_ssim
+                global_mse_loss = F.mse_loss(x_recon, ct_img)
+
+                val_diff_loss += diff_loss.item()
+                val_global_ssim_loss += global_ssim_loss.item()
+                val_global_mse_loss += global_mse_loss.item()
 
         avg_val_loss_total = val_loss_total / len(val_loader)
-        avg_val_loss_diff = val_loss_diff / len(val_loader)
-        avg_val_loss_liver = val_loss_liver / len(val_loader)
-        avg_val_loss_tumor = val_loss_tumor / len(val_loader)
+        avg_val_liver_mse_loss = val_liver_mse_loss / len(val_loader)
+        avg_val_tumor_mse_loss = val_tumor_mse_loss / len(val_loader)
+        avg_val_liver_ssim_loss = val_liver_ssim_loss / len(val_loader)
+        avg_val_tumor_ssim_loss = val_tumor_ssim_loss / len(val_loader)
+
+        avg_val_diff_loss = val_diff_loss / len(val_loader)
+        avg_val_global_ssim_loss = val_global_ssim_loss / len(val_loader)
+        avg_val_global_mse_loss = val_global_mse_loss / len(val_loader)
+        
+        current_lr = optimizer.param_groups[0]['lr']
+
+        print(f"Epoch {epoch+1} | "
+              f"Train Total Loss: {avg_train_loss_total:.4f}, Train Liver MSE: {avg_train_liver_mse_loss:.4f}, Train Tumor MSE: {avg_train_tumor_mse_loss:.4f}, Train Liver SSIM: {avg_train_liver_ssim_loss:.4f}, Train Tumor SSIM: {avg_train_tumor_ssim_loss:.4f} | "
+              f"Train Diff Loss: {avg_train_diff_loss:.4f}, Train Global SSIM: {avg_train_global_ssim_loss:.4f}, Train Global MSE: {avg_train_global_mse_loss:.4f} | "
+              f"Val Total Loss: {avg_val_loss_total:.4f}, Val Liver MSE: {avg_val_liver_mse_loss:.4f}, Val Tumor MSE: {avg_val_tumor_mse_loss:.4f}, Val Liver SSIM: {avg_val_liver_ssim_loss:.4f}, Val Tumor SSIM: {avg_val_tumor_ssim_loss:.4f} | "
+              f"Val Diff Loss: {avg_val_diff_loss:.4f}, Val Global SSIM: {avg_val_global_ssim_loss:.4f}, Val Global MSE: {avg_val_global_mse_loss:.4f} | "
+              f"LR: {current_lr:.1e}")
             
         scheduler.step(avg_val_loss_total)
         early_stopping_counter += 1
-
-        current_lr = optimizer.param_groups[0]['lr']
-         # Print epoch statistics (updated to include liver and tumor losses)
-        print(f"Epoch {epoch+1} | Train Loss: {avg_train_loss_total:.4f} (Diff: {avg_train_loss_diff:.4f}, Liver: {avg_train_loss_liver:.4f}, Tumor: {avg_train_loss_tumor:.4f}) | Val Loss: {avg_val_loss_total:.4f} (Diff: {avg_val_loss_diff:.4f}, Liver: {avg_val_loss_liver:.4f}, Tumor: {avg_val_loss_tumor:.4f}) | LR: {current_lr:.1e}")
         
         if avg_val_loss_total < best_val_loss:
             best_val_loss = avg_val_loss_total
@@ -935,6 +964,7 @@ def train_segmentation_control(
                 for i, (ct, cbct, segmentation, _, _) in enumerate(test_loader):
                     ct = ct.to(device)
                     cbct = cbct.to(device)
+                    segmentation.to(device)
 
                     controlnet_input_cbct, _ = dr_module_cbct(cbct)
                     controlnet_input_seg, _ = dr_module_seg(segmentation)

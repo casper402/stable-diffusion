@@ -18,10 +18,10 @@ from scipy.ndimage import zoom
 import nibabel as nib
 
 # --- User settings -----------------------------------------------------------
-ORDER = 2
-input_dir = os.path.expanduser("/Users/Niklas/thesis/predictions/prediction-clinic-20stepsize")
+ORDER = 1
+input_dir = os.path.expanduser("/Users/Niklas/thesis/predictions/prediction-clinic-1stepsize")
 original_nifti = os.path.expanduser("/Users/Niklas/thesis/training_data/Casper-klinik/CBCT.nii.gz")
-output_filename = os.path.expanduser(f"/Users/Niklas/thesis/training_data/Casper-klinik/sCT-{ORDER}.nii.gz")
+output_filename = os.path.expanduser(f"/Users/Niklas/thesis/training_data/Casper-klinik/sCT-1000-steps-{ORDER}.nii.gz")
 
 # --- Load original geometry -------------------------------------------------
 orig_img = nib.load(original_nifti)

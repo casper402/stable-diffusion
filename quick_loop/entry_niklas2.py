@@ -70,7 +70,7 @@ train_loader, val_loader, test_loader = get_dataloaders(manifest_path, batch_siz
 train_vae(vae=vae, train_loader=train_loader, val_loader=val_loader, epochs=epochs, early_stopping=early_stopping, patience=patience, save_path=vae_save_path, predict_dir=vae_predict_dir)
 
 # Unet v1
-unet = load_unet(trainable=True, base_channels=base_channels, dropout_rate=dropout_rate)
+unet = load_unet(save_path = unet_save_path, trainable=True, base_channels=base_channels, dropout_rate=dropout_rate)
 train_unet(unet=unet, 
            vae=vae, 
            train_loader=train_loader, 

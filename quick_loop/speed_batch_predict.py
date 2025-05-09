@@ -14,30 +14,34 @@ from quick_loop.unetControlPACA import load_unet_control_paca
 # ------------------------
 # Configuration Variables
 # ------------------------
-PREDICT_CLINIC = True
+PREDICT_CLINIC = False
 
 CBCT_DIR = '../training_data/scaled-490/'
 CBCT_CLINIC_DIR = '../training_data/clinic/'
 VOLUME_INDICES = [3, 8, 12, 26, 32, 33, 35, 54, 59, 61, 106, 116, 129]
 OUT_DIR = '../prediction-clinic-1stepsize/'
-# OUT_DIR = '../prediction-490-stepsize20-perceptual/'
 
 GUIDANCE_SCALE = 1.0
 ALPHA_A = 0.2         # Mixing weight for CBCT signal at t0
-BATCH_SIZE = 32       # tune as needed
-# DDIM / schedule parameters: reduce steps for faster inference
-DDIM_STEPS = 40       # total coarse sampling steps
-POWER_P = 2.0         # power-law exponent for smoothing
-FINE_CUTOFF = 9       # switch to single-step updates at t<=9 (last 10 steps)
+BATCH_SIZE = 32
+DDIM_STEPS = 40
+POWER_P = 2.0
+FINE_CUTOFF = 9
 STEP_SIZE = 1
 
 MODELS_PATH = 'controlnet_v2_inference_v2/'
-# MODELS_PATH = 'controlnet_with_decoding_loss_perceptual_lower/'
 VAE_SAVE_PATH = os.path.join(MODELS_PATH, 'vae_joint_vae.pth')
 UNET_SAVE_PATH = os.path.join(MODELS_PATH, 'unet_joint_unet.pth')
 PACA_LAYERS_SAVE_PATH = os.path.join(MODELS_PATH, 'paca_layers.pth')
 CONTROLNET_SAVE_PATH = os.path.join(MODELS_PATH, 'controlnet.pth')
 DEGRADATION_REMOVAL_SAVE_PATH = os.path.join(MODELS_PATH, 'dr_module.pth')
+
+# ------------------------
+# NaN Assertion Helper
+# ------------------------
+def assert_no_nan(tensor: torch.Tensor, name: str):
+    if torch.isnan(tensor).any():
+        raise RuntimeError(f"NaN encountered in {name}")
 
 # ------------------------
 # Dataset for CBCT slices
@@ -73,10 +77,6 @@ def make_mixed_schedule(T=1000, N=DDIM_STEPS, p=POWER_P, fine_cutoff=FINE_CUTOFF
     return np.concatenate((smooth_ts, fine_ts))
 
 def make_linear_schedule(T: int, step_size: int = 10) -> np.ndarray:
-    """
-    Create a schedule of timesteps from T down to 0,
-    stepping by `step_size` each time.
-    """
     ts = np.arange(T, -1, -step_size, dtype=int)
     if ts[-1] != 0:
         ts = np.concatenate([ts, [0]])
@@ -85,7 +85,6 @@ def make_linear_schedule(T: int, step_size: int = 10) -> np.ndarray:
 # ------------------------
 # Inference Function
 # ------------------------
-
 def predict_volume(
     vae, unet, controlnet, dr_module,
     dataloader: DataLoader,
@@ -94,22 +93,19 @@ def predict_volume(
 ):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     torch.backends.cudnn.benchmark = True
-    torch.backends.cuda.matmul.allow_tf32 = True
-    torch.backends.cudnn.allow_tf32 = True
 
     diffusion = Diffusion(device)
-    betas = diffusion.beta.to(device).half()
-    alpha_cumprod = diffusion.alpha_cumprod.to(device).half()
+    betas = diffusion.beta.to(device).float()
+    alpha_cumprod = diffusion.alpha_cumprod.to(device).float()
     T = diffusion.timesteps
 
-    # Choose sampling schedule
     schedule = make_linear_schedule(T=T-1, step_size=STEP_SIZE)
-    t0 = int(schedule[0])
 
-    vae = vae.to(device).eval()
-    unet = unet.to(device).eval()
-    controlnet = controlnet.to(device).eval()
-    dr_module = dr_module.to(device).eval()
+    # Move models to float32
+    vae = vae.to(device).float().eval()
+    unet = unet.to(device).float().eval()
+    controlnet = controlnet.to(device).float().eval()
+    dr_module = dr_module.to(device).float().eval()
     if torch.cuda.device_count() > 1:
         unet = nn.DataParallel(unet)
         controlnet = nn.DataParallel(controlnet)
@@ -120,80 +116,78 @@ def predict_volume(
 
     for batch_idx, (names, imgs) in enumerate(dataloader, start=1):
         batch_start = time.time()
-        imgs = imgs.to(device).half()
-        with torch.inference_mode(), torch.cuda.amp.autocast():
+        imgs = imgs.to(device).float()      # ← float32 input
+
+        with torch.inference_mode():
             control_inputs, _ = dr_module(imgs)
             mu, logvar = vae.encode(imgs)
+            assert_no_nan(mu,     "VAE mu")
+            assert_no_nan(logvar, "VAE logvar")
 
-            # Tried with CBCT injected noise, but returned to random noise for now
-            z = torch.randn_like(mu)
+            z = torch.randn_like(mu, device=device, dtype=torch.float32)
+            assert_no_nan(z, "initial z")
 
-            # PACA control diffusion loop
             for i in range(len(schedule) - 1):
-                t, t_prev = int(schedule[i]), int(schedule[i + 1])
-                t_tensor   = torch.full((z.size(0),), t, device=device, dtype=torch.long)
+                t, t_prev = int(schedule[i]), int(schedule[i+1])
+                t_tensor = torch.full((z.size(0),), t, device=device, dtype=torch.long)
+
                 down_res, mid_res = controlnet(z, control_inputs, t_tensor)
                 eps = unet(z, t_tensor, down_res, mid_res)
+                assert_no_nan(eps, f"eps at step {i} (t={t})")
 
-                a_t      = alpha_cumprod[t]
-                a_prev   = alpha_cumprod[t_prev]
+                a_t    = alpha_cumprod[t]
+                a_prev = alpha_cumprod[t_prev]
                 sqrt_at  = a_t.sqrt()
                 sqrt_omt = (1 - a_t).sqrt()
 
-                # DDIM update rule
                 z = ((z - sqrt_omt * eps) / sqrt_at) * a_prev.sqrt() + (1 - a_prev).sqrt() * eps
+                assert_no_nan(z, f"z after step {i} (t={t})")
 
             gen = vae.decode(z)
+            assert_no_nan(gen, "decoder output")
 
-        out_np = gen.cpu().float().numpy() * 1000.0
+        out_np = gen.cpu().numpy() * 1000.0
         for i, fname in enumerate(names):
             np.save(os.path.join(save_dir, fname), out_np[i].squeeze(0))
+
         print(f"Vol {os.path.basename(save_dir)} batch {batch_idx} in {time.time() - batch_start:.2f}s")
 
     print(f"Vol {os.path.basename(save_dir)} done in {time.time() - volume_start:.2f}s")
 
 # ------------------------
-# Predict
+# Entry Points
 # ------------------------
 def predict_test_data():
     transform = transforms.Compose([
         transforms.Pad((0, 64, 0, 64), fill=-1),
         transforms.Resize((256, 256)),
     ])
-    vae = load_vae(VAE_SAVE_PATH).half()
-    unet = load_unet_control_paca(UNET_SAVE_PATH, PACA_LAYERS_SAVE_PATH).half()
-    controlnet = load_controlnet(CONTROLNET_SAVE_PATH).half()
-    dr_module = load_degradation_removal(DEGRADATION_REMOVAL_SAVE_PATH).half()
+    vae        = load_vae(VAE_SAVE_PATH)
+    unet       = load_unet_control_paca(UNET_SAVE_PATH, PACA_LAYERS_SAVE_PATH)
+    controlnet = load_controlnet(CONTROLNET_SAVE_PATH)
+    dr_module  = load_degradation_removal(DEGRADATION_REMOVAL_SAVE_PATH)
 
     for vol in VOLUME_INDICES:
         cbct_folder = os.path.join(CBCT_DIR, f"volume-{vol}")
         save_folder = os.path.join(OUT_DIR, f"volume-{vol}")
-        ds = CBCTDatasetNPY(cbct_folder, transform)
+        ds     = CBCTDatasetNPY(cbct_folder, transform)
         loader = DataLoader(ds, batch_size=BATCH_SIZE, num_workers=4, pin_memory=True)
         predict_volume(vae, unet, controlnet, dr_module, loader, save_folder, GUIDANCE_SCALE)
     print("All volumes processed.")
-
 
 def predict_clinic():
     clinic_transform = transforms.Compose([
         transforms.Resize((256, 256)),
     ])
+    vae        = load_vae(VAE_SAVE_PATH)
+    unet       = load_unet_control_paca(UNET_SAVE_PATH, PACA_LAYERS_SAVE_PATH)
+    controlnet = load_controlnet(CONTROLNET_SAVE_PATH)
+    dr_module  = load_degradation_removal(DEGRADATION_REMOVAL_SAVE_PATH)
 
-    vae = load_vae(VAE_SAVE_PATH).half()
-    unet = load_unet_control_paca(UNET_SAVE_PATH, PACA_LAYERS_SAVE_PATH).half()
-    controlnet = load_controlnet(CONTROLNET_SAVE_PATH).half()
-    dr_module = load_degradation_removal(DEGRADATION_REMOVAL_SAVE_PATH).half()
-
-    ds = CBCTDatasetNPY(CBCT_CLINIC_DIR, clinic_transform)
+    ds     = CBCTDatasetNPY(CBCT_CLINIC_DIR, clinic_transform)
     loader = DataLoader(ds, batch_size=BATCH_SIZE, num_workers=4, pin_memory=True)
-
     print("ready to predict for:", CBCT_CLINIC_DIR)
-
     predict_volume(vae, unet, controlnet, dr_module, loader, OUT_DIR, GUIDANCE_SCALE)
-
-# ------------------------
-# Main
-# ------------------------
 
 if __name__ == '__main__':
     if PREDICT_CLINIC:

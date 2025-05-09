@@ -23,7 +23,7 @@ OUT_DIR = '../prediction-clinic-1stepsize/'
 
 GUIDANCE_SCALE = 1.0
 ALPHA_A = 0.2         # Mixing weight for CBCT signal at t0
-BATCH_SIZE = 32
+BATCH_SIZE = 16 # Can probably be 32
 DDIM_STEPS = 40
 POWER_P = 2.0
 FINE_CUTOFF = 9

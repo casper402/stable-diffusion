@@ -37,7 +37,6 @@ LEFT_CROP   = int(round((PAD_L / _pad_w) * RES_W))
 RIGHT_CROP  = int(round((PAD_R / _pad_w) * RES_W))
 
 transform = transforms.Compose([
-    transforms.Pad((0, 64, 0, 64), fill=-1000),
     transforms.Resize((256, 256)),
 ])
 
@@ -76,7 +75,7 @@ def plot_multi_side_by_side(test_dirs, gt_dir, volume_idx, slice_num):
 
     gt_image = np.load(os.path.join(gt_dir, filename))
     # TODO souhld be uncommented for actual GT!
-    # gt_image = apply_transform(gt_image)
+    gt_image = apply_transform(gt_image)
     # gt_image = crop_back(gt_image)
 
     test_images = []
@@ -162,10 +161,10 @@ def plot(volume_idx, slice_num):
         # os.path.expanduser(f"/Users/Niklas/thesis/predictions/v2_490_speed_stepsize20_v2/volume-{volume_idx}"),
         # os.path.expanduser(f"/Users/Niklas/thesis/predictions/casper/volume-{volume_idx}"),
         # os.path.expanduser("/Users/Niklas/thesis/training_data/CBCT/scaled-490"),
-        os.path.expanduser("/Users/Niklas/thesis/training_data/clinic"),
+        os.path.expanduser("/Users/Niklas/thesis/predictions/prediction-clinic-20stepsize"),
     ]
     # gt_dir = os.path.expanduser("/Users/Niklas/thesis/training_data/CT/test") # normal GT
-    gt_dir = os.path.expanduser("/Users/Niklas/thesis/training_data/clinic") # just using this here to not get an error
+    gt_dir = os.path.expanduser("/Users/Niklas/thesis/training_data/clinic")
     
     plot_multi_side_by_side(test_dirs, gt_dir, volume_idx, slice_num)
 
@@ -181,9 +180,9 @@ def plot_random_slice(volume_idx):
 
 def plot_specific():
     volume_idx = 33
-    slice_num = 191
+    slice_num = 50
     plot(volume_idx, slice_num)
 
 if __name__ == "__main__":
-    # plot_specific()
-    plot_random_slice(3)
+    plot_specific()
+    # plot_random_slice(3)

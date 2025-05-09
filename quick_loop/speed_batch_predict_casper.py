@@ -30,7 +30,7 @@ STEP_SIZE = 20
 
 MODELS_PATH = 'conditional_unet_base_channels_256'
 VAE_SAVE_PATH = os.path.join(MODELS_PATH, 'vae.pth')
-UNET_SAVE_PATH = os.path.join(MODELS_PATH, 'unet.pth')
+UNET_SAVE_PATH = os.path.join(MODELS_PATH, 'unet_v2.pth')
 PACA_LAYERS_SAVE_PATH = os.path.join(MODELS_PATH, 'paca_layers.pth')
 CONTROLNET_SAVE_PATH = os.path.join(MODELS_PATH, 'controlnet.pth')
 DEGRADATION_REMOVAL_SAVE_PATH = os.path.join(MODELS_PATH, 'dr_module.pth')

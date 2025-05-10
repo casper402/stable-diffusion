@@ -750,7 +750,7 @@ def train_segmentation_control(
         min_lr=min(1e-7, learning_rate)
     )
     diffusion = Diffusion(device, timesteps=1000)
-    ssim = StructuralSimilarityIndexMeasure(data_range=2.0, return_full_image=True).to(ct_img.device)
+    ssim = StructuralSimilarityIndexMeasure(data_range=2.0, return_full_image=True).to(device)
 
     # --- Training Loop ---
     best_val_loss = float('inf')

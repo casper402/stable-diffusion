@@ -16,7 +16,7 @@ from quick_loop.unetControlPACA import load_unet_control_paca, train_dr_control_
 train_size = None
 val_size = None
 test_size = 10
-batch_size = 8
+batch_size = 4
 num_workers = 8
 epochs = 2000
 early_stopping = 50

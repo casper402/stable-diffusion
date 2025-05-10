@@ -5,7 +5,7 @@ import torch.nn as nn
 import torchvision
 from tqdm import tqdm
 import torch.nn.functional as F
-from skimage.metrics import structural_similarity as ssim
+from torchmetrics.image import StructuralSimilarityIndexMeasure
 
 from models.diffusion import Diffusion
 from quick_loop.blocks import nonlinearity, Normalize, TimestepEmbedding, DownBlock, MiddleBlock, ControlNetPACAUpBlock
@@ -750,6 +750,7 @@ def train_segmentation_control(
         min_lr=min(1e-7, learning_rate)
     )
     diffusion = Diffusion(device, timesteps=1000)
+    ssim = StructuralSimilarityIndexMeasure(data_range=2.0, return_full_image=True).to(ct_img.device)
 
     # --- Training Loop ---
     best_val_loss = float('inf')
@@ -814,7 +815,7 @@ def train_segmentation_control(
             x_recon = vae.decode(z_hat)
 
             # Compute losses
-            g_ssim, ssim_map = ssim(ct_img, x_recon, data_range=2.0, full=True)
+            g_ssim, ssim_map = ssim(ct_img, x_recon)
             liver_mse_loss, tumor_mse_loss, liver_ssim_loss, tumor_ssim_loss = segmentation_losses(x_recon, ct_img, liver, tumor, ssim_map)
             total_loss = liver_mse_loss + liver_ssim_loss + tumor_mse_loss + tumor_ssim_loss
 
@@ -899,7 +900,7 @@ def train_segmentation_control(
                 z_hat = (z_noisy_ct - sqrt_one_minus_alpha_cumprod * pred_noise) / (sqrt_alpha_cumprod + 1e-8)
                 x_recon = vae.decode(z_hat)
 
-                g_ssim, ssim_map = ssim(ct_img, x_recon, data_range=2.0, full=True)
+                g_ssim, ssim_map = ssim(ct_img, x_recon)
                 liver_mse_loss, tumor_mse_loss, liver_ssim_loss, tumor_ssim_loss = segmentation_losses(x_recon, ct_img, liver, tumor, ssim_map)
                 total_loss = liver_mse_loss + liver_ssim_loss + tumor_mse_loss + tumor_ssim_loss
 

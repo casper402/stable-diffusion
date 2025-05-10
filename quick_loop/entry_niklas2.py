@@ -16,7 +16,7 @@ from quick_loop.unetControlPACA import load_unet_control_paca, train_dr_control_
 train_size = None
 val_size = None
 test_size = 10
-batch_size = 8
+batch_size = 16
 accumulation_steps = 1 # Effectively increases batch size to batch_size * accumulation_steps
 num_workers = 8
 epochs = 2000
@@ -67,7 +67,7 @@ augmentation = {
 vae = load_vae(vae_save_path, trainable=False)
 
 train_loader, val_loader, test_loader = get_dataloaders(manifest_path, batch_size=batch_size, num_workers=num_workers, dataset_class=CTDatasetNPY, train_size=train_size, val_size=val_size, test_size=test_size, augmentation=augmentation)
-train_vae(vae=vae, train_loader=train_loader, val_loader=val_loader, epochs=epochs, early_stopping=early_stopping, patience=patience, save_path=vae_save_path, predict_dir=vae_predict_dir)
+# train_vae(vae=vae, train_loader=train_loader, val_loader=val_loader, epochs=epochs, early_stopping=early_stopping, patience=patience, save_path=vae_save_path, predict_dir=vae_predict_dir)
 
 # Unet v1
 unet = load_unet(save_path = unet_save_path, trainable=True, base_channels=base_channels, dropout_rate=dropout_rate)

@@ -110,7 +110,6 @@ def train_vae(
         factor=0.5,            
         patience=patience,           
         threshold=1e-4,        
-        verbose=True,          
         min_lr=1e-6            
     )
     best_val_loss = float('inf')

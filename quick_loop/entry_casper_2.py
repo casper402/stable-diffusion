@@ -21,10 +21,10 @@ num_workers = 8
 epochs = 2000
 early_stopping = 50
 patience = 20
-epochs_between_prediction = 5
+epochs_between_prediction = 10
 base_channels = 256
 dropout_rate = 0.1
-learning_rate = 5e-5
+learning_rate = 2.5e-5
 warmup_lr = 0
 warmup_epochs = 0
 
@@ -47,7 +47,7 @@ l1_weight=0
 # Load pretrained model paths
 load_dir = "conditional_unet_base_channels_256"
 load_vae_path = os.path.join(load_dir, "vae.pth")
-load_unet_path = os.path.join(load_dir, "unet.pth")
+load_unet_path = os.path.join(load_dir, "unet_v2.pth")
 load_dr_module_path = os.path.join(load_dir, "dr_module.pth")
 load_controlnet_path = os.path.join(load_dir, "controlnet.pth")
 load_paca_layers_path = os.path.join(load_dir, "paca_layers.pth")
@@ -59,14 +59,14 @@ vae_predict_dir = os.path.join(save_dir, "vae_predictions")
 unet_predict_dir = os.path.join(save_dir, "unet_predictions")
 conditional_predict_dir = os.path.join(save_dir, "conditional_predictions")
 vae_save_path = os.path.join(save_dir, "vae.pth")
-unet_save_path = os.path.join(save_dir, "unet_v2.pth")
+unet_save_path = os.path.join(save_dir, "unet_v3.pth")
 controlnet_save_path = os.path.join(save_dir, "segmentation_controlnet.pth")
 paca_layers_save_path = os.path.join(save_dir, "paca_layers.pth")
 dr_module_save_path = os.path.join(save_dir, "segmentation_dr_module.pth")
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
-manifest_path = "../training_data/manifest-filtered.csv" # without CBCT
+manifest_path = "../training_data/manifest-filtered.csv"
 # manifest_path = "../manifest-cbct.csv" # with CBCT
 # manifest_path = "../data_quick_loop/manifest.csv" # Local config
 

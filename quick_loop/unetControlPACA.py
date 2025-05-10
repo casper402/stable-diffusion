@@ -817,7 +817,7 @@ def train_segmentation_control(
             # Compute losses
             g_ssim, ssim_map = ssim(ct_img, x_recon)
             liver_mse_loss, tumor_mse_loss, liver_ssim_loss, tumor_ssim_loss = segmentation_losses(x_recon, ct_img, liver, tumor, ssim_map)
-            total_loss = liver_mse_loss + liver_ssim_loss + tumor_mse_loss + tumor_ssim_loss
+            total_loss = (liver_mse_loss + tumor_mse_loss) * 100 # TODO: Maybe add ssim and remove scaling factor
 
             total_loss.backward()
             torch.nn.utils.clip_grad_norm_(params_to_train, max_norm=1.0)
@@ -902,7 +902,7 @@ def train_segmentation_control(
 
                 g_ssim, ssim_map = ssim(ct_img, x_recon)
                 liver_mse_loss, tumor_mse_loss, liver_ssim_loss, tumor_ssim_loss = segmentation_losses(x_recon, ct_img, liver, tumor, ssim_map)
-                total_loss = liver_mse_loss + liver_ssim_loss + tumor_mse_loss + tumor_ssim_loss
+                total_loss = (liver_mse_loss + tumor_mse_loss) * 100# TODO: Maybe add ssim
 
                 val_liver_mse_loss += liver_mse_loss.item()
                 val_tumor_mse_loss += tumor_mse_loss.item()

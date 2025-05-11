@@ -163,7 +163,7 @@ class UpBlock(nn.Module):
 
         self.res_block1 = ResnetBlock(res1_in_channels, out_channels, time_emb_dim, dropout_rate)
         self.attention1 = AttentionBlock(out_channels) if has_attn else nn.Identity()
-        self.cross_attention = PACALayer(out_channels, num_heads=8) if cross_attention else None
+        self.cross_attention = PACALayer(out_channels, in_channels, num_heads=8) if cross_attention else None
         self.res_block2 = ResnetBlock(res2_in_channels, out_channels, time_emb_dim, dropout_rate)
         self.attention2 = AttentionBlock(out_channels) if has_attn else nn.Identity()
         self.upsample = Upsample(out_channels, with_conv=True) if upsample else None

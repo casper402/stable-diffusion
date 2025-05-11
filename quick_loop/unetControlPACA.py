@@ -678,16 +678,21 @@ def train_dr_control_paca_v2(
 
     print("Training finished.")
 
-def segmentation_losses(x_recon, ct_img, liver, tumor, ssim_map):    
+def segmentation_losses(x_recon, ct_img, liver, tumor, ssim_map=None):    
     x_recon_liver_masked = x_recon * liver
     ct_img_liver_masked = ct_img * liver
     liver_mse_loss = F.mse_loss(x_recon_liver_masked, ct_img_liver_masked)
-    liver_ssim_loss = 1 - torch.mean(ssim_map * liver)
 
     x_recon_tumor_masked = x_recon * tumor
     ct_img_tumor_masked = ct_img * tumor
     tumor_mse_loss = F.mse_loss(x_recon_tumor_masked, ct_img_tumor_masked)
-    tumor_ssim_loss = 1 - torch.mean(ssim_map * tumor)
+
+    if ssim_map is not None:
+        liver_ssim_loss = 1 - torch.mean(ssim_map * liver)
+        tumor_ssim_loss = 1 - torch.mean(ssim_map * tumor)
+    else:
+        liver_ssim_loss = liver_mse_loss
+        tumor_ssim_loss = tumor_mse_loss
     
     return liver_mse_loss, tumor_mse_loss, liver_ssim_loss, tumor_ssim_loss
 
@@ -715,7 +720,6 @@ def train_segmentation_control(
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     os.makedirs(save_dir, exist_ok=True)
     os.makedirs(predict_dir, exist_ok=True)
-    amp_enabled = torch.cuda.is_available()
     vae.to(device)
     unet.to(device)
     controlnet_cbct.to(device)
@@ -750,7 +754,7 @@ def train_segmentation_control(
         min_lr=min(1e-7, learning_rate)
     )
     diffusion = Diffusion(device, timesteps=1000)
-    ssim = StructuralSimilarityIndexMeasure(data_range=2.0, return_full_image=True).to(device)
+    # ssim = StructuralSimilarityIndexMeasure(data_range=2.0, return_full_image=True).to(device)
 
     # --- Training Loop ---
     best_val_loss = float('inf')
@@ -815,8 +819,8 @@ def train_segmentation_control(
             x_recon = vae.decode(z_hat)
 
             # Compute losses
-            g_ssim, ssim_map = ssim(ct_img, x_recon)
-            liver_mse_loss, tumor_mse_loss, liver_ssim_loss, tumor_ssim_loss = segmentation_losses(x_recon, ct_img, liver, tumor, ssim_map)
+            # g_ssim, ssim_map = ssim(ct_img, x_recon)
+            liver_mse_loss, tumor_mse_loss, liver_ssim_loss, tumor_ssim_loss = segmentation_losses(x_recon, ct_img, liver, tumor, None)
             total_loss = (liver_mse_loss + tumor_mse_loss) * 100 # TODO: Maybe add ssim and remove scaling factor
 
             total_loss.backward()
@@ -831,11 +835,13 @@ def train_segmentation_control(
 
             # Compute monitoring losses
             diff_loss = noise_loss(pred_noise, noise)
-            global_ssim_loss = 1 - g_ssim
+            # global_ssim_loss = 1 - g_ssim
+            global_ssim_loss = 0
             global_mse_loss = F.mse_loss(x_recon, ct_img)
 
             train_diff_loss += diff_loss.item()
-            train_global_ssim_loss += global_ssim_loss.item()
+            # train_global_ssim_loss += global_ssim_loss.item()
+            train_global_ssim_loss += global_ssim_loss
             train_global_mse_loss += global_mse_loss.item()
         
         # Average losses
@@ -900,8 +906,8 @@ def train_segmentation_control(
                 z_hat = (z_noisy_ct - sqrt_one_minus_alpha_cumprod * pred_noise) / (sqrt_alpha_cumprod + 1e-8)
                 x_recon = vae.decode(z_hat)
 
-                g_ssim, ssim_map = ssim(ct_img, x_recon)
-                liver_mse_loss, tumor_mse_loss, liver_ssim_loss, tumor_ssim_loss = segmentation_losses(x_recon, ct_img, liver, tumor, ssim_map)
+                # g_ssim, ssim_map = ssim(ct_img, x_recon)
+                liver_mse_loss, tumor_mse_loss, liver_ssim_loss, tumor_ssim_loss = segmentation_losses(x_recon, ct_img, liver, tumor, None)
                 total_loss = (liver_mse_loss + tumor_mse_loss) * 100# TODO: Maybe add ssim
 
                 val_liver_mse_loss += liver_mse_loss.item()
@@ -911,11 +917,13 @@ def train_segmentation_control(
                 val_loss_total += total_loss.item()
 
                 diff_loss = noise_loss(pred_noise, noise)
-                global_ssim_loss = 1 - g_ssim
+                # global_ssim_loss = 1 - g_ssim
+                global_ssim_loss = 0
                 global_mse_loss = F.mse_loss(x_recon, ct_img)
 
                 val_diff_loss += diff_loss.item()
-                val_global_ssim_loss += global_ssim_loss.item()
+                #val_global_ssim_loss += global_ssim_loss.item()
+                val_global_ssim_loss += global_ssim_loss
                 val_global_mse_loss += global_mse_loss.item()
 
         avg_val_loss_total = val_loss_total / len(val_loader)

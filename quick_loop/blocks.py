@@ -125,7 +125,7 @@ class DownBlock(nn.Module):
         super().__init__()
         self.downsample = downsample
         self.has_attn = has_attn
-        self.cross_attention
+        self.cross_attention = cross_attention
 
         self.res_block1 = ResnetBlock(in_channels, out_channels, time_emb_dim, dropout_rate)
         self.attention1 = AttentionBlock(out_channels) if has_attn else None

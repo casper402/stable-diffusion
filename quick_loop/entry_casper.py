@@ -53,7 +53,7 @@ load_controlnet_path = os.path.join(load_dir, "controlnet.pth")
 load_paca_layers_path = os.path.join(load_dir, "paca_layers.pth")
 
 # Save prediction / model directories
-save_dir = "segmentation_controlnet"
+save_dir = "segmentation_controlnet_new_loss"
 os.makedirs(save_dir, exist_ok=True)
 vae_predict_dir = os.path.join(save_dir, "vae_predictions")
 unet_predict_dir = os.path.join(save_dir, "unet_predictions")

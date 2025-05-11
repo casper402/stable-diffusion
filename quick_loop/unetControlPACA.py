@@ -819,9 +819,11 @@ def train_segmentation_control(
             x_recon = vae.decode(z_hat)
 
             # Compute losses
+            diff_loss = noise_loss(pred_noise, noise)
+
             # g_ssim, ssim_map = ssim(ct_img, x_recon)
             liver_mse_loss, tumor_mse_loss, liver_ssim_loss, tumor_ssim_loss = segmentation_losses(x_recon, ct_img, liver, tumor, None)
-            total_loss = (liver_mse_loss + tumor_mse_loss) * 100 # TODO: Maybe add ssim and remove scaling factor
+            total_loss = diff_loss + (liver_mse_loss + tumor_mse_loss) * 100
 
             total_loss.backward()
             torch.nn.utils.clip_grad_norm_(params_to_train, max_norm=1.0)
@@ -834,7 +836,6 @@ def train_segmentation_control(
             train_loss_total += total_loss.item()
 
             # Compute monitoring losses
-            diff_loss = noise_loss(pred_noise, noise)
             # global_ssim_loss = 1 - g_ssim
             global_ssim_loss = 0
             global_mse_loss = F.mse_loss(x_recon, ct_img)
@@ -906,9 +907,11 @@ def train_segmentation_control(
                 z_hat = (z_noisy_ct - sqrt_one_minus_alpha_cumprod * pred_noise) / (sqrt_alpha_cumprod + 1e-8)
                 x_recon = vae.decode(z_hat)
 
+                diff_loss = noise_loss(pred_noise, noise)
+
                 # g_ssim, ssim_map = ssim(ct_img, x_recon)
                 liver_mse_loss, tumor_mse_loss, liver_ssim_loss, tumor_ssim_loss = segmentation_losses(x_recon, ct_img, liver, tumor, None)
-                total_loss = (liver_mse_loss + tumor_mse_loss) * 100# TODO: Maybe add ssim
+                total_loss = diff_loss + (liver_mse_loss + tumor_mse_loss) * 100# TODO: Maybe add ssim
 
                 val_liver_mse_loss += liver_mse_loss.item()
                 val_tumor_mse_loss += tumor_mse_loss.item()
@@ -916,7 +919,6 @@ def train_segmentation_control(
                 val_tumor_ssim_loss += tumor_ssim_loss.item()
                 val_loss_total += total_loss.item()
 
-                diff_loss = noise_loss(pred_noise, noise)
                 # global_ssim_loss = 1 - g_ssim
                 global_ssim_loss = 0
                 global_mse_loss = F.mse_loss(x_recon, ct_img)
@@ -960,80 +962,80 @@ def train_segmentation_control(
             break
 
         # --- Inference/Saving Test Images ---
-        if ((epoch + 1) % epochs_between_prediction == 0): # Save every 10 epochs
-            print(f"--- Saving prediction for epoch {epoch+1} ---")
+        # if ((epoch + 1) % epochs_between_prediction == 0): # Save every 10 epochs
+        #     print(f"--- Saving prediction for epoch {epoch+1} ---")
 
-            controlnet_seg.eval()
-            dr_module_seg.eval()
+        #     controlnet_seg.eval()
+        #     dr_module_seg.eval()
 
-            num_images_to_save = 5
-            saved_count = 0
+        #     num_images_to_save = 5
+        #     saved_count = 0
 
-            with torch.no_grad():
-                for i, (ct, cbct, segmentation, _, _) in enumerate(test_loader):
-                    ct = ct.to(device)
-                    cbct = cbct.to(device)
-                    segmentation.to(device)
+        #     with torch.no_grad():
+        #         for i, (ct, cbct, segmentation, _, _) in enumerate(test_loader):
+        #             ct = ct.to(device)
+        #             cbct = cbct.to(device)
+        #             segmentation.to(device)
 
-                    controlnet_input_cbct, _ = dr_module_cbct(cbct)
-                    controlnet_input_seg, _ = dr_module_seg(segmentation)
+        #             controlnet_input_cbct, _ = dr_module_cbct(cbct)
+        #             controlnet_input_seg, _ = dr_module_seg(segmentation)
 
-                    z_t = torch.randn_like(vae.encode(ct)[0])
-                    T = diffusion.timesteps
+        #             z_t = torch.randn_like(vae.encode(ct)[0])
+        #             T = diffusion.timesteps
 
-                    for t_int in range(T - 1, -1, -1): 
-                        t = torch.full((z_t.size(0),), t_int, device=device, dtype=torch.long)
+        #             for t_int in range(T - 1, -1, -1): 
+        #                 t = torch.full((z_t.size(0),), t_int, device=device, dtype=torch.long)
 
-                        # CFG: Predict noise twice
-                        down_res_samples_cbct, middle_res_sample_cbct = controlnet_cbct(z_t, controlnet_input_cbct, t)
-                        down_res_samples_seg, middle_res_sample_seg = controlnet_seg(z_t, controlnet_input_cbct, t)
-                        pred_noise = unet(z_t, t, down_res_samples_cbct, middle_res_sample_cbct, down_res_samples_seg, middle_res_sample_seg)
+        #                 # CFG: Predict noise twice
+        #                 down_res_samples_cbct, middle_res_sample_cbct = controlnet_cbct(z_t, controlnet_input_cbct, t)
+        #                 down_res_samples_seg, middle_res_sample_seg = controlnet_seg(z_t, controlnet_input_cbct, t)
+        #                 pred_noise = unet(z_t, t, down_res_samples_cbct, middle_res_sample_cbct, down_res_samples_seg, middle_res_sample_seg)
 
-                        # DDPM
-                        beta_t = diffusion.beta[t_int].view(-1, 1, 1, 1)
-                        alpha_t = diffusion.alpha[t_int].view(-1, 1, 1, 1)
-                        alpha_cumprod_t = diffusion.alpha_cumprod[t_int].view(-1, 1, 1, 1)
-                        sqrt_one_minus_alpha_cumprod_t = torch.sqrt(1.0 - alpha_cumprod_t)
-                        sqrt_reciprocal_alpha_t = torch.sqrt(1.0 / alpha_t)
+        #                 # DDPM
+        #                 beta_t = diffusion.beta[t_int].view(-1, 1, 1, 1)
+        #                 alpha_t = diffusion.alpha[t_int].view(-1, 1, 1, 1)
+        #                 alpha_cumprod_t = diffusion.alpha_cumprod[t_int].view(-1, 1, 1, 1)
+        #                 sqrt_one_minus_alpha_cumprod_t = torch.sqrt(1.0 - alpha_cumprod_t)
+        #                 sqrt_reciprocal_alpha_t = torch.sqrt(1.0 / alpha_t)
 
-                        model_mean_coef2 = beta_t / sqrt_one_minus_alpha_cumprod_t
-                        model_mean = sqrt_reciprocal_alpha_t * (z_t - model_mean_coef2 * pred_noise)
+        #                 model_mean_coef2 = beta_t / sqrt_one_minus_alpha_cumprod_t
+        #                 model_mean = sqrt_reciprocal_alpha_t * (z_t - model_mean_coef2 * pred_noise)
 
-                        if t_int > 0:
-                            variance = diffusion.beta[t_int].view(-1, 1, 1, 1) # Use posterior variance beta_t
-                            noise = torch.randn_like(z_t)
-                            z_t_minus_1 = model_mean + torch.sqrt(variance) * noise
-                        else:
-                            z_t_minus_1 = model_mean
-                        z_t = z_t_minus_1
+        #                 if t_int > 0:
+        #                     variance = diffusion.beta[t_int].view(-1, 1, 1, 1) # Use posterior variance beta_t
+        #                     noise = torch.randn_like(z_t)
+        #                     z_t_minus_1 = model_mean + torch.sqrt(variance) * noise
+        #                 else:
+        #                     z_t_minus_1 = model_mean
+        #                 z_t = z_t_minus_1
 
-                    # Decode final latent
-                    z_0 = z_t
-                    generated_image_batch = vae.decode(z_0)
+        #             # Decode final latent
+        #             z_0 = z_t
+        #             generated_image_batch = vae.decode(z_0)
 
-                    for j in range(generated_image_batch.size(0)):
-                        generated_image = generated_image_batch[j]
-                        cbct_image = cbct[j]
-                        ct_image = ct[j]
+        #             for j in range(generated_image_batch.size(0)):
+        #                 generated_image = generated_image_batch[j]
+        #                 cbct_image = cbct[j]
+        #                 ct_image = ct[j]
 
-                        generated_image_vis = (generated_image / 2 + 0.5).clamp(0, 1)
-                        cbct_image_vis = (cbct_image / 2 + 0.5).clamp(0, 1)
-                        ct_image_vis = (ct_image / 2 + 0.5).clamp(0, 1)
+        #                 generated_image_vis = (generated_image / 2 + 0.5).clamp(0, 1)
+        #                 cbct_image_vis = (cbct_image / 2 + 0.5).clamp(0, 1)
+        #                 ct_image_vis = (ct_image / 2 + 0.5).clamp(0, 1)
 
-                        images_to_save = [cbct_image_vis, generated_image_vis, ct_image_vis]
-                        save_filename = f"{predict_dir}/epoch_{epoch}_batch_{i}_img_{j}_guidance_scale_{guidance_scale}.png"
+        #                 images_to_save = [cbct_image_vis, generated_image_vis, ct_image_vis]
+        #                 save_filename = f"{predict_dir}/epoch_{epoch}_batch_{i}_img_{j}_guidance_scale_{guidance_scale}.png"
 
-                        torchvision.utils.save_image(
-                            images_to_save,
-                            save_filename,
-                            nrow=len(images_to_save),
-                        )
-                        saved_count += 1
-                        if saved_count >= num_images_to_save:
-                            break
-                    if saved_count >= num_images_to_save:
-                        break
-            print(f"Saved {num_images_to_save} images for epoch {epoch+1} to {predict_dir}")
+        #                 torchvision.utils.save_image(
+        #                     images_to_save,
+        #                     save_filename,
+        #                     nrow=len(images_to_save),
+        #                 )
+        #                 saved_count += 1
+        #                 if saved_count >= num_images_to_save:
+        #                     break
+        #             if saved_count >= num_images_to_save:
+        #                 break
+        #     print(f"Saved {num_images_to_save} images for epoch {epoch+1} to {predict_dir}")
     print("Training finished.")
 
 def test_dr_control_paca(

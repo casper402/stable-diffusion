@@ -121,23 +121,27 @@ class AttentionBlock(nn.Module): # From LDM paper
         return x+h_
     
 class DownBlock(nn.Module):
-    def __init__(self, in_channels, out_channels, time_emb_dim=None, has_attn=False, dropout_rate=0.1, downsample=True):
+    def __init__(self, in_channels, out_channels, time_emb_dim=None, has_attn=False, dropout_rate=0.1, downsample=True, cross_attention=False):
         super().__init__()
         self.downsample = downsample
         self.has_attn = has_attn
+        self.cross_attention
 
         self.res_block1 = ResnetBlock(in_channels, out_channels, time_emb_dim, dropout_rate)
         self.attention1 = AttentionBlock(out_channels) if has_attn else None
+        self.cross_attention = PACALayer(out_channels, num_heads=8) if cross_attention else None
         self.res_block2 = ResnetBlock(out_channels, out_channels, time_emb_dim, dropout_rate)
         self.attention2 = AttentionBlock(out_channels) if has_attn else None
         self.downsample = Downsample(out_channels, with_conv=True) if downsample else None
 
-    def forward(self, x, temb=None): # TODO: Return 2 or 3 residuals? If 3 then how to consume the third?
+    def forward(self, x, temb=None, context=None):
         res_samples = ()
         h = x
         h = self.res_block1(h, temb)
         if self.has_attn:
             h = self.attention1(h)
+        if self.cross_attention:
+            h = self.cross_attention(h, context)
         res_samples += (h,)
         h = self.res_block2(h, temb)
         if self.has_attn:
@@ -148,25 +152,29 @@ class DownBlock(nn.Module):
         return h, res_samples
     
 class UpBlock(nn.Module):
-    def __init__(self, in_channels, out_channels, skip_channels=None, time_emb_dim=None, has_attn=False, dropout_rate=0.1, upsample=True):
+    def __init__(self, in_channels, out_channels, skip_channels=None, time_emb_dim=None, has_attn=False, dropout_rate=0.1, upsample=True, cross_attention=False):
         super().__init__()
         self.has_attn = has_attn
         self.upsample = upsample
+        self.cross_attention = cross_attention
 
         res1_in_channels = in_channels + skip_channels if skip_channels is not None else in_channels
         res2_in_channels = out_channels + skip_channels if skip_channels is not None else out_channels
 
         self.res_block1 = ResnetBlock(res1_in_channels, out_channels, time_emb_dim, dropout_rate)
         self.attention1 = AttentionBlock(out_channels) if has_attn else nn.Identity()
+        self.cross_attention = PACALayer(out_channels, num_heads=8) if cross_attention else None
         self.res_block2 = ResnetBlock(res2_in_channels, out_channels, time_emb_dim, dropout_rate)
         self.attention2 = AttentionBlock(out_channels) if has_attn else nn.Identity()
         self.upsample = Upsample(out_channels, with_conv=True) if upsample else None
 
-    def forward(self, x, skips=None, temb=None):
+    def forward(self, x, skips=None, temb=None, context=None):
         if skips is not None:
             x = torch.cat([x, skips[0]], dim=1)
         h = self.res_block1(x, temb)
         h = self.attention1(h)
+        if self.cross_attention:
+            h = self.cross_attention(h, context)
         if skips is not None:
             h = torch.cat([h, skips[1]], dim=1)
         h = self.res_block2(h, temb)
@@ -176,16 +184,21 @@ class UpBlock(nn.Module):
         return h
     
 class MiddleBlock(nn.Module):
-    def __init__(self, in_channels, time_emb_dim=None, dropout=0.1):
+    def __init__(self, in_channels, time_emb_dim=None, dropout=0.1, cross_attention=False):
         super().__init__()
+        self.cross_attention = cross_attention
+
         self.res_block1 = ResnetBlock(in_channels, in_channels, time_emb_dim, dropout)
         self.attention1 = AttentionBlock(in_channels)
+        self.cross_attention = PACALayer(in_channels, num_heads=8) if cross_attention else None
         self.res_block2 = ResnetBlock(in_channels, in_channels, time_emb_dim, dropout)
 
-    def forward(self, x, temb=None):
+    def forward(self, x, temb=None, context=None):
         h = x
         h = self.res_block1(h, temb)
         h = self.attention1(h)
+        if self.cross_attention:
+            h = self.cross_attention(h, context)
         h = self.res_block2(h, temb)
         return h
     

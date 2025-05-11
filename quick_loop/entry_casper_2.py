@@ -7,7 +7,7 @@ from utils.dataset import get_dataloaders, CTDatasetNPY, PairedCTCBCTDatasetNPY,
 from models.diffusion import Diffusion
 from quick_loop.vae import load_vae, train_vae
 from quick_loop.unet import load_unet, train_unet, train_joint
-from quick_loop.unetConditional import load_cond_unet, train_cond_unet
+from quick_loop.unetConditional import UNetCrossAttention, load_cond_unet, train_cond_unet
 from quick_loop.controlnet import load_controlnet
 from quick_loop.degradationRemoval import load_degradation_removal
 from quick_loop.unetControlPACA import load_unet_control_paca, train_dr_control_paca, test_dr_control_paca, train_segmentation_control
@@ -47,19 +47,19 @@ l1_weight=0
 # Load pretrained model paths
 load_dir = "conditional_unet_base_channels_256"
 load_vae_path = os.path.join(load_dir, "vae.pth")
-load_unet_path = os.path.join(load_dir, "unet_v2.pth")
+load_unet_path = os.path.join(load_dir, "unet.pth")
 load_dr_module_path = os.path.join(load_dir, "dr_module.pth")
 load_controlnet_path = os.path.join(load_dir, "controlnet.pth")
 load_paca_layers_path = os.path.join(load_dir, "paca_layers.pth")
 
 # Save prediction / model directories
-save_dir = "conditional_unet_base_channels_256"
+save_dir = "cond_unet_cross_attention"
 os.makedirs(save_dir, exist_ok=True)
 vae_predict_dir = os.path.join(save_dir, "vae_predictions")
 unet_predict_dir = os.path.join(save_dir, "unet_predictions")
 conditional_predict_dir = os.path.join(save_dir, "conditional_predictions")
 vae_save_path = os.path.join(save_dir, "vae.pth")
-unet_save_path = os.path.join(save_dir, "unet_v3.pth")
+unet_save_path = os.path.join(save_dir, "unet.pth")
 controlnet_save_path = os.path.join(save_dir, "segmentation_controlnet.pth")
 paca_layers_save_path = os.path.join(save_dir, "paca_layers.pth")
 dr_module_save_path = os.path.join(save_dir, "segmentation_dr_module.pth")
@@ -156,7 +156,7 @@ manifest_path = "../training_data/manifest-filtered.csv"
 
 # --- Conditional Unet ---
 train_loader, val_loader, test_loader = get_dataloaders(manifest_path, batch_size=batch_size, num_workers=num_workers, dataset_class=PairedCTCBCTDatasetNPY, train_size=train_size, val_size=val_size, test_size=test_size, augmentation=augmentation)
-unet = load_cond_unet(load_unet_path, trainable=True)
+unet = load_cond_unet(None, trainable=True, unet_type=UNetCrossAttention)
 vae = load_vae(load_vae_path)
 train_cond_unet(
     unet=unet, 

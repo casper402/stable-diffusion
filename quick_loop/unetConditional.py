@@ -7,9 +7,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from models.diffusion import Diffusion
-from quick_loop.blocks import nonlinearity, Normalize, TimestepEmbedding, DownBlock, MiddleBlock, ConditionalUpBlock
+from quick_loop.blocks import nonlinearity, Normalize, TimestepEmbedding, DownBlock, MiddleBlock, ConditionalUpBlock, UpBlock, PACALayer
 
-class UNet(nn.Module):
+class UNetSkip(nn.Module):
     def __init__(self, 
                  in_channels=3, 
                  out_channels=3, 
@@ -78,13 +78,85 @@ class UNet(nn.Module):
         h = nonlinearity(h)
         h = self.final_conv(h)
         return h
+    
+class UNetCrossAttention(nn.Module):
+    def __init__(self, 
+                 in_channels=3, 
+                 out_channels=3, 
+                 base_channels=256, 
+                 dropout_rate=0.1):
+        super().__init__()
+        time_emb_dim = base_channels * 4
+
+        ch1 = base_channels * 1
+        ch2 = base_channels * 2
+        ch3 = base_channels * 4
+        ch4 = base_channels * 4
+
+        attn_res_64 = False
+        attn_res_32 = True
+        attn_res_16 = True
+        attn_res_8 = True
+
+        self.time_embedding = TimestepEmbedding(time_emb_dim)
+
+        self.init_conv = nn.Conv2d(in_channels, ch1, kernel_size=3, padding=1)
+        self.down1 = DownBlock(ch1, ch1, time_emb_dim, attn_res_64, dropout_rate, cross_attention=True)
+        self.down2 = DownBlock(ch1, ch2, time_emb_dim, attn_res_32, dropout_rate, cross_attention=True)
+        self.down3 = DownBlock(ch2, ch3, time_emb_dim, attn_res_16, dropout_rate, cross_attention=True)
+        self.down4 = DownBlock(ch3, ch4, time_emb_dim, attn_res_8, dropout_rate, downsample=False, cross_attention=True)
+
+        self.middle = MiddleBlock(ch4, time_emb_dim, dropout_rate, cross_attention=True)
+
+        self.up4 = UpBlock(ch4, ch3, ch4, time_emb_dim, attn_res_8, dropout_rate, cross_attention=True)
+        self.up3 = UpBlock(ch3, ch2, ch3, time_emb_dim, attn_res_16, dropout_rate, cross_attention=True)
+        self.up2 = UpBlock(ch2, ch1, ch2, time_emb_dim, attn_res_32, dropout_rate, cross_attention=True)
+        self.up1 = UpBlock(ch1, ch1, ch1, time_emb_dim, attn_res_64, dropout_rate, upsample=False, cross_attention=True)
+        self.final_norm = Normalize(ch1)
+        self.final_conv = nn.Conv2d(ch1, out_channels, kernel_size=3, stride=1, padding=1)
+
+        self.cond_init_conv = nn.Conv2d(in_channels, ch1, kernel_size=3, padding=1)
+        self.cond_down1 = DownBlock(ch1, ch1, time_emb_dim, attn_res_64, dropout_rate)
+        self.cond_down2 = DownBlock(ch1, ch2, time_emb_dim, attn_res_32, dropout_rate)
+        self.cond_down3 = DownBlock(ch2, ch3, time_emb_dim, attn_res_16, dropout_rate)
+        self.cond_down4 = DownBlock(ch3, ch4, time_emb_dim, attn_res_8, dropout_rate, downsample=False)
+        self.cond_middle = MiddleBlock(ch4, time_emb_dim, dropout_rate)
+
+
+    def forward(self, x, condition, t):
+        t_emb = self.time_embedding(t)
+
+        c = self.cond_init_conv(condition)
+        c, cond_intermediates1 = self.cond_down1(c)
+        c, cond_intermediates2 = self.cond_down2(c)
+        c, cond_intermediates3 = self.cond_down3(c)
+        c, cond_intermediates4 = self.cond_down4(c)
+        cond_middle = self.cond_middle(c)
+
+        h = self.init_conv(x)         
+        h, intermediates1 = self.down1(h, t_emb, cond_intermediates1[1])
+        h, intermediates2 = self.down2(h, t_emb, cond_intermediates2[1])
+        h, intermediates3 = self.down3(h, t_emb, cond_intermediates3[1])
+        h, intermediates4 = self.down4(h, t_emb, cond_intermediates4[1])
+
+        h = self.middle(h, t_emb, cond_middle)
+
+        h = self.up4(h, intermediates4, t_emb, cond_intermediates4[1])
+        h = self.up3(h, intermediates3, t_emb, cond_intermediates3[1])
+        h = self.up2(h, intermediates2, t_emb, cond_intermediates2[1])
+        h = self.up1(h, intermediates1, t_emb, cond_intermediates1[1])
+
+        h = self.final_norm(h)
+        h = nonlinearity(h)
+        h = self.final_conv(h)
+        return h
 
 def noise_loss(pred_noise, true_noise):
     return F.mse_loss(pred_noise, true_noise)
     
-def load_cond_unet(save_path=None, trainable=False, base_channels=256, dropout_rate=0.1):
+def load_cond_unet(save_path=None, trainable=False, base_channels=256, dropout_rate=0.1, unet_type=UNetSkip):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    unet = UNet(base_channels=base_channels, dropout_rate=dropout_rate).to(device)
+    unet = unet_type(base_channels=base_channels, dropout_rate=dropout_rate).to(device)
     print("UNET base channels:", base_channels)
     if save_path is None:
         print("UNET initialized with random weights.")

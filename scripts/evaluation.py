@@ -232,15 +232,19 @@ if __name__ == "__main__":
     v2_cbct   = os.path.expanduser("~/thesis/predictions/predictionsV2-490-50steps_v2_cbct")
 
     # perceptual
-    perc_base = os.path.expanduser("/Users/Niklas/thesis/predictions/predctions_perceptual_with_float32"),
+    perc_base = os.path.expanduser("/Users/Niklas/thesis/predictions/predctions_perceptual_with_float32")
+
+    # v3
+    v3_pred490stepsize20 = os.path.expanduser(f"/Users/Niklas/thesis/predictions/predctions_controlnet_v3")
 
     gt_folder           = os.path.expanduser("~/thesis/training_data/CT/test")
     liver_mask_folder   = os.path.expanduser("~/thesis/training_data/liver/test")
     tumor_mask_folder   = os.path.expanduser("~/thesis/training_data/tumor/test")
 
     eval_sets = [
-        ("best",  v2_pred490speedstepsize20v2_base, False),
-        ("perc",  perc_base, False),
+        ("v1",  pred_base, False),
+        ("v2",  v2_pred490speedstepsize20v2_base, False),
+        ("v3",  v3_pred490stepsize20, False),
     ]
 
     # ──────── 1) GLOBAL & REGION‑BASED EVAL ─────────────────────────────────

@@ -10,7 +10,7 @@ from quick_loop.vae import load_vae
 from quick_loop.controlnet import load_controlnet
 from quick_loop.degradationRemoval import load_degradation_removal
 from quick_loop.unetControlPACA import load_unet_control_paca
-from quick_loop.unetConditional import load_cond_unet
+from quick_loop.unetConditional import load_cond_unet, UNetCrossAttention
 
 # ------------------------
 # Configuration Variables
@@ -28,9 +28,9 @@ POWER_P = 2.0         # power-law exponent for smoothing
 FINE_CUTOFF = 9       # switch to single-step updates at t<=9 (last 10 steps)
 STEP_SIZE = 20
 
-MODELS_PATH = 'conditional_unet_base_channels_256'
+MODELS_PATH = 'cond_unet_cross_attention'
 VAE_SAVE_PATH = os.path.join(MODELS_PATH, 'vae.pth')
-UNET_SAVE_PATH = os.path.join(MODELS_PATH, 'unet_v2.pth')
+UNET_SAVE_PATH = os.path.join(MODELS_PATH, 'unet.pth')
 PACA_LAYERS_SAVE_PATH = os.path.join(MODELS_PATH, 'paca_layers.pth')
 CONTROLNET_SAVE_PATH = os.path.join(MODELS_PATH, 'controlnet.pth')
 DEGRADATION_REMOVAL_SAVE_PATH = os.path.join(MODELS_PATH, 'dr_module.pth')
@@ -229,7 +229,7 @@ if __name__ == '__main__':
     # unet = load_unet_control_paca(UNET_SAVE_PATH, PACA_LAYERS_SAVE_PATH)
     # controlnet = load_controlnet(CONTROLNET_SAVE_PATH)
     # dr_module = load_degradation_removal(DEGRADATION_REMOVAL_SAVE_PATH)
-    unet = load_cond_unet(UNET_SAVE_PATH)
+    unet = load_cond_unet(UNET_SAVE_PATH, unet_type=UNetCrossAttention)
 
     for vol in VOLUME_INDICES:
         cbct_folder = os.path.join(CBCT_DIR, f"volume-{vol}")

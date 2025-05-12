@@ -20,7 +20,7 @@ batch_size = 8
 num_workers = 8
 epochs = 2000
 early_stopping = 50
-patience = 20
+patience = 10
 epochs_between_prediction = 10
 base_channels = 256
 dropout_rate = 0.1
@@ -45,7 +45,7 @@ kl_weight=0.000001
 l1_weight=0
 
 # Load pretrained model paths
-load_dir = "conditional_unet_base_channels_256"
+load_dir = "cond_unet_cross_attention"
 load_vae_path = os.path.join(load_dir, "vae.pth")
 load_unet_path = os.path.join(load_dir, "unet.pth")
 load_dr_module_path = os.path.join(load_dir, "dr_module.pth")
@@ -56,10 +56,10 @@ load_paca_layers_path = os.path.join(load_dir, "paca_layers.pth")
 save_dir = "cond_unet_cross_attention"
 os.makedirs(save_dir, exist_ok=True)
 vae_predict_dir = os.path.join(save_dir, "vae_predictions")
-unet_predict_dir = os.path.join(save_dir, "unet_predictions")
-conditional_predict_dir = os.path.join(save_dir, "conditional_predictions")
+unet_predict_dir = os.path.join(save_dir, "unet_predictions_v2")
+conditional_predict_dir = os.path.join(save_dir, "conditional_predictions_v2")
 vae_save_path = os.path.join(save_dir, "vae.pth")
-unet_save_path = os.path.join(save_dir, "unet.pth")
+unet_save_path = os.path.join(save_dir, "unet_v2.pth")
 controlnet_save_path = os.path.join(save_dir, "segmentation_controlnet.pth")
 paca_layers_save_path = os.path.join(save_dir, "paca_layers.pth")
 dr_module_save_path = os.path.join(save_dir, "segmentation_dr_module.pth")
@@ -156,7 +156,7 @@ manifest_path = "../training_data/manifest-filtered.csv"
 
 # --- Conditional Unet ---
 train_loader, val_loader, test_loader = get_dataloaders(manifest_path, batch_size=batch_size, num_workers=num_workers, dataset_class=PairedCTCBCTDatasetNPY, train_size=train_size, val_size=val_size, test_size=test_size, augmentation=augmentation)
-unet = load_cond_unet(None, trainable=True, unet_type=UNetCrossAttention)
+unet = load_cond_unet(load_unet_path, trainable=True, unet_type=UNetCrossAttention)
 vae = load_vae(load_vae_path)
 train_cond_unet(
     unet=unet, 

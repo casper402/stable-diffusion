@@ -296,6 +296,7 @@ def segmentation_predict_volume(
     for batch_idx, (names, imgs, segmentation) in enumerate(dataloader, start=1):
         batch_start = time.time()
         imgs = imgs.to(device)
+        segmentation = segmentation.to(device)
         with torch.inference_mode():
             control_inputs, _ = dr_module(imgs)
             controlnet_input_seg, _ = dr_module_seg(segmentation)

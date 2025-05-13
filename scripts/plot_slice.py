@@ -149,7 +149,7 @@ def plot_multi_side_by_side(test_dirs, gt_dir, volume_idx, slice_num):
 
 def plot(volume_idx, slice_num):
     test_dirs = [
-        os.path.expanduser(f"/Users/Niklas/thesis/predictions/v1/volume-{volume_idx}"),
+        # os.path.expanduser(f"/Users/Niklas/thesis/predictions/v1/volume-{volume_idx}"),
         # os.path.expanduser(f"/Users/Niklas/thesis/predictions/v1_speed/volume-{volume_idx}"),
         # os.path.expanduser(f"/Users/Niklas/thesis/predictions/basic/volume-{volume_idx}"),
         # os.path.expanduser("/Users/Niklas/thesis/training_data/CBCT/test"),
@@ -159,7 +159,7 @@ def plot(volume_idx, slice_num):
         # os.path.expanduser(f"/Users/Niklas/thesis/predictions/v2_490_speed_stepsize20/volume-{volume_idx}"),
         os.path.expanduser(f"/Users/Niklas/thesis/predictions/v2_490_speed_stepsize20_v2/volume-{volume_idx}"),
         os.path.expanduser(f"/Users/Niklas/thesis/predictions/predctions_controlnet_v3/volume-{volume_idx}"),
-        # os.path.expanduser(f"/Users/Niklas/thesis/predictions/predctions_controlnet_from_unet_trained_after_joint/volume-{volume_idx}"),
+        os.path.expanduser(f"/Users/Niklas/thesis/predictions/predctions_controlnet_from_unet_trained_after_joint_v2/volume-{volume_idx}"),
         # os.path.expanduser("/Users/Niklas/thesis/training_data/CBCT/scaled-490"),
     ]
     gt_dir = os.path.expanduser("/Users/Niklas/thesis/training_data/CT/test")
@@ -176,10 +176,10 @@ def plot_random_slice(volume_idx):
 
 
 def plot_specific():
-    volume_idx = 12
-    slice_num = 160
+    volume_idx = 33
+    slice_num = 150 # This one looks like it has a tumor that only the 'train after joint' finds!
     plot(volume_idx, slice_num)
 
 if __name__ == "__main__":
     # plot_specific()
-    plot_random_slice(59)
+    plot_random_slice(61)

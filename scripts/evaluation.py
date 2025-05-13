@@ -237,14 +237,16 @@ if __name__ == "__main__":
     # v3
     v3_pred490stepsize20 = os.path.expanduser(f"/Users/Niklas/thesis/predictions/predctions_controlnet_v3")
 
+    # trained after joint
+    trained_after_joint = os.path.expanduser(f"/Users/Niklas/thesis/predictions/predctions_controlnet_from_unet_trained_after_joint_v2")
+
     gt_folder           = os.path.expanduser("~/thesis/training_data/CT/test")
     liver_mask_folder   = os.path.expanduser("~/thesis/training_data/liver/test")
     tumor_mask_folder   = os.path.expanduser("~/thesis/training_data/tumor/test")
 
     eval_sets = [
-        ("v1",  pred_base, False),
-        ("v2",  v2_pred490speedstepsize20v2_base, False),
         ("v3",  v3_pred490stepsize20, False),
+        ("after_joint",  trained_after_joint, False),
     ]
 
     # ──────── 1) GLOBAL & REGION‑BASED EVAL ─────────────────────────────────

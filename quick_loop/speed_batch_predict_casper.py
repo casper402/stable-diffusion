@@ -362,10 +362,8 @@ if __name__ == '__main__':
 
     for vol in VOLUME_INDICES:
         cbct_folder = os.path.join(CBCT_DIR, f"volume-{vol}")
-        liver_folder = os.path.join(LIVER_DIR, f"volume-{vol}")
-        tumor_folder = os.path.join(TUMOR_DIR, f"volume-{vol}")
         save_folder = os.path.join(OUT_DIR, f"volume-{vol}")
-        ds = CBCTSegmentationDatasetNPY(cbct_folder, liver_folder, tumor_folder, transform, seg_transform)
+        ds = CBCTSegmentationDatasetNPY(cbct_folder, LIVER_DIR, TUMOR_DIR, transform, seg_transform)
         loader = DataLoader(ds, batch_size=BATCH_SIZE, num_workers=4, pin_memory=True)
         segmentation_predict_volume(vae, unet, controlnet, dr_module, controlnet_seg, dr_module_seg, loader, save_folder, GUIDANCE_SCALE)
     print("All volumes processed.")

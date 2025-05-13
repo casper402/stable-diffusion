@@ -39,8 +39,8 @@ UNET_SAVE_PATH = os.path.join(MODELS_PATH, 'unet.pth')
 PACA_LAYERS_SAVE_PATH = os.path.join(MODELS_PATH, 'paca_layers.pth')
 CONTROLNET_SAVE_PATH = os.path.join(MODELS_PATH, 'controlnet.pth')
 DEGRADATION_REMOVAL_SAVE_PATH = os.path.join(MODELS_PATH, 'dr_module.pth')
-CONTROLNET_SEG_SAVE_PATH = os.path.join(MODELS_PATH, 'controlnet_seg.pth')
-DEGRADATION_REMOVAL_SEG_SAVE_PATH = os.path.join(MODELS_PATH, 'dr_module_seg.pth')
+CONTROLNET_SEG_SAVE_PATH = os.path.join(SEGMENTATION_PATH, 'controlnet_seg.pth')
+DEGRADATION_REMOVAL_SEG_SAVE_PATH = os.path.join(SEGMENTATION_PATH, 'dr_module_seg.pth')
 
 # ------------------------
 # Dataset for CBCT slices
@@ -87,12 +87,12 @@ class CBCTSegmentationDatasetNPY(Dataset):
             liver = np.load(liver_path).astype(np.float32)
         else:
             print(f"no liver path: {liver_path}")
-            liver = np.zeros(cbct.shape, dtype=torch.float32)
+            liver = np.zeros(cbct.shape, dtype=np.float32)
         if os.path.exists(tumor_path):
             tumor = np.load(tumor_path).astype(np.float32)
         else:
             print(f"no tumor path: {tumor_path}")
-            tumor = np.zeros(cbct.shape, dtype=torch.float32)
+            tumor = np.zeros(cbct.shape, dtype=np.float32)
 
         segmentation_map = liver - tumor
         segmentation_map_tensor = torch.from_numpy(segmentation_map).unsqueeze(0)

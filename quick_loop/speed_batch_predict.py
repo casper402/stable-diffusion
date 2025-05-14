@@ -14,12 +14,12 @@ from quick_loop.unetControlPACA import load_unet_control_paca
 # ------------------------
 # Configuration Variables
 # ------------------------
-PREDICT_CLINIC = False
+PREDICT_CLINIC = True
 
 CBCT_DIR = '../training_data/scaled-490/'
 CBCT_CLINIC_DIR = '../training_data/clinic/'
 VOLUME_INDICES = [3, 8, 12, 26, 32, 33, 35, 54, 59, 61, 106, 116, 129]
-OUT_DIR = '../predictions_v5/'
+OUT_DIR = '../predictions_clinicV2/'
 
 GUIDANCE_SCALE = 1.0
 ALPHA_A = 0.2         # Mixing weight for CBCT signal at t0
@@ -27,13 +27,13 @@ BATCH_SIZE = 16 # Can probably be 32
 DDIM_STEPS = 40
 POWER_P = 2.0
 FINE_CUTOFF = 9
-STEP_SIZE = 20
+STEP_SIZE = 1 # usually 20
 
 # MODELS_PATH = 'controlnet_v2_inference_v2/'
-# MODELS_PATH = 'controlnet_v3'
+MODELS_PATH = 'controlnet_v3'
 # MODELS_PATH = 'controlnet_from_unet_trained_after_joint'
 # MODELS_PATH = 'controlnet_v4'
-MODELS_PATH = 'controlnet_v5'
+# MODELS_PATH = 'controlnet_v5'
 VAE_SAVE_PATH = os.path.join(MODELS_PATH, 'vae_joint_vae.pth')
 UNET_SAVE_PATH = os.path.join(MODELS_PATH, 'unet_joint_unet.pth')
 PACA_LAYERS_SAVE_PATH = os.path.join(MODELS_PATH, 'paca_layers.pth')

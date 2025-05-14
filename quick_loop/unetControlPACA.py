@@ -149,7 +149,7 @@ def train_dr_control_paca(
     gamma=1.0, 
     guidance_scale=1.0, 
     epochs_between_prediction=50, 
-    learning_rate=2.5e-5, 
+    learning_rate=1.25e-5, 
 ):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     os.makedirs(save_dir, exist_ok=True)

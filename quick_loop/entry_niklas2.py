@@ -47,7 +47,7 @@ load_degradation_removal_path = os.path.join(load_dir, "dr_module.pth")
 # save_dir = "controlnet_from_unet_trained_after_joint"
 # save_dir = "controlnet_v4"
 # save_dir = "controlnet_from_unet_trained_after_joint_round2"
-save_dir = "controlnet_v5"
+save_dir = "controlnet_v6"
 
 os.makedirs(save_dir, exist_ok=True)
 vae_predict_dir = os.path.join(save_dir, "vae_predictions")

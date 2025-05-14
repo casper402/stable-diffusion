@@ -76,7 +76,7 @@ except ImportError:
 ENABLE_3D_GAUSS = True
 ENABLE_3D_BILATERAL = True
 ENABLE_NLM = True
-ENABLE_BM4D = False
+ENABLE_BM4D = True
 ENABLE_TV = True
 ENABLE_ANISO_DIFFUSION = True
 
@@ -158,7 +158,7 @@ def plot_slice_comparisons(stacks, names, idx):
 
 # — Main —
 if __name__=='__main__':
-    volume_idx, slice_idx = 33, 150
+    volume_idx, slice_idx = 26, 150
     base = os.path.expanduser('~/thesis')
     sct_dir = os.path.join(base, 'predictions', 'predctions_controlnet_v3', f'volume-{volume_idx}')
     gt_dir = os.path.join(base, 'training_data', 'CT', 'test')
@@ -176,7 +176,7 @@ if __name__=='__main__':
     gaussian_3d_params = [(1,1),(1,2),(2,1)]
     bilateral_params   = [(1.0,0.1),(2.0,0.2)]
     nlm_params         = [(3,3,0.8),(5,5,1.0)]
-    bm4d_sigmas        = [5,10]
+    bm4d_sigmas        = [5]
     tv_aniso_weights   = [(0.2,0.1),(0.5,0.2)]
     ad_params          = [(10,20),(20,30)]
 

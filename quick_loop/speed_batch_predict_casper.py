@@ -21,21 +21,21 @@ CBCT_DIR = '../training_data/CBCT/490/test'
 LIVER_DIR = '../training_data/liver/test'
 TUMOR_DIR = '../training_data/liver/test'
 VOLUME_INDICES = [3, 8, 12, 26, 32, 33, 35, 54, 59, 61, 106, 116, 129]
-OUT_DIR = '../predictions/segmentation'
+OUT_DIR = '../predictions/conditional_unet'
 
 GUIDANCE_SCALE = 1.0
 ALPHA_A = 0.2         # Mixing weight for CBCT signal at t0
-BATCH_SIZE = 16       # tune as needed
+BATCH_SIZE = 32       # tune as needed
 # DDIM / schedule parameters: reduce steps for faster inference
 DDIM_STEPS = 40       # total coarse sampling steps
 POWER_P = 2.0         # power-law exponent for smoothing
 FINE_CUTOFF = 9       # switch to single-step updates at t<=9 (last 10 steps)
 STEP_SIZE = 20
 
-MODELS_PATH = '../best_model'
+MODELS_PATH = 'cond_unet_cross_attention'
 SEGMENTATION_PATH = 'segmentation_controlnet_new_loss'
 VAE_SAVE_PATH = os.path.join(MODELS_PATH, 'vae.pth')
-UNET_SAVE_PATH = os.path.join(MODELS_PATH, 'unet.pth')
+UNET_SAVE_PATH = os.path.join(MODELS_PATH, 'unet_v2.pth')
 PACA_LAYERS_SAVE_PATH = os.path.join(MODELS_PATH, 'paca_layers.pth')
 CONTROLNET_SAVE_PATH = os.path.join(MODELS_PATH, 'controlnet.pth')
 DEGRADATION_REMOVAL_SAVE_PATH = os.path.join(MODELS_PATH, 'dr_module.pth')
@@ -353,17 +353,18 @@ if __name__ == '__main__':
         transforms.Resize((256, 256), interpolation=InterpolationMode.NEAREST_EXACT),
     ])
     vae = load_vae(VAE_SAVE_PATH)
-    unet = load_unet_control_paca(UNET_SAVE_PATH, PACA_LAYERS_SAVE_PATH)
-    controlnet = load_controlnet(CONTROLNET_SAVE_PATH)
-    dr_module = load_degradation_removal(DEGRADATION_REMOVAL_SAVE_PATH)
-    controlnet_seg = load_controlnet(CONTROLNET_SEG_SAVE_PATH)
-    dr_module_seg = load_degradation_removal(DEGRADATION_REMOVAL_SEG_SAVE_PATH)
-    # unet = load_cond_unet(UNET_SAVE_PATH, unet_type=UNetCrossAttention)
+    #unet = load_unet_control_paca(UNET_SAVE_PATH, PACA_LAYERS_SAVE_PATH)
+    #controlnet = load_controlnet(CONTROLNET_SAVE_PATH)
+    #dr_module = load_degradation_removal(DEGRADATION_REMOVAL_SAVE_PATH)
+    #controlnet_seg = load_controlnet(CONTROLNET_SEG_SAVE_PATH)
+    #dr_module_seg = load_degradation_removal(DEGRADATION_REMOVAL_SEG_SAVE_PATH)
+    unet = load_cond_unet(UNET_SAVE_PATH, unet_type=UNetCrossAttention)
 
     for vol in VOLUME_INDICES:
         cbct_folder = os.path.join(CBCT_DIR, f"volume-{vol}")
         save_folder = os.path.join(OUT_DIR, f"volume-{vol}")
-        ds = CBCTSegmentationDatasetNPY(cbct_folder, LIVER_DIR, TUMOR_DIR, transform, seg_transform)
+        ds = CBCTDatasetNPY(cbct_folder, transform)
         loader = DataLoader(ds, batch_size=BATCH_SIZE, num_workers=4, pin_memory=True)
-        segmentation_predict_volume(vae, unet, controlnet, dr_module, controlnet_seg, dr_module_seg, loader, save_folder, GUIDANCE_SCALE)
+        #segmentation_predict_volume(vae, unet, controlnet, dr_module, controlnet_seg, dr_module_seg, loader, save_folder, GUIDANCE_SCALE)
+        conditional_unet_predict_volume(vae, unet, loader, save_folder, GUIDANCE_SCALE)
     print("All volumes processed.")

@@ -20,7 +20,7 @@ CBCT_DIR = '../training_data/scaled-490/'
 # CBCT_CLINIC_DIR = '../training_data/clinic/'
 CBCT_CLINIC_DIR = '../training_data/clinic_cropped/'
 VOLUME_INDICES = [3, 8, 12, 26, 32, 33, 35, 54, 59, 61, 106, 116, 129]
-OUT_DIR = '../predictions_clinicV2/'
+OUT_DIR = '../predictions_clinicV2_cropped/'
 
 GUIDANCE_SCALE = 1.0
 ALPHA_A = 0.2         # Mixing weight for CBCT signal at t0

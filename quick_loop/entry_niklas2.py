@@ -32,7 +32,7 @@ warmup_epochs = 5
 # Load pretrained model paths
 # load_dir = "controlnet_v3"
 # load_dir = "controlnet_from_unet_trained_after_joint_round2"
-load_dir = "controlnet_v7-data-augmentation"
+load_dir = "controlnet_v6"
 load_vae_path = os.path.join(load_dir, "vae_joint_vae.pth")
 load_unet_path = os.path.join(load_dir, "unet_joint_unet.pth")
 load_controlnet_path = os.path.join(load_dir, "controlnet.pth")
@@ -47,7 +47,7 @@ load_degradation_removal_path = os.path.join(load_dir, "dr_module.pth")
 # save_dir = "controlnet_from_unet_trained_after_joint"
 # save_dir = "controlnet_v4"
 # save_dir = "controlnet_from_unet_trained_after_joint_round2"
-load_dir = "controlnet_v7-data-augmentation"
+save_dir = "controlnet_v7-data-augmentation"
 
 os.makedirs(save_dir, exist_ok=True)
 vae_predict_dir = os.path.join(save_dir, "vae_predictions")

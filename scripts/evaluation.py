@@ -230,15 +230,28 @@ if __name__ == "__main__":
     v2_pred490speedstepsize20_base   = os.path.expanduser("~/thesis/predictions/v2_490_speed_stepsize20")
     v2_pred490speedstepsize20v2_base   = os.path.expanduser("~/thesis/predictions/v2_490_speed_stepsize20_v2")
     v2_cbct   = os.path.expanduser("~/thesis/predictions/predictionsV2-490-50steps_v2_cbct")
-    
+
+    # perceptual
+    perc_base = os.path.expanduser("/Users/Niklas/thesis/predictions/predctions_perceptual_with_float32")
+
+    # v3
+    v3_pred490stepsize20 = os.path.expanduser(f"/Users/Niklas/thesis/predictions/predctions_controlnet_v3")
+
+    # v4
+    v4_pred490stepsize20 = os.path.expanduser(f"/Users/Niklas/thesis/predictions/prediction_controlnet_v4")
+
+    # trained after joint
+    trained_after_joint = os.path.expanduser(f"/Users/Niklas/thesis/predictions/predctions_controlnet_from_unet_trained_after_joint_v2")
 
     gt_folder           = os.path.expanduser("~/thesis/training_data/CT/test")
     liver_mask_folder   = os.path.expanduser("~/thesis/training_data/liver/test")
     tumor_mask_folder   = os.path.expanduser("~/thesis/training_data/tumor/test")
 
     eval_sets = [
-        ("CBCT", cbct490_base, True),
-        ("sCT",  v2_pred490speedstepsize20v2_base, False),
+        ("CBCT",  cbct490_base, True),
+        # ("v2",  v2_pred490speedstepsize20v2_base, False),
+        ("sCT",  v3_pred490stepsize20, False),
+        # ("v4",  v4_pred490stepsize20, False),
     ]
 
     # ──────── 1) GLOBAL & REGION‑BASED EVAL ─────────────────────────────────

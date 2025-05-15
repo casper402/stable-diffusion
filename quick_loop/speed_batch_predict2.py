@@ -14,13 +14,12 @@ from quick_loop.unetControlPACA import load_unet_control_paca
 # ------------------------
 # Configuration Variables
 # ------------------------
-PREDICT_CLINIC = True
+PREDICT_CLINIC = False
 
 CBCT_DIR = '../training_data/scaled-490/'
-# CBCT_CLINIC_DIR = '../training_data/clinic/'
-CBCT_CLINIC_DIR = '../training_data/clinic_cropped/'
+CBCT_CLINIC_DIR = '../training_data/clinic/'
 VOLUME_INDICES = [3, 8, 12, 26, 32, 33, 35, 54, 59, 61, 106, 116, 129]
-OUT_DIR = '../predictions_clinicV2_cropped/'
+OUT_DIR = '../predictions_v5/'
 
 GUIDANCE_SCALE = 1.0
 ALPHA_A = 0.2         # Mixing weight for CBCT signal at t0
@@ -28,13 +27,13 @@ BATCH_SIZE = 16 # Can probably be 32
 DDIM_STEPS = 40
 POWER_P = 2.0
 FINE_CUTOFF = 9
-STEP_SIZE = 1 # usually 20
+STEP_SIZE = 20
 
 # MODELS_PATH = 'controlnet_v2_inference_v2/'
-MODELS_PATH = 'controlnet_v3'
+# MODELS_PATH = 'controlnet_v3'
 # MODELS_PATH = 'controlnet_from_unet_trained_after_joint'
 # MODELS_PATH = 'controlnet_v4'
-# MODELS_PATH = 'controlnet_v5'
+MODELS_PATH = 'controlnet_v5'
 VAE_SAVE_PATH = os.path.join(MODELS_PATH, 'vae_joint_vae.pth')
 UNET_SAVE_PATH = os.path.join(MODELS_PATH, 'unet_joint_unet.pth')
 PACA_LAYERS_SAVE_PATH = os.path.join(MODELS_PATH, 'paca_layers.pth')
@@ -189,8 +188,7 @@ def predict_clinic():
     controlnet = load_controlnet(CONTROLNET_SAVE_PATH)
     dr_module  = load_degradation_removal(DEGRADATION_REMOVAL_SAVE_PATH)
 
-    # ds     = CBCTDatasetNPY(CBCT_CLINIC_DIR, clinic_transform)
-    ds     = CBCTDatasetNPY(CBCT_CLINIC_DIR)
+    ds     = CBCTDatasetNPY(CBCT_CLINIC_DIR, clinic_transform)
     loader = DataLoader(ds, batch_size=BATCH_SIZE, num_workers=4, pin_memory=True)
     print("ready to predict for:", CBCT_CLINIC_DIR)
     predict_volume(vae, unet, controlnet, dr_module, loader, OUT_DIR, GUIDANCE_SCALE)

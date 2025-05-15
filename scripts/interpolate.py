@@ -132,12 +132,12 @@ def plot_slice_comparisons(stacks, names, slice_idx):
 
 # — Main —
 if __name__ == '__main__':
-    volume_idx = 8
-    slice_idx = 50
+    volume_idx = 33
+    slice_idx = 150
     base = os.path.expanduser('~/thesis')
-    sct_dir = os.path.join(base, 'predictions', f'volume-{volume_idx}')
+    sct_dir = os.path.join(base, 'predictions', 'predctions_controlnet_v3', f'volume-{volume_idx}')
     gt_dir = os.path.join(base, 'training_data', 'CT', 'test')
-    cbct_dir = os.path.join(base, 'training_data', 'CBCT', 'test')
+    cbct_dir = os.path.join(base, 'training_data', 'CBCT', '490', 'test')
 
     print('Loading volumes...')
     raw_sct = load_volume_slices(sct_dir, volume_idx)

@@ -35,7 +35,7 @@ augmentation = {
     'scale': (0.95, 1.05),
     'shear': None,
 }
-augmentation = None
+#augmentation = None
 
 # Vae Loss params
 perceptual_weight=0.05

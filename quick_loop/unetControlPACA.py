@@ -5,7 +5,7 @@ import torch.nn as nn
 import torchvision
 from tqdm import tqdm
 import torch.nn.functional as F
-from torchmetrics.image import StructuralSimilarityIndexMeasure
+# from torchmetrics.image import StructuralSimilarityIndexMeasure
 
 from models.diffusion import Diffusion
 from quick_loop.blocks import nonlinearity, Normalize, TimestepEmbedding, DownBlock, MiddleBlock, ControlNetPACAUpBlock

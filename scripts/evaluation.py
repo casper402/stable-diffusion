@@ -40,7 +40,8 @@ SLICE_RANGES = {
 }
 
 # all volumes are valid; None means include all slices
-VALID_VOLUMES = list(SLICE_RANGES.keys())
+# VALID_VOLUMES = list(SLICE_RANGES.keys())
+VALID_VOLUMES = [3, 26, 106, 116]
 
 # ──────── transforms & crops ──────────────────────────────────────────────────
 gt_transform = transforms.Compose([
@@ -236,6 +237,7 @@ if __name__ == "__main__":
 
     # v3
     v3_pred490stepsize20 = os.path.expanduser(f"/Users/Niklas/thesis/predictions/predctions_controlnet_v3")
+    v3_pred490stepsize1 = os.path.expanduser(f"/Users/Niklas/thesis/predictions/predictions-v3-stepsize1")
 
     # v4
     v4_pred490stepsize20 = os.path.expanduser(f"/Users/Niklas/thesis/predictions/prediction_controlnet_v4")
@@ -248,9 +250,10 @@ if __name__ == "__main__":
     tumor_mask_folder   = os.path.expanduser("~/thesis/training_data/tumor/test")
 
     eval_sets = [
-        ("CBCT",  cbct490_base, True),
+        # ("CBCT",  cbct490_base, True),
         # ("v2",  v2_pred490speedstepsize20v2_base, False),
-        ("sCT",  v3_pred490stepsize20, False),
+        ("50-steps",  v3_pred490stepsize20, False),
+        ("1000-steps",  v3_pred490stepsize1, False),
         # ("v4",  v4_pred490stepsize20, False),
     ]
 

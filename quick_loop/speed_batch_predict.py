@@ -17,7 +17,8 @@ from quick_loop.unetControlPACA import load_unet_control_paca
 PREDICT_CLINIC = True
 
 CBCT_DIR = '../training_data/scaled-490/'
-CBCT_CLINIC_DIR = '../training_data/clinic/'
+# CBCT_CLINIC_DIR = '../training_data/clinic/'
+CBCT_CLINIC_DIR = '../training_data/clinic_cropped/'
 VOLUME_INDICES = [3, 8, 12, 26, 32, 33, 35, 54, 59, 61, 106, 116, 129]
 OUT_DIR = '../predictions_clinicV2/'
 
@@ -188,7 +189,8 @@ def predict_clinic():
     controlnet = load_controlnet(CONTROLNET_SAVE_PATH)
     dr_module  = load_degradation_removal(DEGRADATION_REMOVAL_SAVE_PATH)
 
-    ds     = CBCTDatasetNPY(CBCT_CLINIC_DIR, clinic_transform)
+    # ds     = CBCTDatasetNPY(CBCT_CLINIC_DIR, clinic_transform)
+    ds     = CBCTDatasetNPY(CBCT_CLINIC_DI)
     loader = DataLoader(ds, batch_size=BATCH_SIZE, num_workers=4, pin_memory=True)
     print("ready to predict for:", CBCT_CLINIC_DIR)
     predict_volume(vae, unet, controlnet, dr_module, loader, OUT_DIR, GUIDANCE_SCALE)

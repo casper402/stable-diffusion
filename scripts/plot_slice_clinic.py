@@ -162,8 +162,8 @@ def plot(volume_idx, slice_num):
         # os.path.expanduser(f"/Users/Niklas/thesis/predictions/v2_490_speed_stepsize20_v2/volume-{volume_idx}"),
         # os.path.expanduser(f"/Users/Niklas/thesis/predictions/casper/volume-{volume_idx}"),
         # os.path.expanduser("/Users/Niklas/thesis/training_data/CBCT/scaled-490"),
-        os.path.expanduser("/Users/Niklas/thesis/predictions/prediction-clinic-20stepsize"),
         os.path.expanduser("/Users/Niklas/thesis/predictions/prediction-clinic-1stepsize"),
+        os.path.expanduser("/Users/Niklas/thesis/predictions/predictions_clinicV2"),
         os.path.expanduser("/Users/Niklas/thesis/training_data/clinic")
     ]
     # gt_dir = os.path.expanduser("/Users/Niklas/thesis/training_data/CT/test") # normal GT

@@ -118,8 +118,83 @@ def run_eval(volumes, base_folder, is_cbct, gt_folder, lm_folder, tm_folder):
     results = {}
     for v in volumes:
         vals = compare_batch(v, base_folder, gt_folder, lm_folder, tm_folder, is_cbct)
-        if vals is not None: results[v] = vals
+        if vals is not None:
+            results[v] = vals
     return results
+
+# ──────── global & region eval ─────────────────────────────────────────────────
+def print_global_metrics(volumes, eval_sets, results):
+    metrics = ["MAE", "RMSE", "PSNR", "SSIM"]
+    hdr = "Vol".rjust(4) + " | " + " | ".join(
+        " ".join(f"{(label+'_'+m):>10}" for m in metrics)
+        for label, _, _ in eval_sets
+    )
+    print(" GLOBAL METRICS") 
+    print(hdr)
+    print("-" * len(hdr))
+    for v in volumes:
+        parts = []
+        for label, _, _ in eval_sets:
+            vals = results[label].get(v, [np.nan] * len(metrics))
+            parts.append(
+                " ".join(
+                    f"{vals[k]:>10.2f}" if m != "SSIM" else f"{vals[k]:>10.3f}"
+                    for k, m in enumerate(metrics)
+                )
+            )
+        print(f"{v:4d} | " + " | ".join(parts))
+    overall = lambda rr: np.nanmean(np.stack(list(rr.values()), axis=0), axis=0)
+    overall_results = {label: overall(results[label]) for label, _, _ in eval_sets}
+    print("-" * len(hdr))
+    overall_parts = []
+    for label, _, _ in eval_sets:
+        vals = overall_results[label]
+        overall_parts.append(
+            " ".join(
+                f"{vals[k]:>10.2f}" if m != "SSIM" else f"{vals[k]:>10.3f}"
+                for k, m in enumerate(metrics)
+            )
+        )
+    print(f"{'ALL':>4} | " + " | ".join(overall_parts))
+
+
+def print_region_metrics(volumes, eval_sets, results):
+    metrics = ["MAE", "RMSE", "PSNR", "SSIM"]
+    hdr = (
+        "Vol".rjust(4) + " | " + "Region".rjust(6) + " | " +
+        " | ".join(
+            " ".join(f"{(label+'_'+m):>10}" for m in metrics)
+            for label, _, _ in eval_sets
+        )
+    )
+    print(" LIVER & TUMOR METRICS") 
+    print(hdr)
+    print("-" * len(hdr))
+    for v in volumes:
+        for region, base in [("Liver", 4), ("Tumor", 8)]:
+            parts = []
+            for label, _, _ in eval_sets:
+                vals = results[label].get(v, [np.nan] * 12)
+                parts.append(
+                    " ".join(
+                        f"{vals[base+k]:>10.2f}" if m != "SSIM" else f"{vals[base+k]:>10.3f}"
+                        for k, m in enumerate(metrics)
+                    )
+                )
+            print(f"{v:4d} | {region:>6} | " + " | ".join(parts))
+    print("-" * len(hdr))
+
+
+def evaluate_global_and_region(volumes, eval_sets, gt_folder, lm_folder, tm_folder):
+    """
+    Run global and region-based evaluation and print tables.
+    """
+    results = {
+        label: run_eval(volumes, folder, is_cbct, gt_folder, lm_folder, tm_folder)
+        for label, folder, is_cbct in eval_sets
+    }
+    print_global_metrics(volumes, eval_sets, results)
+    print_region_metrics(volumes, eval_sets, results)
 
 # ──────── masked intensity stats ──────────────────────────────────────────────
 def compute_masked_stats(img_folder, mask_folders, volumes, eval_sets):
@@ -238,6 +313,7 @@ def main():
 
     v4_pred490stepsize20 = os.path.expanduser("~/thesis/predictions/prediction_controlnet_v4")
     v5                   = os.path.expanduser("~/thesis/predictions/predictions_v5")
+    v7                   = os.path.expanduser("~/thesis/predictions/predictions_controlnet_v7-data-augmentation")
 
     trained_after_joint = os.path.expanduser(
         "~/thesis/predictions/predctions_controlnet_from_unet_trained_after_joint_v2"
@@ -248,14 +324,15 @@ def main():
     tumor_mask_folder   = os.path.expanduser("~/thesis/training_data/tumor/test")
 
     eval_sets = [
-        ("CBCT",  cbct490_base, True),
-        ("sCT",    v3_pred490stepsize20, False),
+        # ("CBCT",  cbct490_base, True),
+        ("v3",    v3_pred490stepsize20, False),
+        ("v7",    v7, False),
     ]
 
     volumes = VALID_VOLUMES
 
     # run evaluations
-    # evaluate_global_and_region(volumes, eval_sets, gt_folder, liver_mask_folder, tumor_mask_folder)
+    evaluate_global_and_region(volumes, eval_sets, gt_folder, liver_mask_folder, tumor_mask_folder)
 
     stats = compute_masked_stats(gt_folder, (liver_mask_folder, tumor_mask_folder), volumes, eval_sets)
     print_masked_table(volumes, eval_sets, stats)

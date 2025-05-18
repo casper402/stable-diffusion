@@ -32,10 +32,10 @@ SLICE_RANGES = {
 # Transform for CT/CBCT (pad + resize)
 gt_transform = transforms.Compose([
     transforms.Pad((PAD_L, PAD_T, PAD_R, PAD_B), fill=-1000),
-    transforms.Resize((RES_H, RES_W)),
+    transforms.Resize((RES_H, RES_W), interpolation=InterpolationMode.BILINEAR),
 ])
 
-def apply_transform(img_np):
+def apply_transform(img_np: np.ndarray) -> np.ndarray:
     """
     Pad and resize CT/CBCT slice.
     """
@@ -43,17 +43,16 @@ def apply_transform(img_np):
     return gt_transform(t).squeeze(0).numpy()
 
 
-def crop_back(arr):
+def crop_back(arr: np.ndarray) -> np.ndarray:
     """
     Crop padded/resized image back to original aspect.
     """
     return arr[TOP_CROP:RES_H-BOTTOM_CROP, LEFT_CROP:RES_W-RIGHT_CROP]
 
 
-def load_and_prepare(path, is_cbct=True):
+def load_and_prepare(path: str, is_cbct: bool = True) -> np.ndarray:
     """
-    Load a .npy slice and apply pad/resize (if CBCT/CT) then crop back.
-    For sCT (is_cbct=False) only cropping is applied.
+    Load a .npy slice and apply transforms for CBCT/CT or crop only for predictions.
     """
     data = np.load(path)
     if is_cbct:
@@ -61,7 +60,7 @@ def load_and_prepare(path, is_cbct=True):
     return crop_back(data)
 
 
-def list_slices(volume, folder):
+def list_slices(volume: int, folder: str) -> list:
     """
     Return list of slice filenames for a given volume, applying SLICE_RANGES.
     """
@@ -79,47 +78,51 @@ def list_slices(volume, folder):
     return [os.path.basename(f) for f in files]
 
 
-def plot_profile(slice_name, x_coord,
-                 gt_folder, cbct_folder, pred_folder, volume):
+def plot_profile_multi(
+    slice_name: str,
+    x_coord: int,
+    gt_folder: str,
+    cbct_folder: str,
+    pred_folders: dict,
+    volume: int
+):
     """
-    Display CT slice with vertical red line and plot HU profiles top→bottom.
+    Display CT slice with a vertical line and HU profiles for CT, CBCT, and multiple predictions.
+
+    pred_folders: dict mapping label->folder containing volume subfolder.
     """
-    # Build file paths
-    ct_path   = os.path.join(gt_folder,   slice_name)
-    cbct_path = os.path.join(cbct_folder, slice_name)
-    pred_path = os.path.join(pred_folder, f"volume-{volume}", slice_name)
+    # Build paths and load images
+    ct_img = load_and_prepare(os.path.join(gt_folder, slice_name), is_cbct=True)
+    cbct_img = load_and_prepare(os.path.join(cbct_folder, slice_name), is_cbct=True)
 
-    # Load & prepare images
-    ct_img   = load_and_prepare(ct_path,   is_cbct=True)
-    cbct_img = load_and_prepare(cbct_path, is_cbct=True)
-    sct_img  = load_and_prepare(pred_path, is_cbct=False)
+    preds = {}
+    for label, folder in pred_folders.items():
+        pred_path = os.path.join(folder, f"volume-{volume}", slice_name)
+        preds[label] = load_and_prepare(pred_path, is_cbct=False)
 
-    # Define line endpoints (top→bottom at column x_coord)
+    # Determine x-coordinate (random if None)
     H, W = ct_img.shape
     if x_coord is None:
         x_coord = random.randint(0, W-1)
-    start = (0, x_coord)
-    end   = (H-1, x_coord)
+    start, end = (0, x_coord), (H-1, x_coord)
 
     # Sample intensity profiles
-    prof_ct   = profile_line(ct_img,   start, end, mode='constant', cval=np.nan)
-    prof_cbct = profile_line(cbct_img, start, end, mode='constant', cval=np.nan)
-    prof_sct  = profile_line(sct_img,  start, end, mode='constant', cval=np.nan)
-    x_pixels = np.arange(len(prof_ct))
+    profs = {'CT': profile_line(ct_img, start, end, mode='constant', cval=np.nan),
+             'CBCT': profile_line(cbct_img, start, end, mode='constant', cval=np.nan)}
+    for label, img in preds.items():
+        profs[label] = profile_line(img, start, end, mode='constant', cval=np.nan)
 
-    # Plot side-by-side
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
+    x = np.arange(len(profs['CT']))
 
-    # CT image with red line
+    # Plot
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
     ax1.imshow(ct_img, cmap='gray', vmin=-1000, vmax=1000)
-    ax1.plot([x_coord, x_coord], [0, H-1], 'r-', linewidth=2)
-    ax1.set_title(f'Volume {volume}, Slice {slice_name}')
+    ax1.axvline(x=x_coord, color='r', lw=2)
+    ax1.set_title(f'Volume {volume}, {slice_name}')
     ax1.axis('off')
 
-    # HU profiles
-    ax2.plot(x_pixels, prof_ct,   label='CT')
-    ax2.plot(x_pixels, prof_cbct, label='CBCT')
-    ax2.plot(x_pixels, prof_sct,  label='sCT')
+    for label, prof in profs.items():
+        ax2.plot(x, prof, label=label)
     ax2.set_xlabel('Pixel position (top to bottom)')
     ax2.set_ylabel('Hounsfield Unit (HU)')
     ax2.set_title(f'HU Profile at x={x_coord}')
@@ -130,25 +133,30 @@ def plot_profile(slice_name, x_coord,
     plt.show()
 
 if __name__ == '__main__':
-    # Paths
     gt_folder   = os.path.expanduser("~/thesis/training_data/CT/test")
     cbct_folder = os.path.expanduser("~/thesis/training_data/CBCT/test")
-    pred_folder = os.path.expanduser("~/thesis/predictions/predctions_controlnet_v3")
+    pred_folders = {
+        'v3': os.path.expanduser("~/thesis/predictions/predctions_controlnet_v3"),
+        'v7': os.path.expanduser("~/thesis/predictions/predictions_controlnet_v7-data-augmentation")
+    }
 
     volumes = list(SLICE_RANGES.keys())
     print(f"Using volumes: {volumes}")
 
     # Infinite loop: randomly pick volume, slice, x-coordinate
     while True:
-        # vol = random.choice(volumes)
-        # slices = list_slices(vol, gt_folder)
-        vol = 8
-        # if not slices:
-        #     continue
-        # slice_name = random.choice(slices)
-        slice_name = 'volume-8_slice_107.npy'
-        plot_profile(slice_name, x_coord=117, # set x_coord to None to choose random
-                     gt_folder=gt_folder,
-                     cbct_folder=cbct_folder,
-                     pred_folder=pred_folder,
-                     volume=vol)
+        vol = random.choice(volumes)
+        slices = list_slices(vol, gt_folder)
+        if not slices:
+            continue
+        slice_name = random.choice(slices)
+
+        # Set x_coord=None for random or provide an int
+        plot_profile_multi(
+            slice_name,
+            x_coord=112,
+            gt_folder=gt_folder,
+            cbct_folder=cbct_folder,
+            pred_folders=pred_folders,
+            volume=vol
+        )

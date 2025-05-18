@@ -159,7 +159,7 @@ class PreprocessedCBCTtoCTDataset(Dataset):
             return None
 
 class CTDatasetNPY(Dataset):
-    def __init__(self, manifest_csv: str, split: str, augmentation=None):
+    def __init__(self, manifest_csv: str, split: str, augmentation=None, preprocess="linear"):
         self.df = pd.read_csv(manifest_csv)
         self.df = self.df[self.df['split'] == split].reset_index(drop=True)
         self.base_transform = transforms.Compose([
@@ -183,12 +183,23 @@ class CTDatasetNPY(Dataset):
         else:
             self.augmentation_transform = None
 
+        assert preprocess in ["linear", "tanh"]
+        print("Using preprocessing:", preprocess)
+        self.preprocess = preprocess
+
     def __len__(self):
         return len(self.df)
 
     def __getitem__(self, idx):
         row = self.df.iloc[idx]
-        ct = np.load(row['ct_path']).astype(np.float32) / 1000.0
+        ct = np.load(row['ct_path']).astype(np.float32)
+        if preprocess == "linear":
+            ct /= 1000.0
+        elif preprocess == "tanh":
+            # apply a "soft window" around ±150 HU:
+            #  - inside ±150 HU it's almost linear (tanh(x/150) ≈ x/150 for |x|≲100),
+            #  - beyond ±150 HU things smoothly compress toward ±1.
+            ct = np.tanh(ct / 150.0)
         ct = torch.from_numpy(ct).unsqueeze(0)
         ct = self.base_transform(ct)
         if self.augmentation_transform:

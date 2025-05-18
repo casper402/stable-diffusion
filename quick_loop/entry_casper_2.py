@@ -129,7 +129,7 @@ train_joint(
     train_loader=train_loader,
     val_loader=val_loader,
     test_loader=test_loader,
-    epochs=5,
+    epochs=epochs,
     save_unet_path=unet_save_path,
     save_vae_path=vae_save_path,
     learning_rate=5e-6,

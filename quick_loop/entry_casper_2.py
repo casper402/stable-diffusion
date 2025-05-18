@@ -45,9 +45,9 @@ kl_weight=5e-6
 l1_weight=0
 
 # Load pretrained model paths
-load_dir = "../best_model"
-load_vae_path = os.path.join(load_dir, "vae.pth")
-load_unet_path = os.path.join(load_dir, "unet.pth")
+load_dir = "train_joint"
+load_vae_path = os.path.join(load_dir, "joint_vae.pth")
+load_unet_path = os.path.join(load_dir, "joint_unet.pth")
 load_dr_module_path = os.path.join(load_dir, "dr_module.pth")
 load_controlnet_path = os.path.join(load_dir, "controlnet.pth")
 load_paca_layers_path = os.path.join(load_dir, "paca_layers.pth")
@@ -58,8 +58,8 @@ os.makedirs(save_dir, exist_ok=True)
 vae_predict_dir = os.path.join(save_dir, "vae_predictions")
 unet_predict_dir = os.path.join(save_dir, "unet_predictions")
 conditional_predict_dir = os.path.join(save_dir, "conditional_predictions")
-vae_save_path = os.path.join(save_dir, "joint_vae.pth")
-unet_save_path = os.path.join(save_dir, "joint_unet.pth")
+vae_save_path = os.path.join(save_dir, "joint_vae_v2.pth")
+unet_save_path = os.path.join(save_dir, "joint_unet_v2.pth")
 controlnet_save_path = os.path.join(save_dir, "segmentation_controlnet.pth")
 paca_layers_save_path = os.path.join(save_dir, "paca_layers.pth")
 dr_module_save_path = os.path.join(save_dir, "segmentation_dr_module.pth")

@@ -535,6 +535,10 @@ def train_dr_control_paca_v2(
         # Validation loop
         unet.eval(); controlnet.eval(); dr_module.eval()
         val_metrics = {k: 0.0 for k in train_metrics}
+
+        # val generator used for reproducability in validation loop
+        val_generator = torch.Generator(device=device).manual_seed(42)
+
         with torch.no_grad():
             for ct_img, cbct_img in val_loader:
                 ct_img = ct_img.to(device)
@@ -546,8 +550,8 @@ def train_dr_control_paca_v2(
                 controlnet_input, intermediate_preds = dr_module(cbct_img)
                 loss_dr = degradation_loss(intermediate_preds, ct_img)
 
-                t = diffusion.sample_timesteps(z_ct.size(0))
-                noise = torch.randn_like(z_ct)
+                t = diffusion.sample_timesteps(z_ct.size(0), generator=val_generator)
+                noise = torch.randn_like(z_ct, generator=val_generator)
                 z_noisy = diffusion.add_noise(z_ct, t, noise=noise)
                 down_res, mid_res = controlnet(z_noisy, controlnet_input, t)
                 pred_noise = unet(z_noisy, t, down_res, mid_res)

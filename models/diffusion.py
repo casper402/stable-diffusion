@@ -18,5 +18,11 @@ class Diffusion:
         sqrt_one_minus_alpha_cumprod = torch.sqrt(1 - alpha_cumprod_t)
         return sqrt_alpha_cumprod * x0 + sqrt_one_minus_alpha_cumprod * noise
 
-    def sample_timesteps(self, batch_size):
-        return torch.randint(0, self.timesteps, (batch_size,), device=self.device)
+    def sample_timesteps(self, batch_size, generator=None):
+        return torch.randint(
+            low=0,
+            high=self.timesteps,
+            size=(batch_size,),
+            generator=generator,
+            device=self.device
+        )

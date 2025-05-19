@@ -193,9 +193,9 @@ class CTDatasetNPY(Dataset):
     def __getitem__(self, idx):
         row = self.df.iloc[idx]
         ct = np.load(row['ct_path']).astype(np.float32)
-        if preprocess == "linear":
+        if self.preprocess == "linear":
             ct /= 1000.0
-        elif preprocess == "tanh":
+        elif self.preprocess == "tanh":
             # apply a "soft window" around ±150 HU:
             #  - inside ±150 HU it's almost linear (tanh(x/150) ≈ x/150 for |x|≲100),
             #  - beyond ±150 HU things smoothly compress toward ±1.

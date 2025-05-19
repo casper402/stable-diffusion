@@ -219,7 +219,7 @@ class CTDatasetWithMeta(CTDatasetNPY):
         return ct, volume_idx
     
 class PairedCTCBCTDatasetNPY(Dataset):
-    def __init__(self, manifest_csv: str, split: str, augmentation=None):
+    def __init__(self, manifest_csv: str, split: str, augmentation=None, preprocess="linear"):
         self.df = pd.read_csv(manifest_csv)
         self.df = self.df[self.df['split'] == split].reset_index(drop=True)
         self.base_transform = transforms.Compose([
@@ -262,7 +262,7 @@ class PairedCTCBCTDatasetNPY(Dataset):
         return ct, cbct
     
 class PairedCTCBCTSegmentationDatasetNPY(Dataset):
-    def __init__(self, manifest_csv: str, split: str, augmentation=None):
+    def __init__(self, manifest_csv: str, split: str, augmentation=None, preprocess="linear"):
         self.df = pd.read_csv(manifest_csv)
         self.df = self.df[self.df['split'] == split].reset_index(drop=True)
         self.base_transform = transforms.Compose([
@@ -331,7 +331,7 @@ class PairedCTCBCTSegmentationDatasetNPY(Dataset):
         return ct, cbct, segmentation_map, liver, tumor
     
 class SegmentationMaskDatasetNPY(Dataset):
-    def __init__(self, manifest_csv: str, split: str, augmentation=None):
+    def __init__(self, manifest_csv: str, split: str, augmentation=None, preprocess="linear"):
         self.df = pd.read_csv(manifest_csv)
         self.df = self.df[self.df['split'] == split].reset_index(drop=True)
         self.mask_transform = transforms.Compose([
@@ -376,10 +376,10 @@ class SegmentationMaskDatasetNPY(Dataset):
 
         return segmentation_map, liver, tumor
     
-def get_dataloaders(manifest_csv, batch_size, num_workers, dataset_class=PairedCTCBCTDatasetNPY, shuffle_train=True, drop_last=True, train_size=None, val_size=None, test_size=None, augmentation=None):
-    train_dataset = dataset_class(manifest_csv=manifest_csv, split='train', augmentation=augmentation)
-    val_dataset = dataset_class(manifest_csv=manifest_csv, split='validation', augmentation=None)
-    test_dataset = dataset_class(manifest_csv=manifest_csv, split='test', augmentation=None)
+def get_dataloaders(manifest_csv, batch_size, num_workers, dataset_class=PairedCTCBCTDatasetNPY, shuffle_train=True, drop_last=True, train_size=None, val_size=None, test_size=None, augmentation=None, preprocess=None):
+    train_dataset = dataset_class(manifest_csv=manifest_csv, split='train', augmentation=augmentation, preprocess=preprocess)
+    val_dataset = dataset_class(manifest_csv=manifest_csv, split='validation', augmentation=None, preprocess=preprocess)
+    test_dataset = dataset_class(manifest_csv=manifest_csv, split='test', augmentation=None, preprocess=preprocess)
     if train_size:
         train_dataset, _ = random_split(train_dataset, [train_size, len(train_dataset) - train_size])
     if val_size:

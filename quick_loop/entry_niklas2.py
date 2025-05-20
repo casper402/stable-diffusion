@@ -50,7 +50,7 @@ load_degradation_removal_path = os.path.join(load_dir, "dr_module.pth")
 # save_dir = "controlnet_v4"
 # save_dir = "controlnet_from_unet_trained_after_joint_round2"
 # save_dir = "controlnet_v7-data-augmentation"
-save_dir = "controlnet_v10-data-augmentation"
+save_dir = "controlnet_v11-data-augmentation"
 
 os.makedirs(save_dir, exist_ok=True)
 vae_predict_dir = os.path.join(save_dir, "vae_predictions")
@@ -72,8 +72,8 @@ manifest_path = "../training_data/manifest-filtered.csv"
 # Augmentation
 augmentation = {
     'degrees': (-1, 1),
-    'translate': (0.20, 0.20),
-    'scale': (0.80, 1.20),
+    'translate': (0.10, 0.10),
+    'scale': (0.10, 1.10),
     'shear': None,
 }
 

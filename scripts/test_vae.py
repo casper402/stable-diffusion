@@ -39,6 +39,22 @@ def postprocess(img: torch.Tensor) -> np.ndarray:
     clipped = torch.clamp(scaled, -1000, 1000)
     return clipped.cpu().numpy()
 
+def postprocess_tanh(img: torch.Tensor, eps: float = 1e-4) -> np.ndarray:
+    """
+    Invert tanh-based preprocessing (tanh(HU/150)) and
+    prepare for display (round + clip to [-1000, 1000]).
+    """
+    # 1. Clamp into (–1,1) so atanh stays finite
+    x = torch.clamp(img, -1 + eps, 1 - eps)
+
+    # 2. Inverse tanh via torch.atanh, then rescale
+    hu = torch.atanh(x) * 150.0
+
+    # 3. Round to integer HUs and clamp to [-1000,1000]
+    hu = torch.round(hu)
+    hu = torch.clamp(hu, -1000.0, 1000.0)
+
+    return hu.cpu().numpy().astype(np.float32)
 
 def add_latent_noise(z: torch.Tensor, noise_std: float) -> torch.Tensor:
     """

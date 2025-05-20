@@ -3,6 +3,7 @@ import glob
 import numpy as np
 import matplotlib.pyplot as plt
 from skimage.measure import profile_line
+from skimage.metrics import structural_similarity as ssim
 import torch
 from torchvision import transforms
 from torchvision.transforms import InterpolationMode
@@ -33,11 +34,17 @@ SLICE_RANGES = {
 }
 
 # Plot configuration
-# Available types: 'profile', 'qq', 'hist', 'ba'
-PLOT_TYPES   = ['profile', 'qq', 'hist', 'ba']
-QQ_QUANTILES = 300    # Number of quantiles for Q-Q plots
-HIST_BINS    = 100    # Number of bins for histograms
-BA_SUBSAMPLE = 5000  # Number of points to sample in Bland-Altman plots
+# Available types: 'profile', 'qq', 'hist', 'ba', 'ssim'
+PLOT_TYPES = [
+    # 'profile',
+    # 'qq',
+    # 'hist',
+    # 'ba',
+    'ssim',
+]
+QQ_QUANTILES = 300     # Number of quantiles for Q-Q plots
+HIST_BINS    = 100     # Number of bins for histograms
+BA_SUBSAMPLE = 10000   # Number of points to sample in Bland-Altman plots
 
 # Executors & cache for preload
 bg_executor   = ThreadPoolExecutor(max_workers=2)
@@ -189,7 +196,6 @@ def plot_bland_altman(volume, gt_folder, cbct_folder, pred_folders):
     for idx, (lbl, arr) in enumerate(targets):
         mean_vals = (ct_all + arr) / 2.0
         diff_vals = arr - ct_all
-        # subsample
         cnt = mean_vals.size
         if cnt > BA_SUBSAMPLE:
             sel = np.random.choice(cnt, BA_SUBSAMPLE, replace=False)
@@ -198,34 +204,65 @@ def plot_bland_altman(volume, gt_folder, cbct_folder, pred_folders):
         else:
             m1, d1 = mean_vals, diff_vals
             m2, d2 = ct_all, diff_vals
-        # stats
         md = np.mean(diff_vals)
         sd = np.std(diff_vals)
         lo = md - 1.96*sd; hi = md + 1.96*sd
-        # top: BA vs mean
         ax1 = axes[0, idx]
         ax1.scatter(m1, d1, s=2, alpha=0.3)
-        ax1.axhline(md, color='k', linestyle='-')
-        ax1.text(1000, md, f"Mean={md:.1f}", va='bottom', ha='right')
-        ax1.axhline(hi, color='k', linestyle='--')
-        ax1.text(1000, hi, f"+1.96SD={hi:.1f}", va='bottom', ha='right')
-        ax1.axhline(lo, color='k', linestyle='--')
-        ax1.text(1000, lo, f"-1.96SD={lo:.1f}", va='top', ha='right')
+        ax1.axhline(md, color='k', linestyle='-'); ax1.text(1000, md, f"Mean={md:.1f}", va='bottom', ha='right')
+        ax1.axhline(hi, color='k', linestyle='--'); ax1.text(1000, hi, f"+1.96SD={hi:.1f}", va='bottom', ha='right')
+        ax1.axhline(lo, color='k', linestyle='--'); ax1.text(1000, lo, f"-1.96SD={lo:.1f}", va='top', ha='right')
         ax1.set_xlim(-1000, 1000); ax1.set_ylim(-1000, 1000)
         ax1.set(title=f'BA vs Mean: CT vs {lbl}', xlabel='Mean HU', ylabel='Diff HU')
         ax1.grid(True)
-        # bottom: BA vs CT
         ax2 = axes[1, idx]
         ax2.scatter(m2, d2, s=2, alpha=0.3)
-        ax2.axhline(md, color='k', linestyle='-')
-        ax2.text(1000, md, f"Mean={md:.1f}", va='bottom', ha='right')
-        ax2.axhline(hi, color='k', linestyle='--')
-        ax2.text(1000, hi, f"+1.96SD={hi:.1f}", va='bottom', ha='right')
-        ax2.axhline(lo, color='k', linestyle='--')
-        ax2.text(1000, lo, f"-1.96SD={lo:.1f}", va='top', ha='right')
+        ax2.axhline(md, color='k', linestyle='-'); ax2.text(1000, md, f"Mean={md:.1f}", va='bottom', ha='right')
+        ax2.axhline(hi, color='k', linestyle='--'); ax2.text(1000, hi, f"+1.96SD={hi:.1f}", va='bottom', ha='right')
+        ax2.axhline(lo, color='k', linestyle='--'); ax2.text(1000, lo, f"-1.96SD={lo:.1f}", va='top', ha='right')
         ax2.set_xlim(-1000, 1000); ax2.set_ylim(-1000, 1000)
         ax2.set(title=f'BA vs CT: CT vs {lbl}', xlabel='CT HU', ylabel='Diff HU')
         ax2.grid(True)
+    plt.tight_layout(); plt.show()
+
+# Plot Spatial SSIM Maps for a given slice
+# Top row: GT, CT, and each comparison image
+# Second row: local SSIM heatmaps
+# Third row: absolute error (MAE)
+# Fourth row: HU difference map
+def plot_ssim(slice_name, gt_folder, cbct_folder, pred_folders, volume):
+    ct_img   = load_and_prepare(os.path.join(gt_folder, slice_name), is_cbct=True)
+    cbct_img = load_and_prepare(os.path.join(cbct_folder, slice_name), is_cbct=True)
+    preds    = {lbl: load_and_prepare(os.path.join(folder, f"volume-{volume}", slice_name), is_cbct=False)
+                for lbl, folder in pred_folders.items()}
+    targets = [('GT', ct_img), ('CBCT', cbct_img)] + list(preds.items())
+    n = len(targets)
+    fig, axes = plt.subplots(4, n, figsize=(6*n, 16))
+
+    for idx, (lbl, img) in enumerate(targets):
+        # Row 1: original image
+        ax0 = axes[0, idx]
+        ax0.imshow(img, cmap='gray', vmin=-1000, vmax=1000)
+        ax0.axis('off'); ax0.set_title(lbl)
+        # Row 2: SSIM map
+        ax1 = axes[1, idx]
+        _, s_map = ssim(ct_img, img, full=True, data_range=DATA_RANGE)
+        im1 = ax1.imshow(s_map, vmin=0, vmax=1)
+        ax1.axis('off'); ax1.set_title(f'SSIM GT vs {lbl}')
+        fig.colorbar(im1, ax=ax1, fraction=0.046, pad=0.02)
+        # Row 3: MAE map
+        ax2 = axes[2, idx]
+        mae_map = np.abs(img - ct_img)
+        im2 = ax2.imshow(mae_map, cmap='hot', vmax=500)
+        ax2.axis('off'); ax2.set_title(f'MAE GT vs {lbl}')
+        fig.colorbar(im2, ax=ax2, fraction=0.046, pad=0.02)
+        # Row 4: HU diff map
+        ax3 = axes[3, idx]
+        diff_map = img - ct_img
+        im3 = ax3.imshow(diff_map, cmap='gray', vmin=-500, vmax=500)
+        ax3.axis('off'); ax3.set_title(f'Diff GT vs {lbl}')
+        fig.colorbar(im3, ax=ax3, fraction=0.046, pad=0.02)
+
     plt.tight_layout(); plt.show()
 
 # Dispatcher
@@ -244,11 +281,13 @@ def plot_multi(slice_name, x_coord, gt_folder, cbct_folder, pred_folders, volume
         plot_hist(volume, gt_folder, cbct_folder, pred_folders)
     if 'ba' in plot_types:
         plot_bland_altman(volume, gt_folder, cbct_folder, pred_folders)
+    if 'ssim' in plot_types:
+        plot_ssim(slice_name, gt_folder, cbct_folder, pred_folders, volume)
 
 # Main
 if __name__ == '__main__':
     gt_folder   = os.path.expanduser("~/thesis/training_data/CT/test")
-    cbct_folder = os.path.expanduser("~/thesis/training_data/CBCT/test")
+    cbct_folder = os.path.expanduser("~/thesis/training_data/CBCT/490/test")
     pred_folders = {
         'v3': os.path.expanduser("~/thesis/predictions/predctions_controlnet_v3"),
         'v7': os.path.expanduser("~/thesis/predictions/predictions_controlnet_v7-data-augmentation")

@@ -54,7 +54,7 @@ def show_random_slice(volumes, ct_dir, mask1_dir, mask2_dir,
                       vmin_ct=-1000, vmax_ct=1000, overlay_alpha=0.3):
     v = random.choice(volumes)            # draw from [3,8]
     z = random.randint(0, max_slice)
-    z = 150
+    z = 108
     pred_dir += f"/volume-{v}"
     fname = f"volume-{v}_slice_{z:03d}.npy"
     paths = [os.path.join(d, fname) for d in (ct_dir, mask1_dir, mask2_dir, cbct_dir, pred_dir)]
@@ -134,7 +134,7 @@ def show_random_slice(volumes, ct_dir, mask1_dir, mask2_dir,
 
 def main():
     # ─── CONFIG ─────────────────────────────────────────────────────
-    volumes    = [33]
+    volumes    = [8]
     ct_dir     = "/Users/Niklas/thesis/training_data/CT/test"
     mask1_dir  = "/Users/Niklas/thesis/training_data/liver/test"
     mask2_dir  = "/Users/Niklas/thesis/training_data/tumor/test"

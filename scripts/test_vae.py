@@ -31,7 +31,7 @@ def vae_loss(recon, x, mu, logvar):
     return total_loss, perceptual, kl, ssim, l1
 
 
-def postprocess(img: torch.Tensor) -> np.ndarray:
+def postprocess1(img: torch.Tensor) -> np.ndarray:
     """
     Scale and clip CT Hounsfield units for visualization.
     """
@@ -39,7 +39,7 @@ def postprocess(img: torch.Tensor) -> np.ndarray:
     clipped = torch.clamp(scaled, -1000, 1000)
     return clipped.cpu().numpy()
 
-def postprocess_tanh(img: torch.Tensor, eps: float = 1e-4) -> np.ndarray:
+def postprocess(img: torch.Tensor, eps: float = 1e-4) -> np.ndarray:
     """
     Invert tanh-based preprocessing (tanh(HU/150)) and
     prepare for display (round + clip to [-1000, 1000]).
@@ -206,12 +206,14 @@ def main():
         batch_size=4,
         num_workers=4,
         dataset_class=CTDatasetWithMeta,
+        preprocess="tanh" # or linear!
     )
 
     vae_paths = [
-        "vaeV6.pth",
-        "casper_vae.pth",
-        "vae_joint_v2.pth",
+        # "vaeV6.pth",
+        # "casper_vae.pth",
+        # "vae_joint_v2.pth",
+        "vae_nonlinear.pth",
     ]
     vaes = []
     for path in vae_paths:
@@ -223,7 +225,7 @@ def main():
         vaes, loader, device,
         names=vae_paths,
         num_batches=10,
-        noise_levels=[0.1, 0.2, 0.3, 0.4, 0.5]
+        noise_levels=[]
     )
 
 if __name__ == "__main__":

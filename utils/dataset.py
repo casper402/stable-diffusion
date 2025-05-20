@@ -376,7 +376,7 @@ class SegmentationMaskDatasetNPY(Dataset):
 
         return segmentation_map, liver, tumor
     
-def get_dataloaders(manifest_csv, batch_size, num_workers, dataset_class=PairedCTCBCTDatasetNPY, shuffle_train=True, drop_last=True, train_size=None, val_size=None, test_size=None, augmentation=None, preprocess=None):
+def get_dataloaders(manifest_csv, batch_size, num_workers, dataset_class=PairedCTCBCTDatasetNPY, shuffle_train=True, drop_last=True, train_size=None, val_size=None, test_size=None, augmentation=None, preprocess="linear"):
     train_dataset = dataset_class(manifest_csv=manifest_csv, split='train', augmentation=augmentation, preprocess=preprocess)
     val_dataset = dataset_class(manifest_csv=manifest_csv, split='validation', augmentation=None, preprocess=preprocess)
     test_dataset = dataset_class(manifest_csv=manifest_csv, split='test', augmentation=None, preprocess=preprocess)

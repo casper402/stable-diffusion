@@ -608,6 +608,9 @@ def train_joint(
         sum_vae_val  = 0.0
         sum_comb_val = 0.0
 
+        # val generator used for reproducability in validation loop
+        val_generator = torch.Generator(device=device).manual_seed(42)
+
         with torch.no_grad():
             for x in val_loader:
                 x = x.to(device)
@@ -615,8 +618,8 @@ def train_joint(
                 z = vae.reparameterize(mu, logvar)
 
                 # unet
-                t = diffusion.sample_timesteps(z.size(0))
-                noise = torch.randn_like(z)
+                t = diffusion.sample_timesteps(z.size(0), generator=val_generator)
+                noise = torch.randn_like(z, generator=val_generator)
                 pred = unet(diffusion.add_noise(z, t, noise), t)
                 l_unet = F.mse_loss(pred, noise)
 

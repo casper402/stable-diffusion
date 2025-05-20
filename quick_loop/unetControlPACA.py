@@ -5,7 +5,7 @@ import torch.nn as nn
 import torchvision
 from tqdm import tqdm
 import torch.nn.functional as F
-from torchmetrics.image import StructuralSimilarityIndexMeasure
+# from torchmetrics.image import StructuralSimilarityIndexMeasure
 
 from models.diffusion import Diffusion
 from quick_loop.blocks import nonlinearity, Normalize, TimestepEmbedding, DownBlock, MiddleBlock, ControlNetPACAUpBlock
@@ -163,7 +163,7 @@ def train_dr_control_paca(
     gamma=1.0, 
     guidance_scale=1.0, 
     epochs_between_prediction=50, 
-    learning_rate=1.25e-5, 
+    learning_rate=5e-6, 
 ):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     os.makedirs(save_dir, exist_ok=True)
@@ -535,6 +535,10 @@ def train_dr_control_paca_v2(
         # Validation loop
         unet.eval(); controlnet.eval(); dr_module.eval()
         val_metrics = {k: 0.0 for k in train_metrics}
+
+        # val generator used for reproducability in validation loop
+        val_generator = torch.Generator(device=device).manual_seed(42)
+
         with torch.no_grad():
             for ct_img, cbct_img in val_loader:
                 ct_img = ct_img.to(device)
@@ -546,8 +550,8 @@ def train_dr_control_paca_v2(
                 controlnet_input, intermediate_preds = dr_module(cbct_img)
                 loss_dr = degradation_loss(intermediate_preds, ct_img)
 
-                t = diffusion.sample_timesteps(z_ct.size(0))
-                noise = torch.randn_like(z_ct)
+                t = diffusion.sample_timesteps(z_ct.size(0), generator=val_generator)
+                noise = torch.randn_like(z_ct, generator=val_generator)
                 z_noisy = diffusion.add_noise(z_ct, t, noise=noise)
                 down_res, mid_res = controlnet(z_noisy, controlnet_input, t)
                 pred_noise = unet(z_noisy, t, down_res, mid_res)

@@ -32,7 +32,9 @@ warmup_epochs = 5
 # Load pretrained model paths
 # load_dir = "controlnet_v3"
 # load_dir = "controlnet_from_unet_trained_after_joint_round2"
-load_dir = "controlnet_v5"
+# load_dir = "controlnet_v6"
+# load_dir = "controlnet_v8-data-augmentation"
+load_dir = "controlnet_v8-data-augmentation"
 load_vae_path = os.path.join(load_dir, "vae_joint_vae.pth")
 load_unet_path = os.path.join(load_dir, "unet_joint_unet.pth")
 load_controlnet_path = os.path.join(load_dir, "controlnet.pth")
@@ -47,7 +49,8 @@ load_degradation_removal_path = os.path.join(load_dir, "dr_module.pth")
 # save_dir = "controlnet_from_unet_trained_after_joint"
 # save_dir = "controlnet_v4"
 # save_dir = "controlnet_from_unet_trained_after_joint_round2"
-save_dir = "controlnet_v6"
+# save_dir = "controlnet_v7-data-augmentation"
+save_dir = "controlnet_v10-data-augmentation"
 
 os.makedirs(save_dir, exist_ok=True)
 vae_predict_dir = os.path.join(save_dir, "vae_predictions")
@@ -69,8 +72,8 @@ manifest_path = "../training_data/manifest-filtered.csv"
 # Augmentation
 augmentation = {
     'degrees': (-1, 1),
-    'translate': (0.1, 0.1),
-    'scale': (0.9, 1.1),
+    'translate': (0.20, 0.20),
+    'scale': (0.80, 1.20),
     'shear': None,
 }
 
@@ -168,7 +171,7 @@ unet = load_unet_control_paca(unet_save_path=load_unet_path, paca_save_path=load
 controlnet = load_controlnet(save_path=load_controlnet_path, trainable=True)
 dr_module = load_degradation_removal(save_path=load_degradation_removal_path, trainable=True)
 
-train_loader, val_loader, test_loader = get_dataloaders(manifest_path, batch_size=batch_size, num_workers=num_workers, dataset_class=PairedCTCBCTDatasetNPY, train_size=train_size, val_size=val_size, test_size=test_size)
+train_loader, val_loader, test_loader = get_dataloaders(manifest_path, batch_size=batch_size, num_workers=num_workers, dataset_class=PairedCTCBCTDatasetNPY, train_size=train_size, val_size=val_size, test_size=test_size, augmentation=augmentation)
 train_dr_control_paca(
     vae=vae, 
     unet=unet, 

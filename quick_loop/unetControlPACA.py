@@ -280,9 +280,9 @@ def train_dr_control_paca(
 
                 t = diffusion.sample_timesteps(z_ct.size(0), generator=val_generator)
                 noise = torch.randn(
-                    z_t.shape,
-                    device=z_t.device,
-                    dtype=z_t.dtype,
+                    z_ct.shape,
+                    device=z_ct.device,
+                    dtype=z_ct.dtype,
                     generator=val_generator
                 )
                 z_noisy_ct = diffusion.add_noise(z_ct, t, noise=noise)

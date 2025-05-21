@@ -46,7 +46,7 @@ l1_weight=0
 
 # Load pretrained model paths
 load_dir = "train_joint"
-load_vae_path = os.path.join(load_dir, "join_vae_v2.pth")
+load_vae_path = os.path.join(load_dir, "joint_vae_v2.pth")
 load_unet_path = os.path.join(load_dir, "joint_unet_v2.pth")
 load_dr_module_path = os.path.join(load_dir, "dr_module.pth")
 load_controlnet_path = os.path.join(load_dir, "controlnet.pth")

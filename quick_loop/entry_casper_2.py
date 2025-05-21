@@ -20,7 +20,7 @@ batch_size = 8
 num_workers = 8
 epochs = 2000
 early_stopping = 50
-patience = 20
+patience = 15
 epochs_between_prediction = 10
 base_channels = 256
 dropout_rate = 0.1
@@ -46,14 +46,15 @@ l1_weight=0
 
 # Load pretrained model paths
 load_dir = "train_joint"
-load_vae_path = os.path.join(load_dir, "joint_vae.pth")
-load_unet_path = os.path.join(load_dir, "joint_unet.pth")
+load_vae_path = os.path.join(load_dir, "joint_vae_v2.pth")
+load_unet_path = os.path.join(load_dir, "unet_fine_tune.pth")
+load_dir = "../best_model_v7"
 load_dr_module_path = os.path.join(load_dir, "dr_module.pth")
 load_controlnet_path = os.path.join(load_dir, "controlnet.pth")
 load_paca_layers_path = os.path.join(load_dir, "paca_layers.pth")
 
 # Save prediction / model directories
-save_dir = "train_joint"
+save_dir = "controlnet_fine_tune"
 os.makedirs(save_dir, exist_ok=True)
 vae_predict_dir = os.path.join(save_dir, "vae_predictions")
 unet_predict_dir = os.path.join(save_dir, "unet_predictions")
@@ -66,8 +67,8 @@ dr_module_save_path = os.path.join(save_dir, "segmentation_dr_module.pth")
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
-#manifest_path = "../training_data/manifest-filtered.csv"
-manifest_path = "../training_data/manifest-full.csv" # without CBCT
+manifest_path = "../training_data/manifest-filtered.csv"
+# manifest_path = "../training_data/manifest-full.csv" # without CBCT
 
 # manifest_path = "../manifest-cbct.csv" # with CBCT
 # manifest_path = "../data_quick_loop/manifest.csv" # Local config
@@ -113,31 +114,31 @@ manifest_path = "../training_data/manifest-full.csv" # without CBCT
 # )
 
 # --- Joint UNET and VAE ---
-vae = load_vae(save_path=load_vae_path, trainable=True)
-unet = load_unet(save_path=load_unet_path, trainable=True, base_channels=base_channels, dropout_rate=dropout_rate)
-train_loader, val_loader, test_loader = get_dataloaders(manifest_path, batch_size=batch_size, num_workers=num_workers, dataset_class=CTDatasetNPY, train_size=train_size, val_size=val_size, test_size=test_size, augmentation=augmentation)
-vae_loss_weights = {
-    'perceptual': 0.1,
-    'ssim':       0.8,
-    'mse':        0.0,
-    'kl':         1e-5,
-    'l1':         1.0,
-}
-train_joint(
-    unet=unet,
-    vae=vae,
-    train_loader=train_loader,
-    val_loader=val_loader,
-    test_loader=test_loader,
-    epochs=epochs,
-    save_unet_path=unet_save_path,
-    save_vae_path=vae_save_path,
-    learning_rate=5e-6,
-    weight_decay=1e-4,
-    gradient_clip_val=1.0,
-    early_stopping=early_stopping,
-    vae_loss_weights=vae_loss_weights,
-)
+# vae = load_vae(save_path=load_vae_path, trainable=True)
+# unet = load_unet(save_path=load_unet_path, trainable=True, base_channels=base_channels, dropout_rate=dropout_rate)
+# train_loader, val_loader, test_loader = get_dataloaders(manifest_path, batch_size=batch_size, num_workers=num_workers, dataset_class=CTDatasetNPY, train_size=train_size, val_size=val_size, test_size=test_size, augmentation=augmentation)
+# vae_loss_weights = {
+#     'perceptual': 0.1,
+#     'ssim':       0.8,
+#     'mse':        0.0,
+#     'kl':         1e-5,
+#     'l1':         1.0,
+# }
+# train_joint(
+#     unet=unet,
+#     vae=vae,
+#     train_loader=train_loader,
+#     val_loader=val_loader,
+#     test_loader=test_loader,
+#     epochs=epochs,
+#     save_unet_path=unet_save_path,
+#     save_vae_path=vae_save_path,
+#     learning_rate=5e-6,
+#     weight_decay=1e-4,
+#     gradient_clip_val=1.0,
+#     early_stopping=early_stopping,
+#     vae_loss_weights=vae_loss_weights,
+# )
 
 # --- Joint continue UNet training with locked VAE ---
 # vae = load_vae(save_path=vae_save_path, trainable=False)
@@ -175,25 +176,26 @@ train_joint(
 # )
 
 # --- ControlNet ---
-# vae = load_vae(save_path=load_vae_path, trainable=False)
-# unet = load_unet_control_paca(unet_save_path=load_unet_path, paca_trainable=True)
-# controlnet = load_controlnet(save_path=load_unet_path, trainable=True)
-# dr_module = load_degradation_removal(save_path=load_dr_module_path, trainable=True)
-# train_loader, val_loader, test_loader = get_dataloaders(manifest_path, batch_size=batch_size, num_workers=num_workers, dataset_class=PairedCTCBCTDatasetNPY, train_size=train_size, val_size=val_size, test_size=test_size, augmentation=augmentation)
-# train_dr_control_paca(
-#     vae=vae, 
-#     unet=unet, 
-#     controlnet=controlnet, 
-#     dr_module=dr_module, 
-#     train_loader=train_loader, 
-#     val_loader=val_loader, 
-#     epochs=epochs, 
-#     save_dir=save_dir, 
-#     predict_dir=conditional_predict_dir, 
-#     early_stopping=early_stopping, 
-#     patience=patience, 
-#     epochs_between_prediction=10
-# )
+vae = load_vae(save_path=load_vae_path, trainable=False)
+unet = load_unet_control_paca(unet_save_path=load_unet_path, paca_save_path=load_paca_layers_path, paca_trainable=True)
+controlnet = load_controlnet(save_path=load_controlnet_path, trainable=True)
+dr_module = load_degradation_removal(save_path=load_dr_module_path, trainable=True)
+train_loader, val_loader, test_loader = get_dataloaders(manifest_path, batch_size=batch_size, num_workers=num_workers, dataset_class=PairedCTCBCTDatasetNPY, train_size=train_size, val_size=val_size, test_size=test_size, augmentation=augmentation)
+train_dr_control_paca(
+    vae=vae, 
+    unet=unet, 
+    controlnet=controlnet, 
+    dr_module=dr_module, 
+    train_loader=train_loader, 
+    val_loader=val_loader, 
+    epochs=epochs, 
+    save_dir=save_dir, 
+    predict_dir=conditional_predict_dir, 
+    early_stopping=early_stopping, 
+    patience=patience, 
+    epochs_between_prediction=10,
+    learning_rate=learning_rate,
+)
 
 # --- Segmentation ControlNet ---
 # vae = load_vae(load_vae_path)

@@ -178,10 +178,10 @@ def plot_random_slice(volume_idx):
 
 
 def plot_specific():
-    volume_idx = 8
-    slice_num = 107
+    volume_idx = 54
+    slice_num = 266
     plot(volume_idx, slice_num)
 
 if __name__ == "__main__":
-    # plot_specific()
-    plot_random_slice(33)
+    plot_specific()
+    # plot_random_slice(33)

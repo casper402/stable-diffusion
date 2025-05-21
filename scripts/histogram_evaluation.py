@@ -31,7 +31,7 @@ SLICE_RANGES = {
     106: None, 116: None, 129: (5, 346)
 }
 VALID_VOLUMES = list(SLICE_RANGES.keys())
-VALID_VOLUMES = [8]
+VALID_VOLUMES = [26]
 
 # ──────── transforms & crops ──────────────────────────────────────────────────
 gt_transform = transforms.Compose([

@@ -26,12 +26,23 @@ LEFT_CROP   = int(round((PAD_L / _pad_w) * RES_W))
 RIGHT_CROP  = int(round((PAD_R / _pad_w) * RES_W))
 
 # Slice ranges per volume (inclusive); None means use all slices
-SLICE_RANGES = {
-    3: None, 8: (0, 354), 12: (0, 320), 26: None,
-    32: (69, 269), 33: (59, 249), 35: (91, 268),
-    54: (0, 330), 59: (0, 311), 61: (0, 315),
-    106: None, 116: None, 129: (5, 346)
+SLICE_SELECT = {
+    3: None,
+    8: (0, 354),
+    12: (0, 320),
+    26: None,
+    32: (69, 269),
+    33: (59, 249),
+    35: (91, 268),
+    # 54: [0, 4, 11, 19, 26, 33, 40, 48, 55, 62, 70, 77, 84, 91, 99, 106, 113, 120, 128, 135, 142, 149, 157, 164, 171, 179, 186, 193, 200, 208, 215, 222, 229, 237, 244, 251, 259, 266, 273, 280, 2888, 295, 317, 324],
+    54: (0, 330)
+    59: (0, 311),
+    61: (0, 315),
+    106: None,
+    116: None,
+    129: (5, 346)
 }
+VOLUMES = list(SLICE_SELECT.keys())
 
 # Plot configuration
 # Available types: 'profile', 'qq', 'hist', 'ba', 'ssim'
@@ -40,7 +51,8 @@ PLOT_TYPES = [
     # 'qq',
     # 'hist',
     # 'ba',
-    'ssim',
+    # 'ssim',
+    'slice_metrics',
 ]
 QQ_QUANTILES = 300     # Number of quantiles for Q-Q plots
 HIST_BINS    = 100     # Number of bins for histograms
@@ -72,15 +84,30 @@ def load_and_prepare(path: str, is_cbct: bool = True) -> np.ndarray:
         data = apply_transform(data)
     return crop_back(data)
 
-# List slice filenames for volume with range filter
 def list_slices(volume: int, folder: str) -> list:
+    """
+    List slice filenames for a given volume,
+    filtering by either a tuple range or explicit list.
+    """
     pattern = os.path.join(folder, f"volume-{volume}_slice_*.npy")
-    files   = sorted(glob.glob(pattern))
-    rng     = SLICE_RANGES.get(volume)
-    if rng:
-        start, end = rng
-        files = [f for f in files if start <= int(os.path.basename(f).split('_')[-1].split('.')[0]) <= end]
-    return [os.path.basename(f) for f in files]
+    files = sorted(glob.glob(pattern))
+    selector = SLICE_SELECT.get(volume)
+    # If None, return all
+    if selector is None:
+        return [os.path.basename(f) for f in files]
+    # If explicit list, filter those indices
+    if isinstance(selector, list):
+        valid = set(selector)
+        filtered = [f for f in files
+                    if int(os.path.basename(f).split('_')[-1].split('.')[0]) in valid]
+    # If tuple, filter inclusive range
+    elif isinstance(selector, tuple) and len(selector) == 2:
+        start, end = selector
+        filtered = [f for f in files
+                    if start <= int(os.path.basename(f).split('_')[-1].split('.')[0]) <= end]
+    else:
+        filtered = files
+    return [os.path.basename(f) for f in filtered]
 
 # Parallel single-slice loader
 def _load_slice_values(args):
@@ -265,6 +292,52 @@ def plot_ssim(slice_name, gt_folder, cbct_folder, pred_folders, volume):
 
     plt.tight_layout(); plt.show()
 
+
+def plot_slice_metrics(volume, gt_folder, cbct_folder, pred_folders):
+    volume = 54
+    slices = list_slices(volume, gt_folder)
+    # preallocate
+    mae_ct_cbct = []
+    mae_preds   = {lbl: [] for lbl in pred_folders}
+    ssim_ct_cbct = []
+    ssim_preds   = {lbl: [] for lbl in pred_folders}
+
+    for slice_name in slices:
+        # load imgs
+        ct_img   = load_and_prepare(os.path.join(gt_folder, slice_name), True)
+        cbct_img = load_and_prepare(os.path.join(cbct_folder, slice_name), True)
+        # MAE
+        mae_ct_cbct.append(np.mean(np.abs(cbct_img - ct_img)))
+        for lbl, folder in pred_folders.items():
+            pred    = load_and_prepare(os.path.join(folder, f"volume-{volume}", slice_name), False)
+            mae_preds[lbl].append(np.mean(np.abs(pred - ct_img)))
+        # SSIM (global, mean over map)
+        ssim_ct_cbct.append(ssim(ct_img, cbct_img, data_range=DATA_RANGE))
+        for lbl, folder in pred_folders.items():
+            pred    = load_and_prepare(os.path.join(folder, f"volume-{volume}", slice_name), False)
+            ssim_preds[lbl].append(ssim(ct_img, pred, data_range=DATA_RANGE))
+
+    x = np.arange(len(slices))
+    fig, (ax_mae, ax_ssim) = plt.subplots(2, 1, figsize=(10, 8), sharex=True)
+
+    # Top: MAE
+    ax_mae.plot(x, mae_ct_cbct, label='CBCT')
+    for lbl, vals in mae_preds.items():
+        ax_mae.plot(x, vals, label=lbl)
+    ax_mae.set(ylabel='MAE (HU)', title=f'Slice-wise MAE & SSIM – Volume {volume}')
+    ax_mae.legend(); ax_mae.grid(True)
+
+    # Bottom: SSIM
+    ax_ssim.plot(x, ssim_ct_cbct, label='CBCT')
+    for lbl, vals in ssim_preds.items():
+        ax_ssim.plot(x, vals, label=lbl)
+    ax_ssim.set(xlabel='Slice index', ylabel='SSIM')
+    ax_ssim.legend(); ax_ssim.grid(True)
+
+    plt.tight_layout()
+    plt.show()
+
+
 # Dispatcher
 def plot_multi(slice_name, x_coord, gt_folder, cbct_folder, pred_folders, volume, plot_types=None):
     if plot_types is None:
@@ -283,6 +356,8 @@ def plot_multi(slice_name, x_coord, gt_folder, cbct_folder, pred_folders, volume
         plot_bland_altman(volume, gt_folder, cbct_folder, pred_folders)
     if 'ssim' in plot_types:
         plot_ssim(slice_name, gt_folder, cbct_folder, pred_folders, volume)
+    if 'slice_metrics' in plot_types:
+        plot_slice_metrics(volume, gt_folder, cbct_folder, pred_folders)
 
 # Main
 if __name__ == '__main__':
@@ -292,7 +367,7 @@ if __name__ == '__main__':
         'v3': os.path.expanduser("~/thesis/predictions/predctions_controlnet_v3"),
         'v7': os.path.expanduser("~/thesis/predictions/predictions_controlnet_v7-data-augmentation")
     }
-    volumes = list(SLICE_RANGES.keys())
+    volumes = list(SLICE_SELECT.keys())
     current_vol = random.choice(volumes)
     preload_volume(current_vol, gt_folder, cbct_folder, pred_folders)
     print(f"[Main] Initial preload of volume {current_vol}")

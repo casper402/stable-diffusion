@@ -23,13 +23,25 @@ LEFT_CROP   = int(round((PAD_L / _pad_w) * RES_W))
 RIGHT_CROP  = int(round((PAD_R / _pad_w) * RES_W))
 
 # ──────── slice-selection ─────────────────────────────────────────────────────
-SLICE_RANGES = {
-    3: None, 8: (0, 354), 12: (0, 320), 26: None,
-    32: (69, 269), 33: (59, 249), 35: (91, 268),
-    54: (0, 330), 59: (0, 311), 61: (0, 315),
-    106: None, 116: None, 129: (5, 346)
+SLICE_SELECT = {
+    3: None,
+    8: (0, 354),
+    12: (0, 320),
+    26: None,
+    32: (69, 269),
+    33: (59, 249),
+    35: (91, 268),
+    # For volume 54, use explicit list instead of a range
+    # 54: [0, 4, 11, 19, 26, 33, 40, 48, 55, 62, 70, 77, 84, 91, 99, 106, 113, 120, 128, 135, 142, 149, 157, 164, 171, 179, 186, 193, 200, 208, 215, 222, 229, 237, 244, 251, 259, 266, 273, 280, 2888, 295, 317, 324],
+    54: (0, 330)
+    59: (0, 311),
+    61: (0, 315),
+    106: None,
+    116: None,
+    129: (5, 346)
 }
-VALID_VOLUMES = list(SLICE_RANGES.keys())
+VALID_VOLUMES = list(SLICE_SELECT.keys())
+VALID_VOLUMES = [54]
 
 # ──────── transforms & crops ──────────────────────────────────────────────────
 gt_transform = transforms.Compose([
@@ -64,9 +76,17 @@ def get_slice_files(folder, vol_idx, is_cbct=False):
     base = folder if is_cbct else os.path.join(folder, f"volume-{vol_idx}")
     pattern = os.path.join(base, f"volume-{vol_idx}_slice_*.npy")
     files = sorted(glob.glob(pattern))
-    rng = SLICE_RANGES.get(vol_idx)
-    if rng:
-        start, end = rng
+    selector = SLICE_SELECT.get(vol_idx)
+    if selector is None:
+        return files
+    # If explicit list, filter by those indices
+    if isinstance(selector, list):
+        valid = set(selector)
+        files = [f for f in files
+                 if int(os.path.basename(f).split('_')[-1].split('.')[0]) in valid]
+    # If tuple, use inclusive range
+    elif isinstance(selector, tuple) and len(selector) == 2:
+        start, end = selector
         files = [f for f in files
                  if start <= int(os.path.basename(f).split('_')[-1].split('.')[0]) <= end]
     return files

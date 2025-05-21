@@ -96,7 +96,7 @@ def train_vae(
         mse_weight=0.0, 
         kl_weight=0.00001, 
         l1_weight=1.0,
-        learning_rate=2.5.0e-5 # Used to be 5
+        learning_rate=2.50e-5 # Used to be 5
     ):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     perceptual_loss = PerceptualLoss(device=device)

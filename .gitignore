@@ -8,4 +8,4 @@ __pycache__/
 *.py[cod]
 **/.DS_Store
 *.pth
-
+best_model_v7

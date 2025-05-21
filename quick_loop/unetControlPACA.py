@@ -279,7 +279,12 @@ def train_dr_control_paca(
                 loss_dr = degradation_loss(intermediate_preds, ct_img)
 
                 t = diffusion.sample_timesteps(z_ct.size(0), generator=val_generator)
-                noise = torch.randn_like(z_ct, generator=val_generator)
+                noise = torch.randn(
+                    z_t.shape,
+                    device=z_t.device,
+                    dtype=z_t.dtype,
+                    generator=val_generator
+                )
                 z_noisy_ct = diffusion.add_noise(z_ct, t, noise=noise)
 
                 down_res_samples, middle_res_sample = controlnet(z_noisy_ct, controlnet_input, t)

@@ -96,7 +96,7 @@ def train_vae(
         mse_weight=0.0, 
         kl_weight=0.00001, 
         l1_weight=1.0,
-        learning_rate=5.0e-5
+        learning_rate=2.5.0e-5 # Used to be 5
     ):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     perceptual_loss = PerceptualLoss(device=device)
@@ -145,7 +145,7 @@ def train_vae(
 
         scheduler.step(val_loss)
         early_stopping_counter += 1
-        print(f"Epoch {epoch+1}, Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}")
+        print(f"Epoch {epoch+1}, Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}, LR: {optimizer.param_groups[0]['lr']} ")
 
         # Save best model
         if val_loss < best_val_loss:

@@ -31,7 +31,7 @@ warmup_epochs = 5
 
 # Load pretrained model paths
 load_dir = "non-linear-vae"
-load_vae_path = os.path.join(load_dir, "vae_nonlinear.pth")
+load_vae_path = os.path.join(load_dir, "vae_nonlinear2.pth")
 # load_unet_path = os.path.join(load_dir, "unet_joint.pth")
 
 # Save prediction / model directories
@@ -41,7 +41,7 @@ os.makedirs(save_dir, exist_ok=True)
 vae_predict_dir = os.path.join(save_dir, "vae_predictions")
 unet_predict_dir = os.path.join(save_dir, "unet_predictions")
 conditional_predict_dir = os.path.join(save_dir, "conditional_predictions")
-vae_save_path = os.path.join(save_dir, "vae_nonlinear2.pth")
+vae_save_path = os.path.join(save_dir, "vae_nonlinear3.pth")
 unet_save_path = os.path.join(save_dir, "unet_joint_unet.pth")
 controlnet_save_path = os.path.join(save_dir, "controlnet.pth")
 paca_layers_save_path = os.path.join(save_dir, "paca_layers.pth")

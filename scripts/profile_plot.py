@@ -35,7 +35,7 @@ SLICE_SELECT = {
     33: (59, 249),
     35: (91, 268),
     # 54: [0, 4, 11, 19, 26, 33, 40, 48, 55, 62, 70, 77, 84, 91, 99, 106, 113, 120, 128, 135, 142, 149, 157, 164, 171, 179, 186, 193, 200, 208, 215, 222, 229, 237, 244, 251, 259, 266, 273, 280, 2888, 295, 317, 324],
-    54: (0, 330)
+    54: (0, 330),
     59: (0, 311),
     61: (0, 315),
     106: None,
@@ -47,11 +47,11 @@ VOLUMES = list(SLICE_SELECT.keys())
 # Plot configuration
 # Available types: 'profile', 'qq', 'hist', 'ba', 'ssim'
 PLOT_TYPES = [
-    # 'profile',
-    # 'qq',
-    # 'hist',
-    # 'ba',
-    # 'ssim',
+    'profile',
+    'qq',
+    'hist',
+    'ba',
+    'ssim',
     'slice_metrics',
 ]
 QQ_QUANTILES = 300     # Number of quantiles for Q-Q plots
@@ -294,7 +294,6 @@ def plot_ssim(slice_name, gt_folder, cbct_folder, pred_folders, volume):
 
 
 def plot_slice_metrics(volume, gt_folder, cbct_folder, pred_folders):
-    volume = 54
     slices = list_slices(volume, gt_folder)
     # preallocate
     mae_ct_cbct = []
@@ -364,7 +363,7 @@ if __name__ == '__main__':
     gt_folder   = os.path.expanduser("~/thesis/training_data/CT/test")
     cbct_folder = os.path.expanduser("~/thesis/training_data/CBCT/490/test")
     pred_folders = {
-        'v3': os.path.expanduser("~/thesis/predictions/predctions_controlnet_v3"),
+        # 'v3': os.path.expanduser("~/thesis/predictions/predctions_controlnet_v3"),
         'v7': os.path.expanduser("~/thesis/predictions/predictions_controlnet_v7-data-augmentation")
     }
     volumes = list(SLICE_SELECT.keys())

@@ -7,15 +7,15 @@ import numpy as np
 # np.save('data_2d.npy', data_2d)
 
 # Load the .npy file
-data_1 = np.load('_real_A.npy') # Assuming you have a data_2d.npy file
+data_1 = np.load('base3.npy') # Assuming you have a data_2d.npy file
 data_1 = np.squeeze(data_1)
 
-data_2 = np.load('_fake_B.npy')
+data_2 = np.load('base_cbct3.npy')
 data_2 = np.squeeze(data_2)
 
 fig, axes = plt.subplots(1, 2, figsize=(10, 5)) # figsize adjusts the total size of the figure
-im1 = axes[0].imshow(data_1, cmap='gray')
-im2 = axes[1].imshow(data_2, cmap='gray')
+im1 = axes[0].imshow(data_1, cmap='gray', vmax=1)
+im2 = axes[1].imshow(data_2, cmap='gray', vmax=1)
 plt.show()
 
 #plt.imshow(data_2, cmap='gray') # Use 'gray' colormap for grayscale images

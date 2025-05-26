@@ -214,6 +214,7 @@ def main():
         # "casper_vae.pth",
         # "vae_joint_v2.pth",
         "vae_nonlinear.pth",
+        "vae_nonlinear2.pth",
     ]
     vaes = []
     for path in vae_paths:

@@ -9,3 +9,4 @@ __pycache__/
 **/.DS_Store
 *.pth
 best_model_v7
+*.npy

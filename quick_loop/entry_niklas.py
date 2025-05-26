@@ -117,7 +117,7 @@ vae_loss_weights = {
 }
 
 # Jointly train UNet + VAE
-train_joint_v2(
+train_joint(
     unet=unet,
     vae=vae,
     train_loader=train_loader,

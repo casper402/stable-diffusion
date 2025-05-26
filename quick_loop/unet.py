@@ -620,7 +620,7 @@ def train_joint(
                 # unet
                 t = diffusion.sample_timesteps(z.size(0), generator=val_generator)
                 # noise = torch.randn_like(z, generator=val_generator)
-                noise = torch.randn_like(z, generator=val_generator)
+                noise = torch.randn_like(z)
                 pred = unet(diffusion.add_noise(z, t, noise), t)
                 l_unet = F.mse_loss(pred, noise)
 

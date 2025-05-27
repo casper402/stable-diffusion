@@ -53,7 +53,8 @@ degradation_removal_save_path = os.path.join(save_dir, "dr_module.pth")
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
 # manifest_path = "../manifest-full.csv" # without CBCT
-manifest_path = "../manifest-cbct.csv" # with CBCT
+# manifest_path = "../manifest-cbct.csv" # with CBCT
+manifest_path = "../training_data/manifest-filtered.csv"
 # manifest_path = "../data_quick_loop/manifest.csv" # Local config
 
 # Augmentation

@@ -327,81 +327,81 @@ def train_dr_control_paca(
             break
 
         # --- Inference/Saving Test Images ---
-        if ((epoch + 1) % epochs_between_prediction == 0): # Save every 10 epochs
-            print(f"--- Saving prediction for epoch {epoch+1} ---")
+        # if ((epoch + 1) % epochs_between_prediction == 0): # Save every 10 epochs
+        #     print(f"--- Saving prediction for epoch {epoch+1} ---")
 
-            unet.eval()
-            controlnet.eval()
-            dr_module.eval()
-            vae.eval()
+        #     unet.eval()
+        #     controlnet.eval()
+        #     dr_module.eval()
+        #     vae.eval()
 
-            num_images_to_save = 5
-            saved_count = 0
+        #     num_images_to_save = 5
+        #     saved_count = 0
 
-            with torch.no_grad():
-                for i, (ct, cbct) in enumerate(val_loader):
-                    ct = ct.to(device)
-                    cbct = cbct.to(device)
+        #     with torch.no_grad():
+        #         for i, (ct, cbct) in enumerate(val_loader):
+        #             ct = ct.to(device)
+        #             cbct = cbct.to(device)
 
-                    controlnet_input, _ = dr_module(cbct)
+        #             controlnet_input, _ = dr_module(cbct)
 
-                    z_t = torch.randn_like(vae.encode(ct)[0])
-                    T = diffusion.timesteps
+        #             z_t = torch.randn_like(vae.encode(ct)[0])
+        #             T = diffusion.timesteps
 
-                    for t_int in range(T - 1, -1, -1): 
-                        t = torch.full((z_t.size(0),), t_int, device=device, dtype=torch.long)
+        #             for t_int in range(T - 1, -1, -1): 
+        #                 t = torch.full((z_t.size(0),), t_int, device=device, dtype=torch.long)
 
-                        # CFG: Predict noise twice
-                        down_res_samples, middle_res_sample = controlnet(z_t, controlnet_input, t)
-                        pred_noise_cond = unet(z_t, t, down_res_samples, middle_res_sample)
-                        pred_noise_uncond = unet(z_t, t, None, None)
-                        pred_noise = pred_noise_uncond + guidance_scale * (pred_noise_cond - pred_noise_uncond)
+        #                 # CFG: Predict noise twice
+        #                 down_res_samples, middle_res_sample = controlnet(z_t, controlnet_input, t)
+        #                 pred_noise_cond = unet(z_t, t, down_res_samples, middle_res_sample)
+        #                 pred_noise_uncond = unet(z_t, t, None, None)
+        #                 pred_noise = pred_noise_uncond + guidance_scale * (pred_noise_cond - pred_noise_uncond)
 
-                        # DDPM
-                        beta_t = diffusion.beta[t_int].view(-1, 1, 1, 1)
-                        alpha_t = diffusion.alpha[t_int].view(-1, 1, 1, 1)
-                        alpha_cumprod_t = diffusion.alpha_cumprod[t_int].view(-1, 1, 1, 1)
-                        sqrt_one_minus_alpha_cumprod_t = torch.sqrt(1.0 - alpha_cumprod_t)
-                        sqrt_reciprocal_alpha_t = torch.sqrt(1.0 / alpha_t)
+        #                 # DDPM
+        #                 beta_t = diffusion.beta[t_int].view(-1, 1, 1, 1)
+        #                 alpha_t = diffusion.alpha[t_int].view(-1, 1, 1, 1)
+        #                 alpha_cumprod_t = diffusion.alpha_cumprod[t_int].view(-1, 1, 1, 1)
+        #                 sqrt_one_minus_alpha_cumprod_t = torch.sqrt(1.0 - alpha_cumprod_t)
+        #                 sqrt_reciprocal_alpha_t = torch.sqrt(1.0 / alpha_t)
 
-                        model_mean_coef2 = beta_t / sqrt_one_minus_alpha_cumprod_t
-                        model_mean = sqrt_reciprocal_alpha_t * (z_t - model_mean_coef2 * pred_noise)
+        #                 model_mean_coef2 = beta_t / sqrt_one_minus_alpha_cumprod_t
+        #                 model_mean = sqrt_reciprocal_alpha_t * (z_t - model_mean_coef2 * pred_noise)
 
-                        if t_int > 0:
-                            variance = diffusion.beta[t_int].view(-1, 1, 1, 1) # Use posterior variance beta_t
-                            noise = torch.randn_like(z_t)
-                            z_t_minus_1 = model_mean + torch.sqrt(variance) * noise
-                        else:
-                            z_t_minus_1 = model_mean
-                        z_t = z_t_minus_1
+        #                 if t_int > 0:
+        #                     variance = diffusion.beta[t_int].view(-1, 1, 1, 1) # Use posterior variance beta_t
+        #                     noise = torch.randn_like(z_t)
+        #                     z_t_minus_1 = model_mean + torch.sqrt(variance) * noise
+        #                 else:
+        #                     z_t_minus_1 = model_mean
+        #                 z_t = z_t_minus_1
 
-                    # Decode final latent
-                    z_0 = z_t
-                    generated_image_batch = vae.decode(z_0)
+        #             # Decode final latent
+        #             z_0 = z_t
+        #             generated_image_batch = vae.decode(z_0)
 
-                    for j in range(generated_image_batch.size(0)):
-                        generated_image = generated_image_batch[j]
-                        cbct_image = cbct[j]
-                        ct_image = ct[j]
+        #             for j in range(generated_image_batch.size(0)):
+        #                 generated_image = generated_image_batch[j]
+        #                 cbct_image = cbct[j]
+        #                 ct_image = ct[j]
 
-                        generated_image_vis = (generated_image / 2 + 0.5).clamp(0, 1)
-                        cbct_image_vis = (cbct_image / 2 + 0.5).clamp(0, 1)
-                        ct_image_vis = (ct_image / 2 + 0.5).clamp(0, 1)
+        #                 generated_image_vis = (generated_image / 2 + 0.5).clamp(0, 1)
+        #                 cbct_image_vis = (cbct_image / 2 + 0.5).clamp(0, 1)
+        #                 ct_image_vis = (ct_image / 2 + 0.5).clamp(0, 1)
 
-                        images_to_save = [cbct_image_vis, generated_image_vis, ct_image_vis]
-                        save_filename = f"{predict_dir}/epoch_{epoch}_batch_{i}_img_{j}_guidance_scale_{guidance_scale}.png"
+        #                 images_to_save = [cbct_image_vis, generated_image_vis, ct_image_vis]
+        #                 save_filename = f"{predict_dir}/epoch_{epoch}_batch_{i}_img_{j}_guidance_scale_{guidance_scale}.png"
 
-                        torchvision.utils.save_image(
-                            images_to_save,
-                            save_filename,
-                            nrow=len(images_to_save),
-                        )
-                        saved_count += 1
-                        if saved_count >= num_images_to_save:
-                            break
-                    if saved_count >= num_images_to_save:
-                        break
-            print(f"Saved {num_images_to_save} images for epoch {epoch+1} to {predict_dir}")
+        #                 torchvision.utils.save_image(
+        #                     images_to_save,
+        #                     save_filename,
+        #                     nrow=len(images_to_save),
+        #                 )
+        #                 saved_count += 1
+        #                 if saved_count >= num_images_to_save:
+        #                     break
+        #             if saved_count >= num_images_to_save:
+        #                 break
+        #     print(f"Saved {num_images_to_save} images for epoch {epoch+1} to {predict_dir}")
 
     print("Training finished.")
 

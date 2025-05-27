@@ -33,6 +33,9 @@ warmup_epochs = 5
 load_dir = "non-linear-vae-controlnet"
 load_vae_path = os.path.join(load_dir, "vae_joint_vae_nonlinear.pth")
 load_unet_path = os.path.join(load_dir, "unet_joint_unet_nonlinear.pth")
+load_controlnet_path = os.path.join(load_dir, "controlnet.pth")
+load_paca_layers_path = os.path.join(load_dir, "paca_layers.pth")
+load_degradation_removal_path = os.path.join(load_dir, "dr_module.pth")
 
 # Save prediction / model directories
 # save_dir = "controlnet_v2"

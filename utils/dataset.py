@@ -234,13 +234,24 @@ class PairedCTCBCTDatasetNPY(Dataset):
     def __getitem__(self, idx):
         row = self.df.iloc[idx]
 
-        ct = np.load(row['ct_path']).astype(np.float32) / 1000.0
-        ct = torch.from_numpy(ct).unsqueeze(0)
+        ct = np.load(row['ct_path']).astype(np.float32)
 
         # randomly choose 256 vs 490 CBCT
         size = random.choice([256, 490])
         cbct_path = row[f'cbct_{size}_path']
-        cbct = np.load(cbct_path).astype(np.float32) / 1000.0
+        cbct = np.load(cbct_path).astype(np.float32)
+
+        if self.preprocess == "linear":
+            ct /= 1000.0
+            cbct /= 1000.0
+        elif self.preprocess == "tanh":
+            # apply a "soft window" around ±150 HU:
+            #  - inside ±150 HU it's almost linear (tanh(x/150) ≈ x/150 for |x|≲100),
+            #  - beyond ±150 HU things smoothly compress toward ±1.
+            ct = np.tanh(ct / 150.0)
+            cbct = np.tanh(cbct / 150.0)
+
+        ct = torch.from_numpy(ct).unsqueeze(0)
         cbct = torch.from_numpy(cbct).unsqueeze(0)
 
         if self.base_transform:

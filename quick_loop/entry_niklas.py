@@ -16,7 +16,7 @@ from quick_loop.unetControlPACA import load_unet_control_paca, train_dr_control_
 train_size = None
 val_size = None
 test_size = 10
-batch_size = 16
+batch_size = 8
 accumulation_steps = 1 # Effectively increases batch size to batch_size * accumulation_steps
 num_workers = 8
 epochs = 2000
@@ -30,13 +30,13 @@ warmup_lr = 1e-8
 warmup_epochs = 5
 
 # Load pretrained model paths
-load_dir = "non-linear-vae-joint"
-load_vae_path = os.path.join(load_dir, "vae_nonlinear2.pth")
-load_unet_path = os.path.join(load_dir, "unet_joint_unet.pth")
+load_dir = "non-linear-vae-controlnet"
+load_vae_path = os.path.join(load_dir, "vae_joint_vae_nonlinear.pth")
+load_unet_path = os.path.join(load_dir, "unet_joint_unet_nonlinear.pth")
 
 # Save prediction / model directories
 # save_dir = "controlnet_v2"
-save_dir = "non-linear-vae-joint"
+save_dir = "non-linear-vae-controlnet"
 os.makedirs(save_dir, exist_ok=True)
 vae_predict_dir = os.path.join(save_dir, "vae_predictions")
 unet_predict_dir = os.path.join(save_dir, "unet_predictions")
@@ -102,36 +102,36 @@ preprocess = "tanh"
 
 # train_loader, val_loader, test_loader = get_dataloaders(manifest_path, batch_size=batch_size, num_workers=num_workers, dataset_class=PairedCTCBCTDatasetNPY, train_size=train_size, val_size=val_size, test_size=test_size, augmentation=augmentation)
 
-train_loader, val_loader, test_loader = get_dataloaders(manifest_path, batch_size=batch_size, num_workers=num_workers, dataset_class=CTDatasetNPY, train_size=train_size, val_size=val_size, test_size=test_size, augmentation=augmentation, preprocess=preprocess)
-vae = load_vae(load_vae_path, trainable=True)
+# train_loader, val_loader, test_loader = get_dataloaders(manifest_path, batch_size=batch_size, num_workers=num_workers, dataset_class=CTDatasetNPY, train_size=train_size, val_size=val_size, test_size=test_size, augmentation=augmentation, preprocess=preprocess)
+# vae = load_vae(load_vae_path, trainable=True)
 # vae = load_vae(save_path=vae_save_path, trainable=True)
-unet = load_unet(save_path=load_unet_path, trainable=True, base_channels=base_channels, dropout_rate=dropout_rate)
+# unet = load_unet(save_path=load_unet_path, trainable=True, base_channels=base_channels, dropout_rate=dropout_rate)
 
 # Define your VAE‐loss weights:
-vae_loss_weights = {
-    'perceptual': 0.1,
-    'ssim':       0.9,
-    'mse':        0.0,
-    'kl':         1e-5,
-    'l1':         1.0,
-}
+# vae_loss_weights = {
+#     'perceptual': 0.1,
+#     'ssim':       0.9,
+#     'mse':        0.0,
+#     'kl':         1e-5,
+#     'l1':         1.0,
+# }
 
 # Jointly train UNet + VAE
-train_joint(
-    unet=unet,
-    vae=vae,
-    train_loader=train_loader,
-    val_loader=val_loader,
-    test_loader=test_loader,
-    epochs=epochs,
-    save_unet_path=unet_save_path,
-    save_vae_path=vae_save_path,
-    learning_rate=5e-6,
-    weight_decay=1e-4,
-    gradient_clip_val=1.0,
-    early_stopping=early_stopping,
-    vae_loss_weights=vae_loss_weights,
-)
+# train_joint(
+#     unet=unet,
+#     vae=vae,
+#     train_loader=train_loader,
+#     val_loader=val_loader,
+#     test_loader=test_loader,
+#     epochs=epochs,
+#     save_unet_path=unet_save_path,
+#     save_vae_path=vae_save_path,
+#     learning_rate=5e-6,
+#     weight_decay=1e-4,
+#     gradient_clip_val=1.0,
+#     early_stopping=early_stopping,
+#     vae_loss_weights=vae_loss_weights,
+# )
 
 # train_loader, val_loader, test_loader = get_dataloaders(manifest_path, batch_size=batch_size, num_workers=num_workers, dataset_class=PairedCTCBCTDatasetNPY, train_size=train_size, val_size=val_size, test_size=test_size, augmentation=augmentation)
 
@@ -150,6 +150,7 @@ train_joint(
 #     epochs_between_prediction=epochs_between_prediction,
 # )
 
+# ControlNet from sratch
 # vae = load_vae(save_path=vae_save_path, trainable=False)
 # unet = load_unet_control_paca(unet_save_path=unet_save_path, paca_trainable=True)
 # controlnet = load_controlnet(save_path=unet_save_path, trainable=True)
@@ -169,6 +170,32 @@ train_joint(
 #     early_stopping=early_stopping, 
 #     patience=patience, 
 #     epochs_between_prediction=10)
+
+
+# ----
+# ControlNet fine tuning
+vae = load_vae(save_path=load_vae_path, trainable=False)
+unet = load_unet_control_paca(unet_save_path=load_unet_path, paca_save_path=load_paca_layers_path, paca_trainable=True)
+controlnet = load_controlnet(save_path=load_controlnet_path, trainable=True)
+dr_module = load_degradation_removal(save_path=load_degradation_removal_path, trainable=True)
+
+train_loader, val_loader, test_loader = get_dataloaders(manifest_path, batch_size=batch_size, num_workers=num_workers, dataset_class=PairedCTCBCTDatasetNPY, train_size=train_size, val_size=val_size, test_size=test_size, augmentation=augmentation, preprocess=preprocess)
+train_dr_control_paca(
+    vae=vae, 
+    unet=unet, 
+    controlnet=controlnet, 
+    dr_module=dr_module, 
+    train_loader=train_loader, 
+    val_loader=val_loader, 
+    epochs=epochs, 
+    save_dir=save_dir, 
+    predict_dir=conditional_predict_dir, 
+    early_stopping=early_stopping, 
+    patience=patience, 
+    epochs_between_prediction=10)
+
+# ----
+
 
 # _, _, test_loader = get_dataloaders(manifest_path, batch_size=batch_size, num_workers=num_workers, dataset_class=PairedCTCBCTDatasetNPY, train_size=train_size, val_size=val_size, test_size=test_size)
 # vae = load_vae(vae_save_path)

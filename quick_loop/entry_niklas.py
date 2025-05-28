@@ -30,7 +30,7 @@ warmup_lr = 1e-8
 warmup_epochs = 5
 
 # Load pretrained model paths
-load_dir = "non-linear-vae-controlnet"
+load_dir = "non-linear-vae-controlnet-dr_scratch"
 load_vae_path = os.path.join(load_dir, "vae_joint_vae_nonlinear.pth")
 load_unet_path = os.path.join(load_dir, "unet_joint_unet_nonlinear.pth")
 load_controlnet_path = os.path.join(load_dir, "controlnet.pth")
@@ -39,7 +39,7 @@ load_degradation_removal_path = os.path.join(load_dir, "dr_module.pth")
 
 # Save prediction / model directories
 # save_dir = "controlnet_v2"
-save_dir = "non-linear-vae-controlnet"
+save_dir = "non-linear-vae-controlnet-dr_scratch"
 os.makedirs(save_dir, exist_ok=True)
 vae_predict_dir = os.path.join(save_dir, "vae_predictions")
 unet_predict_dir = os.path.join(save_dir, "unet_predictions")
@@ -181,7 +181,7 @@ preprocess = "tanh"
 vae = load_vae(save_path=load_vae_path, trainable=False)
 unet = load_unet_control_paca(unet_save_path=load_unet_path, paca_save_path=load_paca_layers_path, paca_trainable=True)
 controlnet = load_controlnet(save_path=load_controlnet_path, trainable=True)
-dr_module = load_degradation_removal(save_path=load_degradation_removal_path, trainable=True)
+dr_module = load_degradation_removal(trainable=True) # DR FROM SCRATCH!
 
 train_loader, val_loader, test_loader = get_dataloaders(manifest_path, batch_size=batch_size, num_workers=num_workers, dataset_class=PairedCTCBCTDatasetNPY, train_size=train_size, val_size=val_size, test_size=test_size, augmentation=augmentation, preprocess=preprocess)
 train_dr_control_paca(

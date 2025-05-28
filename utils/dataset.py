@@ -228,6 +228,10 @@ class PairedCTCBCTDatasetNPY(Dataset):
         ])
         self.augmentation = augmentation
 
+        assert preprocess in ["linear", "tanh"]
+        print("Using preprocessing:", preprocess)
+        self.preprocess = preprocess
+
     def __len__(self):
         return len(self.df)
 

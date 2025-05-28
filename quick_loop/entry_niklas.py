@@ -59,9 +59,9 @@ manifest_path = "../training_data/manifest-filtered.csv"
 
 # Augmentation
 augmentation = {
-    'degrees': 1,
-    'translate': (0.1, 0.1),
-    'scale': (0.9, 1.1),
+    'degrees': (-1, 1),
+    'translate': (0.10, 0.10),
+    'scale': (0.10, 1.10),
     'shear': None,
 }
 # augmentation = None

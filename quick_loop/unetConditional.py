@@ -100,7 +100,7 @@ class UNetConcatenation(nn.Module):
 
         self.time_embedding = TimestepEmbedding(time_emb_dim)
 
-        self.init_conv = nn.Conv2d(in_channels, ch1, kernel_size=3, padding=1)
+        self.init_conv = nn.Conv2d(in_channels*2, ch1, kernel_size=3, padding=1)
         self.down1 = DownBlock(ch1, ch1, time_emb_dim, attn_res_64, dropout_rate)
         self.down2 = DownBlock(ch1, ch2, time_emb_dim, attn_res_32, dropout_rate)
         self.down3 = DownBlock(ch2, ch3, time_emb_dim, attn_res_16, dropout_rate)

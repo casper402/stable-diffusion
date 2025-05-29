@@ -68,7 +68,7 @@ class CBCTDatasetNPY(Dataset):
         fname = self.files[idx]
         arr = np.load(os.path.join(self.volume_dir, fname)).astype(np.float32)
 
-         if self.preprocess == "linear":
+        if self.preprocess == "linear":
             arr /= 1000.0
         elif self.preprocess == "tanh":
             # apply a "soft window" around ±150 HU:

@@ -78,7 +78,66 @@ class UNetSkip(nn.Module):
         h = nonlinearity(h)
         h = self.final_conv(h)
         return h
-    
+
+class UNetConcatenation(nn.Module):
+    def __init__(self, 
+                 in_channels=3, 
+                 out_channels=3, 
+                 base_channels=256, 
+                 dropout_rate=0.1):
+        super().__init__()
+        time_emb_dim = base_channels * 4
+
+        ch1 = base_channels * 1
+        ch2 = base_channels * 2
+        ch3 = base_channels * 4
+        ch4 = base_channels * 4
+
+        attn_res_64 = False
+        attn_res_32 = True
+        attn_res_16 = True
+        attn_res_8 = True
+
+        self.time_embedding = TimestepEmbedding(time_emb_dim)
+
+        self.init_conv = nn.Conv2d(in_channels, ch1, kernel_size=3, padding=1)
+        self.down1 = DownBlock(ch1, ch1, time_emb_dim, attn_res_64, dropout_rate)
+        self.down2 = DownBlock(ch1, ch2, time_emb_dim, attn_res_32, dropout_rate)
+        self.down3 = DownBlock(ch2, ch3, time_emb_dim, attn_res_16, dropout_rate)
+        self.down4 = DownBlock(ch3, ch4, time_emb_dim, attn_res_8, dropout_rate, downsample=False)
+
+        self.middle = MiddleBlock(ch4, time_emb_dim, dropout_rate)
+
+        self.up4 = UpBlock(ch4, ch3, ch4, time_emb_dim, attn_res_8, dropout_rate)
+        self.up3 = UpBlock(ch3, ch2, ch3, time_emb_dim, attn_res_16, dropout_rate)
+        self.up2 = UpBlock(ch2, ch1, ch2, time_emb_dim, attn_res_32, dropout_rate)
+        self.up1 = UpBlock(ch1, ch1, ch1, time_emb_dim, attn_res_64, dropout_rate, upsample=False)
+        self.final_norm = Normalize(ch1)
+        self.final_conv = nn.Conv2d(ch1, out_channels, kernel_size=3, stride=1, padding=1)
+
+    def forward(self, x, condition, t):
+        t_emb = self.time_embedding(t)
+        
+        x = torch.cat((x, condition), dim=1)
+
+        h = self.init_conv(x)         
+        h, intermediates1 = self.down1(h, t_emb)
+        h, intermediates2 = self.down2(h, t_emb)
+        h, intermediates3 = self.down3(h, t_emb)
+        h, intermediates4 = self.down4(h, t_emb)
+
+        h = self.middle(h, t_emb)
+
+        h = self.up4(h, intermediates4, t_emb)
+        h = self.up3(h, intermediates3, t_emb)
+        h = self.up2(h, intermediates2, t_emb)
+        h = self.up1(h, intermediates1, t_emb)
+
+        h = self.final_norm(h)
+        h = nonlinearity(h)
+        h = self.final_conv(h)
+        return h
+
 class UNetCrossAttention(nn.Module):
     def __init__(self, 
                  in_channels=3, 

@@ -29,6 +29,8 @@ POWER_P = 2.0
 FINE_CUTOFF = 9
 STEP_SIZE = 20
 
+PREPROCESS = "tanh" # linear or tanh
+
 # MODELS_PATH = 'controlnet_v2_inference_v2/'
 # MODELS_PATH = 'controlnet_v3'
 # MODELS_PATH = 'controlnet_from_unet_trained_after_joint'
@@ -51,21 +53,58 @@ def assert_no_nan(tensor: torch.Tensor, name: str):
 # Dataset for CBCT slices
 # ------------------------
 class CBCTDatasetNPY(Dataset):
-    def __init__(self, volume_dir: str, transform=None):
+    def __init__(self, volume_dir: str, transform=None, preprocess="linear"):
         self.files = sorted([f for f in os.listdir(volume_dir) if f.endswith('.npy')])
         self.volume_dir = volume_dir
         self.transform = transform
+        assert preprocess in ["linear", "tanhh"]
+        self.preprocess = preprocess
+        print("using preprocess:", preprocess)
 
     def __len__(self):
         return len(self.files)
 
     def __getitem__(self, idx):
         fname = self.files[idx]
-        arr = np.load(os.path.join(self.volume_dir, fname)).astype(np.float32) / 1000.0
+        arr = np.load(os.path.join(self.volume_dir, fname)).astype(np.float32)
+
+         if self.preprocess == "linear":
+            arr /= 1000.0
+        elif self.preprocess == "tanh":
+            # apply a "soft window" around ±150 HU:
+            #  - inside ±150 HU it's almost linear (tanh(x/150) ≈ x/150 for |x|≲100),
+            #  - beyond ±150 HU things smoothly compress toward ±1.
+            arr = np.tanh(arr / 150.0)
+
         tensor = torch.from_numpy(arr).unsqueeze(0)
         if self.transform:
             tensor = self.transform(tensor)
         return fname, tensor
+
+def postprocess_linear(CT):
+    """
+    Scale and clip CT Hounsfield units for visualization.
+    """
+    scaled = torch.round(CT * 1000)
+    clipped = torch.clamp(scaled, -1000, 1000)
+    return clipped.cpu().numpy()
+
+def postprocess_tanh(CT, eps: float = 1e-4):
+    """
+    Invert tanh-based preprocessing (tanh(HU/150)) and
+    prepare for display (round + clip to [-1000, 1000]).
+    """
+    # 1. Clamp into (–1,1) so atanh stays finite
+    x = torch.clamp(CT, -1 + eps, 1 - eps)
+
+    # 2. Inverse tanh via torch.atanh, then rescale
+    hu = torch.atanh(x) * 150.0
+
+    # 3. Round to integer HUs and clamp to [-1000,1000]
+    hu = torch.round(hu)
+    hu = torch.clamp(hu, -1000.0, 1000.0)
+
+    return hu.cpu().numpy().astype(np.float32)
 
 # ------------------------
 # Schedule Helpers
@@ -150,7 +189,12 @@ def predict_volume(
             gen = vae.decode(z)
             assert_no_nan(gen, "decoder output")
 
-        out_np = gen.cpu().numpy() * 1000.0
+        if PREPROCESS = "linear":
+            out_np = postprocess_linear(gen)
+        elif PREPROCESS = "tanh":
+            out_np = postprocess_tanh(gen)
+        else:
+            raise Exception("incorrect preprocess:", PREPROCESS)
         for i, fname in enumerate(names):
             np.save(os.path.join(save_dir, fname), out_np[i].squeeze(0))
 
@@ -188,7 +232,7 @@ def predict_clinic():
     controlnet = load_controlnet(CONTROLNET_SAVE_PATH)
     dr_module  = load_degradation_removal(DEGRADATION_REMOVAL_SAVE_PATH)
 
-    ds     = CBCTDatasetNPY(CBCT_CLINIC_DIR, clinic_transform)
+    ds     = CBCTDatasetNPY(CBCT_CLINIC_DIR, clinic_transform, preprocess=PREPROCESS)
     loader = DataLoader(ds, batch_size=BATCH_SIZE, num_workers=4, pin_memory=True)
     print("ready to predict for:", CBCT_CLINIC_DIR)
     predict_volume(vae, unet, controlnet, dr_module, loader, OUT_DIR, GUIDANCE_SCALE)

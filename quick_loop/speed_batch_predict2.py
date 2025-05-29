@@ -57,7 +57,7 @@ class CBCTDatasetNPY(Dataset):
         self.files = sorted([f for f in os.listdir(volume_dir) if f.endswith('.npy')])
         self.volume_dir = volume_dir
         self.transform = transform
-        assert preprocess in ["linear", "tanhh"]
+        assert preprocess in ["linear", "tanh"]
         self.preprocess = preprocess
         print("using preprocess:", preprocess)
 
@@ -218,7 +218,7 @@ def predict_test_data():
     for vol in VOLUME_INDICES:
         cbct_folder = os.path.join(CBCT_DIR, f"volume-{vol}")
         save_folder = os.path.join(OUT_DIR, f"volume-{vol}")
-        ds     = CBCTDatasetNPY(cbct_folder, transform)
+        ds     = CBCTDatasetNPY(cbct_folder, transform, preprocess=PREPROCESS)
         loader = DataLoader(ds, batch_size=BATCH_SIZE, num_workers=4, pin_memory=True)
         predict_volume(vae, unet, controlnet, dr_module, loader, save_folder, GUIDANCE_SCALE)
     print("All volumes processed.")

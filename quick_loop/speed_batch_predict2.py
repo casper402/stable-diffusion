@@ -19,7 +19,7 @@ PREDICT_CLINIC = False
 CBCT_DIR = '../training_data/scaled-490/'
 CBCT_CLINIC_DIR = '../training_data/clinic/'
 VOLUME_INDICES = [3, 8, 12, 26, 32, 33, 35, 54, 59, 61, 106, 116, 129]
-OUT_DIR = '../predictions_tanh_v1/'
+OUT_DIR = '../predictions_tanh_v2/'
 
 GUIDANCE_SCALE = 1.0
 ALPHA_A = 0.2         # Mixing weight for CBCT signal at t0
@@ -95,7 +95,8 @@ def postprocess_tanh(CT, eps: float = 1e-4):
     prepare for display (round + clip to [-1000, 1000]).
     """
     # 1. Clamp into (–1,1) so atanh stays finite
-    x = torch.clamp(CT, -1 + eps, 1 - eps)
+    # x = torch.clamp(CT, -1 + eps, 1 - eps)
+    x = torch.clamp(CT, -1, 1)
 
     # 2. Inverse tanh via torch.atanh, then rescale
     hu = torch.atanh(x) * 150.0

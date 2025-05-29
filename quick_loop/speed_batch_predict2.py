@@ -189,9 +189,9 @@ def predict_volume(
             gen = vae.decode(z)
             assert_no_nan(gen, "decoder output")
 
-        if PREPROCESS = "linear":
+        if PREPROCESS == "linear":
             out_np = postprocess_linear(gen)
-        elif PREPROCESS = "tanh":
+        elif PREPROCESS == "tanh":
             out_np = postprocess_tanh(gen)
         else:
             raise Exception("incorrect preprocess:", PREPROCESS)

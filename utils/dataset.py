@@ -275,6 +275,70 @@ class PairedCTCBCTDatasetNPY(Dataset):
             cbct = F.affine(cbct, *affine_params, interpolation=InterpolationMode.BILINEAR, fill=-1)
 
         return ct, cbct
+        
+class PairedCTCBCTDatasetNPY2(Dataset):
+    def __init__(self, manifest_csv: str, split: str, augmentation=None, preprocess="linear"):
+        self.df = pd.read_csv(manifest_csv)
+        self.df = self.df[self.df['split'] == split].reset_index(drop=True)
+        self.base_transform = transforms.Compose([
+            transforms.Pad((0, 64, 0, 64), fill=-1),
+            transforms.Resize((256, 256)),
+        ])
+        self.augmentation = augmentation
+
+        assert preprocess in ["linear", "tanh"]
+        print("Using preprocessing:", preprocess)
+        self.preprocess = preprocess
+
+        print("using dataset2!")
+
+    def __len__(self):
+        return len(self.df)
+
+    def __getitem__(self, idx):
+        row = self.df.iloc[idx]
+
+        ct = np.load(row['ct_path']).astype(np.float32)
+
+        # randomly choose 256 vs 490 CBCT
+        size = random.choice([256, 490])
+        cbct_path = row[f'cbct_{size}_path']
+        cbct = np.load(cbct_path).astype(np.float32)
+
+        if self.preprocess == "linear":
+            ct /= 1000.0
+            cbct /= 1000.0
+        elif self.preprocess == "tanh":
+            # apply a "soft window" around ±150 HU:
+            #  - inside ±150 HU it's almost linear (tanh(x/150) ≈ x/150 for |x|≲100),
+            #  - beyond ±150 HU things smoothly compress toward ±1.
+            ct1 = np.tanh(ct / 150.0)
+            ct2 = np.tanh(ct / 350.0)
+            cbct = np.tanh(cbct / 350.0)
+
+        ct1 = torch.from_numpy(ct1).unsqueeze(0)
+        ct2 = torch.from_numpy(ct2).unsqueeze(0)
+        cbct = torch.from_numpy(cbct).unsqueeze(0)
+
+        if self.base_transform:
+            ct1   = self.base_transform(ct1)
+            ct2   = self.base_transform(ct2)
+            cbct = self.base_transform(cbct)
+
+        if self.augmentation:
+            img_size = F.get_image_size(ct1)
+            affine_params = transforms.RandomAffine.get_params(
+                degrees = self.augmentation.get('degrees', 0),
+                translate = self.augmentation.get('translate', None),
+                scale_ranges = self.augmentation.get('scale', None),
+                shears = self.augmentation.get('shear', None),
+                img_size = img_size
+            )
+            ct1 = F.affine(ct1, *affine_params, interpolation=InterpolationMode.BILINEAR, fill=-1)
+            ct2 = F.affine(ct2, *affine_params, interpolation=InterpolationMode.BILINEAR, fill=-1)
+            cbct = F.affine(cbct, *affine_params, interpolation=InterpolationMode.BILINEAR, fill=-1)
+
+        return ct1, ct2, cbct
     
 class PairedCTCBCTSegmentationDatasetNPY(Dataset):
     def __init__(self, manifest_csv: str, split: str, augmentation=None, preprocess="linear"):

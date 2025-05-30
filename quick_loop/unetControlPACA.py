@@ -271,6 +271,7 @@ def train_dr_control_paca(
             for ct_img, ct2_img, cbct_img in val_loader:
                 cbct_img = cbct_img.to(device)
                 ct_img = ct_img.to(device)
+                ct2_img = ct2_img.to(device)
 
                 ct_mu, ct_logvar = vae.encode(ct_img)
                 z_ct = vae.reparameterize(ct_mu, ct_logvar)

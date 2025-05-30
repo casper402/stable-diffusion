@@ -3,7 +3,7 @@ os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:128"
 import torch
 import torchvision
 
-from utils.dataset import get_dataloaders, CTDatasetNPY, PairedCTCBCTDatasetNPY
+from utils.dataset import get_dataloaders, CTDatasetNPY, PairedCTCBCTDatasetNPY, PairedCTCBCTDatasetNPY2
 from models.diffusion import Diffusion
 from quick_loop.vae import load_vae, train_vae
 from quick_loop.unet import load_unet, train_unet, train_unet_v2, train_joint, train_joint_v2
@@ -183,7 +183,7 @@ unet = load_unet_control_paca(unet_save_path=load_unet_path, paca_save_path=load
 controlnet = load_controlnet(save_path=load_controlnet_path, trainable=True)
 dr_module = load_degradation_removal(save_path=load_degradation_removal_path, trainable=True)
 
-train_loader, val_loader, test_loader = get_dataloaders(manifest_path, batch_size=batch_size, num_workers=num_workers, dataset_class=PairedCTCBCTDatasetNPY, train_size=train_size, val_size=val_size, test_size=test_size, augmentation=augmentation, preprocess=preprocess)
+train_loader, val_loader, test_loader = get_dataloaders(manifest_path, batch_size=batch_size, num_workers=num_workers, dataset_class=PairedCTCBCTDatasetNPY2, train_size=train_size, val_size=val_size, test_size=test_size, augmentation=augmentation, preprocess=preprocess)
 train_dr_control_paca(
     vae=vae, 
     unet=unet, 

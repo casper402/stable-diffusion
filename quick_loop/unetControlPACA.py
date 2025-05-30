@@ -221,9 +221,10 @@ def train_dr_control_paca(
         train_loss_diff = 0
         train_loss_dr = 0
 
-        for i, (ct_img, cbct_img) in enumerate(train_loader):
+        for i, (ct_img, ct2_img, cbct_img) in enumerate(train_loader):
             cbct_img = cbct_img.to(device)
             ct_img = ct_img.to(device)
+            ct2_img = ct2_img.to(device)
 
             optimizer.zero_grad()
 
@@ -240,7 +241,7 @@ def train_dr_control_paca(
             pred_noise = unet(z_noisy_ct, t, down_res_samples, middle_res_sample)
 
             # Compute losses
-            loss_dr = degradation_loss(intermediate_preds, ct_img)
+            loss_dr = degradation_loss(intermediate_preds, ct2_img)
             loss_diff = noise_loss(pred_noise, noise)
             total_loss = loss_diff + gamma * loss_dr
 
@@ -268,7 +269,7 @@ def train_dr_control_paca(
         val_generator = torch.Generator(device=device).manual_seed(42)
 
         with torch.no_grad():
-            for ct_img, cbct_img in val_loader:
+            for ct_img, ct2_img, cbct_img in val_loader:
                 cbct_img = cbct_img.to(device)
                 ct_img = ct_img.to(device)
 
@@ -277,7 +278,7 @@ def train_dr_control_paca(
 
                 controlnet_input, intermediate_preds = dr_module(cbct_img)
 
-                loss_dr = degradation_loss(intermediate_preds, ct_img)
+                loss_dr = degradation_loss(intermediate_preds, ct2_img)
 
                 t = diffusion.sample_timesteps(z_ct.size(0), generator=val_generator)
                 noise = torch.randn(

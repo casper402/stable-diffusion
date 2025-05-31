@@ -19,20 +19,20 @@ test_size = 10
 batch_size = 16
 num_workers = 8
 epochs = 2000
-early_stopping = 60
-patience = 20
+early_stopping = 50
+patience = 10
 epochs_between_prediction = 10
 base_channels = 256
-dropout_rate = 0.1
-learning_rate = 5e-6
+dropout_rate = 0.0
+learning_rate = 5e-5
 warmup_lr = 0
 warmup_epochs = 0
 
 # Augmentation
 augmentation = {
     'degrees': (-1, 1),
-    'translate': (0.05, 0.05),
-    'scale': (0.95, 1.05),
+    'translate': (0.10, 0.10),
+    'scale': (0.90, 1.10),
     'shear': None,
 }
 #augmentation = None
@@ -59,7 +59,7 @@ vae_predict_dir = os.path.join(save_dir, "vae_predictions")
 unet_predict_dir = os.path.join(save_dir, "unet_predictions")
 conditional_predict_dir = os.path.join(save_dir, "conditional_predictions")
 vae_save_path = os.path.join(save_dir, "vae.pth")
-unet_save_path = os.path.join(save_dir, "unet_fine_tune.pth")
+unet_save_path = os.path.join(save_dir, "unet_v2.pth")
 controlnet_save_path = os.path.join(save_dir, "segmentation_controlnet.pth")
 paca_layers_save_path = os.path.join(save_dir, "paca_layers.pth")
 dr_module_save_path = os.path.join(save_dir, "segmentation_dr_module.pth")

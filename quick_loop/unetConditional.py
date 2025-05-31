@@ -359,10 +359,11 @@ def train_cond_unet(
             train_loss += loss.item()
 
         train_loss /= len(train_loader)
-
+        
         # Validation
         unet.eval()
         val_loss = 0
+        val_generator = torch.Generator(device=device).manual_seed(42)
         with torch.no_grad():
             for (ct, cbct) in val_loader:
                 ct = ct.to(device)
@@ -374,7 +375,7 @@ def train_cond_unet(
                 cbct_z_mu, cbct_z_logvar = vae.encode(cbct)
                 cbct_z = vae.reparameterize(cbct_z_mu, cbct_z_logvar)
 
-                t = diffusion.sample_timesteps(ct_z.size(0))
+                t = diffusion.sample_timesteps(ct_z.size(0), generator=val_generator)
                 noise = torch.randn_like(ct_z)
                 ct_z_noisy = diffusion.add_noise(ct_z, t, noise)
                 pred_noise = unet(ct_z_noisy, cbct_z, t)

@@ -32,7 +32,7 @@ POWER_P = 2.0         # power-law exponent for smoothing
 FINE_CUTOFF = 9       # switch to single-step updates at t<=9 (last 10 steps)
 STEP_SIZE = 20
 
-MODELS_PATH = 'cond_unet_cross_attention'
+MODELS_PATH = 'unet_concat'
 SEGMENTATION_PATH = 'segmentation_controlnet_new_loss'
 VAE_SAVE_PATH = os.path.join(MODELS_PATH, 'vae.pth')
 UNET_SAVE_PATH = os.path.join(MODELS_PATH, 'unet_v2.pth')

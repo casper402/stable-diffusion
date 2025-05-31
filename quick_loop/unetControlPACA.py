@@ -869,6 +869,8 @@ def train_segmentation_control(
         val_diff_loss = 0
         val_global_mse_loss = 0
 
+        val_generator = torch.Generator(device=device).manual_seed(42)
+
         with torch.no_grad():
             for i, (ct, cbct, segmentation, liver, tumor) in enumerate(val_loader):
                 cbct_img = cbct.to(device)
@@ -880,7 +882,7 @@ def train_segmentation_control(
                 ct_mu, ct_logvar = vae.encode(ct_img)
                 z_ct = vae.reparameterize(ct_mu, ct_logvar)
 
-                t = diffusion.sample_timesteps(z_ct.size(0))
+                t = diffusion.sample_timesteps(z_ct.size(0), val_generator)
                 noise = torch.randn_like(z_ct)
                 z_noisy_ct = diffusion.add_noise(z_ct, t, noise=noise)
 
@@ -944,8 +946,8 @@ def train_segmentation_control(
         if avg_val_loss_total < best_val_loss:
             best_val_loss = avg_val_loss_total
             early_stopping_counter = 0
-            torch.save(controlnet_seg.state_dict(), os.path.join(save_dir, "controlnet_seg.pth"))
-            torch.save(dr_module_seg.state_dict(), os.path.join(save_dir, "dr_module_seg.pth"))
+            torch.save(controlnet_seg.state_dict(), os.path.join(save_dir, "controlnet_seg_v2.pth"))
+            torch.save(dr_module_seg.state_dict(), os.path.join(save_dir, "dr_module_seg_v2.pth"))
             print(f"✅ Saved new best models at epoch {epoch+1} with val loss {avg_val_loss_total:.6f}")
 
         if early_stopping and early_stopping_counter >= early_stopping:

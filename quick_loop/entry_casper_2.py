@@ -20,10 +20,10 @@ batch_size = 4
 num_workers = 8
 epochs = 2000
 early_stopping = 50
-patience = 15
+patience = 10
 epochs_between_prediction = 10
 base_channels = 256
-dropout_rate = 0.1
+dropout_rate = 0.0
 learning_rate = 5e-5
 warmup_lr = 0
 warmup_epochs = 0
@@ -51,6 +51,9 @@ load_unet_path = os.path.join(load_dir, "unet_joint_unet.pth")
 load_dr_module_path = os.path.join(load_dir, "dr_module.pth")
 load_controlnet_path = os.path.join(load_dir, "controlnet.pth")
 load_paca_layers_path = os.path.join(load_dir, "paca_layers.pth")
+load_dir_2 = "segmentation_v7"
+load_dr_module_seg_path = os.path.join(load_dir_2, "dr_module_seg.pth")
+load_controlnet_seg_path = os.path.join(load_dir_2, "controlnet_seg.pth")
 
 # Save prediction / model directories
 save_dir = "segmentation_v7"
@@ -60,9 +63,9 @@ unet_predict_dir = os.path.join(save_dir, "unet_predictions")
 conditional_predict_dir = os.path.join(save_dir, "conditional_predictions")
 vae_save_path = os.path.join(save_dir, "joint_vae_v2.pth")
 unet_save_path = os.path.join(save_dir, "joint_unet_v2.pth")
-controlnet_save_path = os.path.join(save_dir, "segmentation_controlnet.pth")
+controlnet_save_path = os.path.join(save_dir, "controlnet_seg_v2.pth")
 paca_layers_save_path = os.path.join(save_dir, "paca_layers.pth")
-dr_module_save_path = os.path.join(save_dir, "segmentation_dr_module.pth")
+dr_module_save_path = os.path.join(save_dir, "dr_module_seg_v2.pth")
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
@@ -201,8 +204,8 @@ vae = load_vae(load_vae_path)
 unet = load_unet_control_paca(load_unet_path, load_paca_layers_path)
 controlnet_cbct = load_controlnet(load_controlnet_path)
 dr_module_cbct = load_degradation_removal(load_dr_module_path)
-controlnet_seg = load_controlnet(load_unet_path, True)
-dr_module_seg = load_degradation_removal(None, True)
+controlnet_seg = load_controlnet(load_controlnet_seg_path, True)
+dr_module_seg = load_degradation_removal(load_dr_module_seg_path, True)
 train_loader, val_loader, test_loader = get_dataloaders(manifest_path, batch_size=batch_size, num_workers=num_workers, dataset_class=PairedCTCBCTSegmentationDatasetNPY, train_size=train_size, val_size=val_size, test_size=test_size, augmentation=augmentation)
 train_segmentation_control(
     vae=vae, 

@@ -209,6 +209,7 @@ def train_dr_control_paca(
 
     # --- Training Loop ---
     best_val_loss = float('inf')
+    best_val_loss_diff = float('inf')
     early_stopping_counter = 0
 
     optimizer.zero_grad()
@@ -322,6 +323,20 @@ def train_dr_control_paca(
             if paca_state_dict: # Save only if PACA layers exist
                 torch.save(paca_state_dict, os.path.join(save_dir, "paca_layers.pth"))
                 print(f"✅ Saved new best ControlNet+PACA model at epoch {epoch+1} with val loss {avg_val_loss_total:.6f}")
+            else:
+                print(f"✅ Saved new best ControlNet+DR model (no PACA found/saved) at epoch {epoch+1} with val loss {avg_val_loss_total:.6f}")
+
+        if avg_val_loss_diff < best_val_loss_diff:
+            best_val_loss_diff = avg_val_loss_diff
+            early_stopping_counter = 0
+            
+            torch.save(controlnet.state_dict(), os.path.join(save_dir, "controlnet_diff.pth"))
+            torch.save(dr_module.state_dict(), os.path.join(save_dir, "dr_module_diff.pth"))
+            # Save only PACA layer parameters from UNet
+            paca_state_dict = {k: v for k, v in unet.state_dict().items() if 'paca' in k.lower()}
+            if paca_state_dict: # Save only if PACA layers exist
+                torch.save(paca_state_dict, os.path.join(save_dir, "paca_layers_diff.pth"))
+                print(f"✅ Saved new best ControlNet+PACA diff model at epoch {epoch+1} with val loss {avg_val_loss_total:.6f}")
             else:
                 print(f"✅ Saved new best ControlNet+DR model (no PACA found/saved) at epoch {epoch+1} with val loss {avg_val_loss_total:.6f}")
 

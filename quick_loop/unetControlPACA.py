@@ -88,6 +88,7 @@ class UNetControlPaca(nn.Module):
             down_res_3_2 += extra_additional_down_res_3_2
             down_res_4_1 += extra_additional_down_res_4_1
             down_res_4_2 += extra_additional_down_res_4_2
+            middle_paca_control_residual += middle_control_residual
 
         h = self.middle(h, t_emb)
 

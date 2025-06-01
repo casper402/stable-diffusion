@@ -149,7 +149,7 @@ def load_unet_concat_control_paca(unet_save_path=None, paca_save_path=None, unet
 
     return unetConcatControlPACA
 
-def train_dr_control_paca(
+def train_unet_concat_control_paca(
     vae, 
     unet, 
     controlnet, 

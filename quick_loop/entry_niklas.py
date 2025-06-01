@@ -30,7 +30,7 @@ warmup_lr = 1e-8
 warmup_epochs = 5
 
 # Load pretrained model paths
-load_dir = "non-linear-vae-controlnet-4"
+load_dir = "non-linear-vae-controlnet-5"
 load_vae_path = os.path.join(load_dir, "vae_joint_vae_nonlinear.pth")
 load_unet_path = os.path.join(load_dir, "unet_joint_unet_nonlinear.pth")
 load_controlnet_path = os.path.join(load_dir, "controlnet.pth")
@@ -39,7 +39,7 @@ load_degradation_removal_path = os.path.join(load_dir, "dr_module.pth")
 
 # Save prediction / model directories
 # save_dir = "controlnet_v2"
-save_dir = "non-linear-vae-controlnet-4"
+save_dir = "non-linear-vae-controlnet-5"
 os.makedirs(save_dir, exist_ok=True)
 vae_predict_dir = os.path.join(save_dir, "vae_predictions")
 unet_predict_dir = os.path.join(save_dir, "unet_predictions")

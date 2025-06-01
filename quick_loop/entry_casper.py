@@ -48,7 +48,7 @@ l1_weight=0
 # Load pretrained model paths
 load_dir = "../best_model_v7"
 load_vae_path = os.path.join(load_dir, "vae_joint_vae.pth")
-load_dir = "unet_concatenation"
+load_dir = "unet_concat"
 load_unet_path = os.path.join(load_dir, "unet_v2.pth")
 load_dr_module_path = os.path.join(load_dir, "dr_module.pth")
 load_controlnet_path = os.path.join(load_dir, "controlnet.pth")
@@ -200,7 +200,7 @@ unet = load_unet_concat_control_paca(unet_save_path=load_unet_path, paca_trainab
 controlnet = load_controlnet(trainable=True)
 dr_module = load_degradation_removal(trainable=True)
 train_loader, val_loader, test_loader = get_dataloaders(manifest_path, batch_size=batch_size, num_workers=num_workers, dataset_class=PairedCTCBCTDatasetNPY, train_size=train_size, val_size=val_size, test_size=test_size, augmentation=augmentation)
-train_dr_control_paca(
+train_unet_concat_control_paca(
     vae=vae, 
     unet=unet, 
     controlnet=controlnet, 

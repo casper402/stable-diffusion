@@ -278,6 +278,9 @@ def train_unet_concat_control_paca(
                 ct_mu, ct_logvar = vae.encode(ct_img)
                 z_ct = vae.reparameterize(ct_mu, ct_logvar)
 
+                cbct_z_mu, cbct_z_logvar = vae.encode(cbct_img)
+                cbct_z = vae.reparameterize(cbct_z_mu, cbct_z_logvar)
+
                 controlnet_input, intermediate_preds = dr_module(cbct_img)
 
                 loss_dr = degradation_loss(intermediate_preds, ct_img)
@@ -292,7 +295,7 @@ def train_unet_concat_control_paca(
                 z_noisy_ct = diffusion.add_noise(z_ct, t, noise=noise)
 
                 down_res_samples, middle_res_sample = controlnet(z_noisy_ct, controlnet_input, t)
-                pred_noise = unet(z_noisy_ct, t, down_res_samples, middle_res_sample)
+                pred_noise = unet(z_noisy_ct, cbct_z, t, down_res_samples, middle_res_sample)
 
                 loss_diff = noise_loss(pred_noise, noise)
                 total_loss = loss_diff + gamma * loss_dr

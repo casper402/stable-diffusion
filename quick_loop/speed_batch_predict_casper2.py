@@ -32,7 +32,7 @@ POWER_P = 2.0         # power-law exponent for smoothing
 FINE_CUTOFF = 9       # switch to single-step updates at t<=9 (last 10 steps)
 STEP_SIZE = 20
 
-MODELS_PATH = '../best_models_v7'
+MODELS_PATH = '../best_model_v7'
 VAE_SAVE_PATH = os.path.join(MODELS_PATH, 'vae_joint_vae.pth')
 UNET_SAVE_PATH = os.path.join(MODELS_PATH, 'unet_joint_unet.pth')
 CONTROLNET_SAVE_PATH = os.path.join(MODELS_PATH, 'controlnet.pth')
@@ -363,7 +363,14 @@ if __name__ == '__main__':
     for vol in VOLUME_INDICES:
         cbct_folder = os.path.join(CBCT_DIR, f"volume-{vol}")
         save_folder = os.path.join(OUT_DIR, f"volume-{vol}")
-        ds = CBCTDatasetNPY(cbct_folder, transform)
+        # ds = CBCTDatasetNPY(cbct_folder, transform)
+        ds = CBCTSegmentationDatasetNPY(
+            cbct_dir=cbct_folder,
+            tumor_dir=os.path.join(TUMOR_DIR, f"volume-{vol}"),
+            liver_dir=os.path.join(LIVER_DIR, f"volume-{vol}"),
+            cbct_transform=transform,
+            seg_transform=seg_transform
+        )
         loader = DataLoader(ds, batch_size=BATCH_SIZE, num_workers=4, pin_memory=True)
         segmentation_predict_volume(vae, unet, controlnet, dr_module, controlnet_seg, dr_module_seg, loader, save_folder, GUIDANCE_SCALE)
         #conditional_unet_predict_volume(vae, unet, loader, save_folder, GUIDANCE_SCALE)

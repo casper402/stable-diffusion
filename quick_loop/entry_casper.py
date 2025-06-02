@@ -50,6 +50,7 @@ load_dir = "../best_model_v7"
 load_vae_path = os.path.join(load_dir, "vae_joint_vae.pth")
 load_dir = "unet_concat"
 load_unet_path = os.path.join(load_dir, "unet_v2.pth")
+load_dir = "unet_concat_control_paca"
 load_dr_module_path = os.path.join(load_dir, "dr_module.pth")
 load_controlnet_path = os.path.join(load_dir, "controlnet.pth")
 load_paca_layers_path = os.path.join(load_dir, "paca_layers.pth")
@@ -62,9 +63,9 @@ unet_predict_dir = os.path.join(save_dir, "unet_predictions")
 conditional_predict_dir = os.path.join(save_dir, "conditional_predictions")
 vae_save_path = os.path.join(save_dir, "vae.pth")
 unet_save_path = os.path.join(save_dir, "unet.pth")
-controlnet_save_path = os.path.join(save_dir, "controlnet.pth")
-paca_layers_save_path = os.path.join(save_dir, "paca_layers.pth")
-dr_module_save_path = os.path.join(save_dir, "dr_module.pth")
+controlnet_save_path = os.path.join(save_dir, "controlnet_v2.pth")
+paca_layers_save_path = os.path.join(save_dir, "paca_layers_v2.pth")
+dr_module_save_path = os.path.join(save_dir, "dr_module_v2.pth")
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
@@ -196,9 +197,9 @@ manifest_path = "../training_data/manifest-filtered.csv"
 
 # --- UNet Concatenation ControlNet ---
 vae = load_vae(load_vae_path, trainable=False)
-unet = load_unet_concat_control_paca(unet_save_path=load_unet_path, paca_trainable=True)
-controlnet = load_controlnet(trainable=True)
-dr_module = load_degradation_removal(trainable=True)
+unet = load_unet_concat_control_paca(unet_save_path=load_unet_path, paca_save_path=load_paca_layers_path, paca_trainable=True)
+controlnet = load_controlnet(load_controlnet_path, trainable=True)
+dr_module = load_degradation_removal(load_dr_module_path, trainable=True)
 train_loader, val_loader, test_loader = get_dataloaders(manifest_path, batch_size=batch_size, num_workers=num_workers, dataset_class=PairedCTCBCTDatasetNPY, train_size=train_size, val_size=val_size, test_size=test_size, augmentation=augmentation)
 train_unet_concat_control_paca(
     vae=vae, 

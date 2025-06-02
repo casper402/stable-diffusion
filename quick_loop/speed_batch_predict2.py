@@ -19,7 +19,7 @@ PREDICT_CLINIC = False
 CBCT_DIR = '../training_data/scaled-490/'
 CBCT_CLINIC_DIR = '../training_data/clinic/'
 VOLUME_INDICES = [3, 8, 12, 26, 32, 33, 35, 54, 59, 61, 106, 116, 129]
-OUT_DIR = '../predictions_tanh_v3/'
+OUT_DIR = '../predictions_tanh_v5/'
 
 GUIDANCE_SCALE = 1.0
 ALPHA_A = 0.2         # Mixing weight for CBCT signal at t0
@@ -36,7 +36,7 @@ PREPROCESS = "tanh" # linear or tanh
 # MODELS_PATH = 'controlnet_from_unet_trained_after_joint'
 # MODELS_PATH = 'controlnet_v4'
 # MODELS_PATH = 'non-linear-vae-controlnet'
-MODELS_PATH = 'non-linear-vae-controlnet-2'
+MODELS_PATH = 'non-linear-vae-controlnet-5'
 VAE_SAVE_PATH = os.path.join(MODELS_PATH, 'vae_joint_vae_nonlinear.pth')
 UNET_SAVE_PATH = os.path.join(MODELS_PATH, 'unet_joint_unet_nonlinear.pth')
 PACA_LAYERS_SAVE_PATH = os.path.join(MODELS_PATH, 'paca_layers.pth')
@@ -75,7 +75,7 @@ class CBCTDatasetNPY(Dataset):
             # apply a "soft window" around ±150 HU:
             #  - inside ±150 HU it's almost linear (tanh(x/150) ≈ x/150 for |x|≲100),
             #  - beyond ±150 HU things smoothly compress toward ±1.
-            arr = np.tanh(arr / 150.0)
+            arr = np.tanh(arr / 350.0)
 
         tensor = torch.from_numpy(arr).unsqueeze(0)
         if self.transform:

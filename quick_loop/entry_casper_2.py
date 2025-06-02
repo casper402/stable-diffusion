@@ -24,18 +24,18 @@ patience = 10
 epochs_between_prediction = 10
 base_channels = 256
 dropout_rate = 0.0
-learning_rate = 5e-5
+learning_rate = 1e-5
 warmup_lr = 0
 warmup_epochs = 0
 
 # Augmentation
-# augmentation = {
-#     'degrees': (-1, 1),
-#     'translate': (0.05, 0.05),
-#     'scale': (0.95, 1.05),
-#     'shear': None,
-# }
-augmentation = None
+augmentation = {
+    'degrees': (-1, 1),
+    'translate': (0.10, 0.10),
+    'scale': (0.90, 1.10),
+    'shear': None,
+}
+# augmentation = None
 
 # Vae Loss params
 perceptual_weight=0.05
@@ -52,8 +52,8 @@ load_dr_module_path = os.path.join(load_dir, "dr_module.pth")
 load_controlnet_path = os.path.join(load_dir, "controlnet.pth")
 load_paca_layers_path = os.path.join(load_dir, "paca_layers.pth")
 load_dir_2 = "segmentation_v7"
-load_dr_module_seg_path = os.path.join(load_dir_2, "dr_module_seg.pth")
-load_controlnet_seg_path = os.path.join(load_dir_2, "controlnet_seg.pth")
+load_dr_module_seg_path = os.path.join(load_dir_2, "dr_module_seg_v2.pth")
+load_controlnet_seg_path = os.path.join(load_dir_2, "controlnet_seg_v2.pth")
 
 # Save prediction / model directories
 save_dir = "segmentation_v7"
@@ -63,9 +63,9 @@ unet_predict_dir = os.path.join(save_dir, "unet_predictions")
 conditional_predict_dir = os.path.join(save_dir, "conditional_predictions")
 vae_save_path = os.path.join(save_dir, "joint_vae_v2.pth")
 unet_save_path = os.path.join(save_dir, "joint_unet_v2.pth")
-controlnet_save_path = os.path.join(save_dir, "controlnet_seg_v2.pth")
+controlnet_save_path = os.path.join(save_dir, "controlnet_seg_v3.pth")
 paca_layers_save_path = os.path.join(save_dir, "paca_layers.pth")
-dr_module_save_path = os.path.join(save_dir, "dr_module_seg_v2.pth")
+dr_module_save_path = os.path.join(save_dir, "dr_module_seg_v3.pth")
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")

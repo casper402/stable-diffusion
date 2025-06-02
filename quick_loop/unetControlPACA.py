@@ -914,7 +914,7 @@ def train_segmentation_control(
                 liver_mse_loss = mse_losses_output_val[0]
                 tumor_mse_loss = mse_losses_output_val[1]
 
-                total_loss = diff_loss + (liver_mse_loss + tumor_mse_loss) * 100
+                total_loss = diff_loss + (liver_mse_loss + 5*tumor_mse_loss) * 100
 
                 val_liver_mse_loss += liver_mse_loss.item()
                 val_tumor_mse_loss += tumor_mse_loss.item()
@@ -947,8 +947,8 @@ def train_segmentation_control(
         if avg_val_loss_total < best_val_loss:
             best_val_loss = avg_val_loss_total
             early_stopping_counter = 0
-            torch.save(controlnet_seg.state_dict(), os.path.join(save_dir, "controlnet_seg_v2.pth"))
-            torch.save(dr_module_seg.state_dict(), os.path.join(save_dir, "dr_module_seg_v2.pth"))
+            torch.save(controlnet_seg.state_dict(), os.path.join(save_dir, "controlnet_seg_3.pth"))
+            torch.save(dr_module_seg.state_dict(), os.path.join(save_dir, "dr_module_seg_v3.pth"))
             print(f"✅ Saved new best models at epoch {epoch+1} with val loss {avg_val_loss_total:.6f}")
 
         if early_stopping and early_stopping_counter >= early_stopping:

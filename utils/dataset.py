@@ -286,7 +286,7 @@ class PairedCTCBCTSegmentationDatasetNPY(Dataset):
         ])
         self.mask_transform = transforms.Compose([
             transforms.Pad((0, 64, 0, 64), fill=0),
-            transforms.Resize((256, 256), interpolation=InterpolationMode.NEAREST_EXACT),
+            transforms.Resize((256, 256), interpolation=InterpolationMode.NEAREST),
         ])
         self.augmentation = augmentation
 
@@ -339,9 +339,9 @@ class PairedCTCBCTSegmentationDatasetNPY(Dataset):
             )
             ct = F.affine(ct, *affine_params, interpolation=transforms.InterpolationMode.BILINEAR, fill=-1)
             cbct = F.affine(cbct, *affine_params, interpolation=transforms.InterpolationMode.BILINEAR, fill=-1)
-            segmentation_map = F.affine(segmentation_map, *affine_params, interpolation=transforms.InterpolationMode.NEAREST_EXACT, fill=0)
-            liver = F.affine(liver, *affine_params, interpolation=transforms.InterpolationMode.NEAREST_EXACT, fill=0)
-            tumor = F.affine(tumor, *affine_params, interpolation=transforms.InterpolationMode.NEAREST_EXACT, fill=0)
+            segmentation_map = F.affine(segmentation_map, *affine_params, interpolation=transforms.InterpolationMode.NEAREST, fill=0)
+            liver = F.affine(liver, *affine_params, interpolation=transforms.InterpolationMode.NEAREST, fill=0)
+            tumor = F.affine(tumor, *affine_params, interpolation=transforms.InterpolationMode.NEAREST, fill=0)
 
         return ct, cbct, segmentation_map, liver, tumor
     
@@ -351,7 +351,7 @@ class SegmentationMaskDatasetNPY(Dataset):
         self.df = self.df[self.df['split'] == split].reset_index(drop=True)
         self.mask_transform = transforms.Compose([
             transforms.Pad((0, 64, 0, 64), fill=0),
-            transforms.Resize((256, 256), interpolation=InterpolationMode.NEAREST_EXACT),
+            transforms.Resize((256, 256), interpolation=InterpolationMode.NEAREST),
         ])
         self.augmentation = augmentation
 
@@ -385,9 +385,9 @@ class SegmentationMaskDatasetNPY(Dataset):
                 img_size=img_size
             )
 
-            segmentation_map = F.affine(segmentation_map, *affine_params, interpolation=InterpolationMode.NEAREST_EXACT, fill=0)
-            liver = F.affine(liver, *affine_params, interpolation=InterpolationMode.NEAREST_EXACT, fill=0)
-            tumor = F.affine(tumor, *affine_params, interpolation=InterpolationMode.NEAREST_EXACT, fill=0)
+            segmentation_map = F.affine(segmentation_map, *affine_params, interpolation=InterpolationMode.NEAREST, fill=0)
+            liver = F.affine(liver, *affine_params, interpolation=InterpolationMode.NEAREST, fill=0)
+            tumor = F.affine(tumor, *affine_params, interpolation=InterpolationMode.NEAREST, fill=0)
 
         return segmentation_map, liver, tumor
     

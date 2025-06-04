@@ -19,7 +19,7 @@ PREDICT_CLINIC = False
 CBCT_DIR = '../training_data/CBCT/256'
 CBCT_CLINIC_DIR = '../training_data/clinic/'
 VOLUME_INDICES = [3, 8, 12, 26, 32, 33, 35, 54, 59, 61, 106, 116, 129]
-OUT_DIR = '../thesis-ready/256/best-model/50-steps'
+OUT_DIR = '../thesis-ready/256/best-model/50-steps-power'
 
 GUIDANCE_SCALE = 1.0
 ALPHA_A = 0.2         # Mixing weight for CBCT signal at t0
@@ -148,7 +148,8 @@ def predict_volume(
     alpha_cumprod = diffusion.alpha_cumprod.to(device).float()
     T = diffusion.timesteps
 
-    schedule = make_linear_schedule(T=T-1, step_size=STEP_SIZE)
+    # schedule = make_linear_schedule(T=T-1, step_size=STEP_SIZE)
+    schedule = make_mixed_schedule(T=T-1)
 
     # Move models to float32
     vae = vae.to(device).float().eval()

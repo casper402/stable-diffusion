@@ -21,7 +21,7 @@ CBCT_DIR = '../training_data/CBCT/490/test'
 LIVER_DIR = '../training_data/liver/test'
 TUMOR_DIR = '../training_data/liver/test'
 VOLUME_INDICES = [3, 8, 12, 26, 32, 33, 35, 54, 59, 61, 106, 116, 129]
-OUT_DIR = '../predictions/segmentatiov_v7'
+OUT_DIR = '../predictions/segmentation_v7_2'
 
 GUIDANCE_SCALE = 1.0
 ALPHA_A = 0.2         # Mixing weight for CBCT signal at t0
@@ -38,9 +38,9 @@ UNET_SAVE_PATH = os.path.join(MODELS_PATH, 'unet_joint_unet.pth')
 CONTROLNET_SAVE_PATH = os.path.join(MODELS_PATH, 'controlnet.pth')
 PACA_LAYERS_SAVE_PATH = os.path.join(MODELS_PATH, 'paca_layers.pth')
 DEGRADATION_REMOVAL_SAVE_PATH = os.path.join(MODELS_PATH, 'dr_module.pth')
-SEGMENTATION_PATH = 'segmentation_v7'
-CONTROLNET_SEG_SAVE_PATH = os.path.join(SEGMENTATION_PATH, 'controlnet_seg.pth')
-DEGRADATION_REMOVAL_SEG_SAVE_PATH = os.path.join(SEGMENTATION_PATH, 'dr_module_seg.pth')
+SEGMENTATION_PATH = 'segmentation_v7_new_loss'
+CONTROLNET_SEG_SAVE_PATH = os.path.join(SEGMENTATION_PATH, 'controlnet_seg_3.pth')
+DEGRADATION_REMOVAL_SEG_SAVE_PATH = os.path.join(SEGMENTATION_PATH, 'dr_module_seg_v3.pth')
 
 # ------------------------
 # Dataset for CBCT slices

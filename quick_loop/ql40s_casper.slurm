@@ -6,7 +6,7 @@
 #SBATCH --gres=gpu:1
 #SBATCH --mem=48G
 #SBATCH --cpus-per-task=8
-#SBATCH --time=24:00:00
+#SBATCH --time=3:00:00
 #SBATCH --export=NONE
 
 cd $SLURM_SUBMIT_DIR

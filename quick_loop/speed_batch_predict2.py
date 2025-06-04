@@ -221,6 +221,9 @@ def predict_test_data():
     controlnet = load_controlnet(CONTROLNET_SAVE_PATH)
     dr_module  = load_degradation_removal(DEGRADATION_REMOVAL_SAVE_PATH)
 
+    print("using model from:", MODELS_PATH)
+    print("saving in:", OUT_DIR) 
+
     for vol in VOLUME_INDICES:
         cbct_folder = os.path.join(CBCT_DIR, f"volume-{vol}")
         save_folder = os.path.join(OUT_DIR, f"volume-{vol}")

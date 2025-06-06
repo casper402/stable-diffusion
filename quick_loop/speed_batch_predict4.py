@@ -252,5 +252,5 @@ if __name__ == '__main__':
     if PREDICT_CLINIC:
         predict_clinic()
     else:
-        for quality in [128, 64, 32]
+        for quality in [128, 64, 32]:
         predict_test_data(quality)

@@ -223,6 +223,7 @@ def predict_test_data(steps, i):
     print("using model from:", MODELS_PATH)
     print("saving in:", OUT_DIR) 
     print("steps:", steps)
+    print("POWER")
 
     for vol in VOLUME_INDICES:
         cbct_folder = os.path.join(CBCT_DIR, f"volume-{vol}")

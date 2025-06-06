@@ -253,4 +253,4 @@ if __name__ == '__main__':
         predict_clinic()
     else:
         for quality in [128, 64, 32]:
-        predict_test_data(quality)
+            predict_test_data(quality)

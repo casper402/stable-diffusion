@@ -257,6 +257,6 @@ if __name__ == '__main__':
     if PREDICT_CLINIC:
         predict_clinic()
     else:
-        for steps in [5, 10, 25, 50, 100]:
+        for steps in [1, 2]:
             for i in range(10):
                 predict_test_data(steps, i)

@@ -164,11 +164,10 @@ def plot(volume_idx, slice_num):
         # os.path.expanduser(f"/Users/Niklas/thesis/predictions/predictions-v3-stepsize1/volume-{volume_idx}"),
         # os.path.expanduser(f"/Users/Niklas/thesis/predictions/predictions_after_joint_round2/volume-{volume_idx}"),
         os.path.expanduser(f"/Users/Niklas/thesis/predictions/predictions_controlnet_v7-data-augmentation/volume-{volume_idx}"),
+        os.path.expanduser(f"/Users/Niklas/thesis/predictions/5-steps/volume-{volume_idx}"),
         # os.path.expanduser(f"/Users/Niklas/thesis/predictions/predictions_tanh_v2/volume-{volume_idx}"),
         # os.path.expanduser(f"/Users/Niklas/thesis/predictions/predictions_tanh_v5/volume-{volume_idx}"),
         os.path.expanduser("/Users/Niklas/thesis/training_data/CBCT/scaled-490"),
-        os.path.expanduser(f"/Users/Niklas/thesis/predictions/thesis-ready/256/best-model/50-steps-linear/volume-{volume_idx}"),
-        os.path.expanduser("/Users/Niklas/thesis/training_data/CBCT/256/test"),
     ]
     gt_dir = os.path.expanduser("/Users/Niklas/thesis/training_data/CT/test")
     
@@ -190,4 +189,4 @@ def plot_specific():
 
 if __name__ == "__main__":
     # plot_specific()
-    plot_random_slice(3)
+    plot_random_slice(8)

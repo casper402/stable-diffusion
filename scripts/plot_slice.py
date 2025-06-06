@@ -100,8 +100,10 @@ def plot_multi_side_by_side(test_dirs, gt_dir, volume_idx, slice_num):
     for j in range(total_plots, len(axes)):
         axes[j].axis("off")
 
+    vmin, vmax = -1000, 1000
+
     # Plot GT
-    axes[0].imshow(gt_image, cmap="gray")
+    axes[0].imshow(gt_image, cmap="gray", vmin=vmin, vmax=vmax)
     axes[0].set_title("Ground Truth")
     axes[0].axis("off")
 
@@ -115,7 +117,7 @@ def plot_multi_side_by_side(test_dirs, gt_dir, volume_idx, slice_num):
             f"MAE: {mae_val:.2f}, RMSE: {rmse_val:.2f}\n"
             f"PSNR: {psnr_val:.2f}, SSIM: {ssim_val:.2f}"
         )
-        axes[i].imshow(test_img, cmap="gray")
+        axes[i].imshow(test_img, cmap="gray", vmin=vmin, vmax=vmax)
         axes[i].set_title(title)
         axes[i].axis("off")
 
@@ -162,7 +164,11 @@ def plot(volume_idx, slice_num):
         # os.path.expanduser(f"/Users/Niklas/thesis/predictions/predictions-v3-stepsize1/volume-{volume_idx}"),
         # os.path.expanduser(f"/Users/Niklas/thesis/predictions/predictions_after_joint_round2/volume-{volume_idx}"),
         os.path.expanduser(f"/Users/Niklas/thesis/predictions/predictions_controlnet_v7-data-augmentation/volume-{volume_idx}"),
+        # os.path.expanduser(f"/Users/Niklas/thesis/predictions/predictions_tanh_v2/volume-{volume_idx}"),
+        # os.path.expanduser(f"/Users/Niklas/thesis/predictions/predictions_tanh_v5/volume-{volume_idx}"),
         os.path.expanduser("/Users/Niklas/thesis/training_data/CBCT/scaled-490"),
+        os.path.expanduser(f"/Users/Niklas/thesis/predictions/thesis-ready/256/best-model/50-steps-linear/volume-{volume_idx}"),
+        os.path.expanduser("/Users/Niklas/thesis/training_data/CBCT/256/test"),
     ]
     gt_dir = os.path.expanduser("/Users/Niklas/thesis/training_data/CT/test")
     
@@ -178,10 +184,10 @@ def plot_random_slice(volume_idx):
 
 
 def plot_specific():
-    volume_idx = 26
-    slice_num = 121
+    volume_idx = 3
+    slice_num = 142
     plot(volume_idx, slice_num)
 
 if __name__ == "__main__":
-    plot_specific()
-    # plot_random_slice(33)
+    # plot_specific()
+    plot_random_slice(3)

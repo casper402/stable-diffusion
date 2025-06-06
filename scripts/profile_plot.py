@@ -43,6 +43,7 @@ SLICE_SELECT = {
     129: (5, 346)
 }
 VOLUMES = list(SLICE_SELECT.keys())
+VOLUMES = [8, 3]
 
 # Plot configuration
 # Available types: 'profile', 'qq', 'hist', 'ba', 'ssim'
@@ -56,7 +57,7 @@ PLOT_TYPES = [
 ]
 QQ_QUANTILES = 300     # Number of quantiles for Q-Q plots
 HIST_BINS    = 100     # Number of bins for histograms
-BA_SUBSAMPLE = 10000   # Number of points to sample in Bland-Altman plots
+BA_SUBSAMPLE = 500   # Number of points to sample in Bland-Altman plots
 
 # Executors & cache for preload
 bg_executor   = ThreadPoolExecutor(max_workers=2)
@@ -159,6 +160,41 @@ def plot_profile(slice_name, x_coord, ct_img, cbct_img, preds, volume):
     ax2.set(xlabel='Pixel position', ylabel='HU', title=f'Profile at x={x}')
     ax2.legend(); ax2.grid(True)
     plt.tight_layout(); plt.show()
+
+def plot_profile_horizontal(slice_name, y_coord, ct_img, cbct_img, preds, volume):
+    H, W = ct_img.shape
+    # choose random row if not specified
+    y = y_coord if y_coord is not None else random.randint(0, H-1)
+    
+    # sample each image along the horizontal line y
+    profs = {
+        'CT':   profile_line(ct_img,  (y, 0), (y, W-1), mode='constant', cval=np.nan),
+        'CBCT': profile_line(cbct_img,(y, 0), (y, W-1), mode='constant', cval=np.nan),
+    }
+    # add any prediction profiles
+    for lbl, img in preds.items():
+        profs[lbl] = profile_line(img, (y, 0), (y, W-1), mode='constant', cval=np.nan)
+    
+    # plot image + line and the profiles
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
+    
+    ax1.imshow(ct_img, cmap='gray', vmin=-1000, vmax=1000)
+    ax1.axhline(y=y, color='r', lw=2)
+    ax1.axis('off')
+    ax1.set_title(f'Vol {volume}, {slice_name}')
+    
+    for lbl, prof in profs.items():
+        ax2.plot(prof, label=lbl)
+    ax2.set(
+        xlabel='Column (pixel index)',
+        ylabel='HU',
+        title=f'Profile at y={y}'
+    )
+    ax2.legend()
+    ax2.grid(True)
+    
+    plt.tight_layout()
+    plt.show()
 
 # Plot Q-Q
 def plot_qq(volume, gt_folder, cbct_folder, pred_folders):
@@ -346,11 +382,12 @@ def plot_multi(slice_name, x_coord, gt_folder, cbct_folder, pred_folders, volume
         cb = load_and_prepare(os.path.join(cbct_folder, slice_name), True)
         preds = {lbl: load_and_prepare(os.path.join(folder, f"volume-{volume}", slice_name), False)
                  for lbl, folder in pred_folders.items()}
-        plot_profile(slice_name, x_coord, ct, cb, preds, volume)
+        # plot_profile(slice_name, x_coord, ct, cb, preds, volume)
+        plot_profile_horizontal(slice_name, x_coord, ct, cb, preds, volume)
     if 'qq' in plot_types:
         plot_qq(volume, gt_folder, cbct_folder, pred_folders)
     if 'hist' in plot_types:
-        plot_hist(volume, gt_folder, cbct_folder, pred_folders)
+        plot_hi6t(volume, gt_folder, cbct_folder, pred_folders)
     if 'ba' in plot_types:
         plot_bland_altman(volume, gt_folder, cbct_folder, pred_folders)
     if 'ssim' in plot_types:
@@ -364,9 +401,10 @@ if __name__ == '__main__':
     cbct_folder = os.path.expanduser("~/thesis/training_data/CBCT/490/test")
     pred_folders = {
         # 'v3': os.path.expanduser("~/thesis/predictions/predctions_controlnet_v3"),
-        'v7': os.path.expanduser("~/thesis/predictions/predictions_controlnet_v7-data-augmentation")
+        'v7': os.path.expanduser("~/thesis/predictions/predictions_controlnet_v7-data-augmentation"),
+        # 'nl2': os.path.expanduser("~/thesis/predictions/predictions_tanh_v2")
     }
-    volumes = list(SLICE_SELECT.keys())
+    volumes = VOLUMES
     current_vol = random.choice(volumes)
     preload_volume(current_vol, gt_folder, cbct_folder, pred_folders)
     print(f"[Main] Initial preload of volume {current_vol}")
@@ -379,7 +417,8 @@ if __name__ == '__main__':
             current_vol = next_vol
             continue
         slice_name = random.choice(slices)
-        plot_multi(slice_name, x_coord=112, gt_folder=gt_folder,
+        slice_name = 'volume-8_slice_107.npy'
+        plot_multi(slice_name, x_coord=140, gt_folder=gt_folder,
                    cbct_folder=cbct_folder, pred_folders=pred_folders,
                    volume=current_vol)
         current_vol = next_vol

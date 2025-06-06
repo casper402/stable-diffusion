@@ -31,7 +31,6 @@ SLICE_RANGES = {
     106: None, 116: None, 129: (5, 346)
 }
 VALID_VOLUMES = list(SLICE_RANGES.keys())
-VALID_VOLUMES = [35]
 
 # ──────── transforms & crops ──────────────────────────────────────────────────
 gt_transform = transforms.Compose([
@@ -76,6 +75,7 @@ def get_slice_files(folder, vol_idx, is_cbct=False):
 def compute_hu_histogram(folder, vols, is_cbct=False, bins=np.linspace(-1000, 1000, 200)):
     hist = np.zeros(len(bins)-1)
     for v in vols:
+        print("v:", v)
         for fp in get_slice_files(folder, v, is_cbct):
             data = np.load(fp)
             if is_cbct:
@@ -115,7 +115,7 @@ def plot_hu_distributions(gt_folder, cbct_folder, pred_folders, vols, save_path=
 
     plt.xlabel('Hounsfield Units (HU)')
     plt.ylabel('Normalized Frequency')
-    plt.title('Figure 3: HU Distribution Comparison')
+    plt.title('HU Distribution Comparison')
     plt.ylim(0, 0.15)
     plt.legend()
     plt.grid(True)
@@ -134,7 +134,8 @@ if __name__ == "__main__":
     pred_folders = [
         # ("v3", os.path.expanduser("~/thesis/predictions/predictions_controlnet_v3")),
         ("v7", os.path.expanduser("~/thesis/predictions/predictions_controlnet_v7-data-augmentation")),
-        ("perceptual", os.path.expanduser("~/thesis/predictions/predctions_controlnet_from_unet_trained_after_joint_v2")),
+        # ("perceptual", os.path.expanduser("~/thesis/predictions/predctions_controlnet_from_unet_trained_after_joint_v2")),
+        # ("nl", os.path.expanduser("~/thesis/predictions/predictions_tanh_temp")),
     ]
 
     plot_hu_distributions(gt_folder, cbct_folder, pred_folders, vols)

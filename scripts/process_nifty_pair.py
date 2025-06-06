@@ -6,10 +6,10 @@ import concurrent.futures
 
 
 # Just test volumes:
-# volumes = [3, 8, 12, 26, 32, 33, 35, 54, 59, 61, 106, 116, 129]
+volumes = [3, 8, 12, 26, 32, 33, 35, 54, 59, 61, 106, 116, 129]
 
 # All volumes
-volumes = [i for i in range(131)]
+# volumes = [i for i in range(131)]
 
 def process_nifti_pair(ct_folder, ct_fname, cbct_folder, cbct_fname, output_dir, debug=False):
     # --- 1) Load CT and CBCT (keep full CT range) ---
@@ -67,9 +67,10 @@ def process_nifti_pair(ct_folder, ct_fname, cbct_folder, cbct_fname, output_dir,
 
 def main():
     # Folders & parameters
+    quality = 32
     ct_folder   = "/Volumes/Lenovo PS8/Casper/kaggle_dataset/TRAINCTAlignedToCBCT"
-    cbct_folder = "/Volumes/Lenovo PS8/Casper/kaggle_dataset/TRAINCBCTSimulated/490"
-    output_dir  = "/Users/Niklas/thesis/training_data/CBCT/490full"
+    cbct_folder = f"/Volumes/Lenovo PS8/Casper/kaggle_dataset/TRAINCBCTSimulated/{quality}/3D"
+    output_dir  = f"/Users/Niklas/thesis/training_data/CBCT/{quality}/test"
     os.makedirs(output_dir, exist_ok=True)
 
     np.random.seed(42)

@@ -41,7 +41,6 @@ SLICE_SELECT = {
     129: (5, 346)
 }
 VALID_VOLUMES = list(SLICE_SELECT.keys())
-VALID_VOLUMES = [54]
 
 # ──────── transforms & crops ──────────────────────────────────────────────────
 gt_transform = transforms.Compose([
@@ -190,11 +189,13 @@ def print_region_metrics(volumes, eval_sets, results):
     print(" LIVER & TUMOR METRICS") 
     print(hdr)
     print("-" * len(hdr))
+
+    # per‐volume
     for v in volumes:
         for region, base in [("Liver", 4), ("Tumor", 8)]:
             parts = []
             for label, _, _ in eval_sets:
-                vals = results[label].get(v, [np.nan] * 12)
+                vals = results[label].get(v, [np.nan]*12)
                 parts.append(
                     " ".join(
                         f"{vals[base+k]:>10.2f}" if m != "SSIM" else f"{vals[base+k]:>10.3f}"
@@ -202,8 +203,27 @@ def print_region_metrics(volumes, eval_sets, results):
                     )
                 )
             print(f"{v:4d} | {region:>6} | " + " | ".join(parts))
+
+    # separator
     print("-" * len(hdr))
 
+    # overall (mean across volumes)
+    for region, base in [("Liver", 4), ("Tumor", 8)]:
+        parts = []
+        for label, _, _ in eval_sets:
+            # collect [vol x metrics] array for this label+region
+            arr = np.stack(
+                [results[label][v][base:base+len(metrics)] for v in volumes],
+                axis=0
+            )
+            mean_vals = np.nanmean(arr, axis=0)
+            parts.append(
+                " ".join(
+                    f"{mean_vals[k]:>10.2f}" if m != "SSIM" else f"{mean_vals[k]:>10.3f}"
+                    for k, m in enumerate(metrics)
+                )
+            )
+        print(f"{'ALL':>4} | {region:>6} | " + " | ".join(parts))
 
 def evaluate_global_and_region(volumes, eval_sets, gt_folder, lm_folder, tm_folder):
     """
@@ -333,11 +353,19 @@ def main():
 
     v4_pred490stepsize20 = os.path.expanduser("~/thesis/predictions/prediction_controlnet_v4")
     v5                   = os.path.expanduser("~/thesis/predictions/predictions_v5")
+
+
     v7                   = os.path.expanduser("~/thesis/predictions/predictions_controlnet_v7-data-augmentation")
+    v7_260_lin                   = os.path.expanduser("~/thesis/predictions/thesis-ready/256/best-model/50-steps-linear")
+    v7_260_pow                   = os.path.expanduser("~/thesis/predictions/thesis-ready/256/best-model/50-steps-power")
 
     trained_after_joint = os.path.expanduser(
         "~/thesis/predictions/predctions_controlnet_from_unet_trained_after_joint_v2"
     )
+
+    nl                   = os.path.expanduser("~/thesis/predictions/predictions_tanh_v2")
+    nl3                  = os.path.expanduser("~/thesis/predictions/predictions_tanh_v3")
+    nl5                  = os.path.expanduser("~/thesis/predictions/predictions_tanh_v5")
 
     gt_folder           = os.path.expanduser("~/thesis/training_data/CT/test")
     liver_mask_folder   = os.path.expanduser("~/thesis/training_data/liver/test")
@@ -345,8 +373,9 @@ def main():
 
     eval_sets = [
         # ("CBCT",  cbct490_base, True),
-        ("v3",    v3_pred490stepsize20, False),
-        ("v7",    v7, False),
+        ("490",    v7, False),
+        ("256_l",    v7_260_lin, False),
+        ("256_p",    v7_260_pow, False),
     ]
 
     volumes = VALID_VOLUMES

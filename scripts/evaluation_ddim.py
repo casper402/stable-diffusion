@@ -9,6 +9,8 @@ from torchvision import transforms
 from torchvision.transforms import InterpolationMode
 
 # ──────── constants ───────────────────────────────────────────────────────────
+STEPS = 50
+
 DATA_RANGE = 2000.0    # CT range -1000…1000
 ORIG_H, ORIG_W = 238, 366
 PAD_L, PAD_T, PAD_R, PAD_B = 0, 64, 0, 64
@@ -25,6 +27,7 @@ RIGHT_CROP  = int(round((PAD_R / _pad_w) * RES_W))
 SLICE_SELECT = {
     3: None,
     8: (0, 354),
+    # 8: (150, 150),
     12: (0, 320),
     26: None,
     32: (69, 269),
@@ -241,26 +244,31 @@ def evaluate_runs_for_volume_8(
 
 # ──────── main entrypoint ─────────────────────────────────────────────────────
 def main():
-    # Base folder that contains subfolders "0", "1", ..., "9"
-    base_runs_folder = "/Users/Niklas/thesis/predictions/thesis-ready/490/best-model/ddim/linear/5-steps"
+    for _steps in [5, 10, 25, 50]:
+        print(f"*** Evaluation for {_steps} steps ***")
 
-    # Ground-truth CT slices
-    gt_folder = os.path.expanduser("~/thesis/training_data/CT/test")
-    # Liver masks
-    liver_mask_folder = os.path.expanduser("~/thesis/training_data/liver/test")
-    # Tumor masks
-    tumor_mask_folder = os.path.expanduser("~/thesis/training_data/tumor/test")
+        # Base folder that contains subfolders "0", "1", ..., "9"
+        base_runs_folder = f"/Users/Niklas/thesis/predictions/thesis-ready/490/best-model/ddim/linear/{_steps}-steps"
 
-    # Evaluate volume 8 for runs 0..9
-    evaluate_runs_for_volume_8(
-        base_runs_folder=base_runs_folder,
-        gt_folder=gt_folder,
-        liver_mask_folder=liver_mask_folder,
-        tumor_mask_folder=tumor_mask_folder,
-        n_runs=10,
-        vol_idx=8,
-        is_cbct=False
-    )
+        # Ground-truth CT slices
+        gt_folder = os.path.expanduser("~/thesis/training_data/CT/test")
+        # Liver masks
+        liver_mask_folder = os.path.expanduser("~/thesis/training_data/liver/test")
+        # Tumor masks
+        tumor_mask_folder = os.path.expanduser("~/thesis/training_data/tumor/test")
+
+        # Evaluate volume 8 for runs 0..9
+        evaluate_runs_for_volume_8(
+            base_runs_folder=base_runs_folder,
+            gt_folder=gt_folder,
+            liver_mask_folder=liver_mask_folder,
+            tumor_mask_folder=tumor_mask_folder,
+            n_runs=10,
+            vol_idx=8,
+            is_cbct=False
+        )
+
+        print("===========================================")
 
 if __name__ == "__main__":
     main()

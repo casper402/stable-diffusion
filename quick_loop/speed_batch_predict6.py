@@ -229,7 +229,7 @@ def predict_test_data(steps, i):
         save_folder = os.path.join(OUT_DIR, f"volume-{vol}")
         ds     = CBCTDatasetNPY(cbct_folder, transform, preprocess=PREPROCESS)
         loader = DataLoader(ds, batch_size=BATCH_SIZE, num_workers=4, pin_memory=True)
-        predict_volume(vae, unet, controlnet, dr_module, loader, save_folder, GUIDANCE_SCALE, STEP_SIZE)
+        predict_volume(vae, unet, controlnet, dr_module, loader, save_folder, GUIDANCE_SCALE, steps)
     print("All volumes processed.")
 
 def predict_clinic():

@@ -16,6 +16,7 @@ from quick_loop.unetControlPACA import load_unet_control_paca
 # ------------------------
 PREDICT_CLINIC = False
 
+CBCT_DIR = '../training_data/CBCT/490/test'
 CBCT_CLINIC_DIR = '../training_data/clinic/'
 VOLUME_INDICES = [3, 8, 12, 26, 32, 33, 35, 54, 59, 61, 106, 116, 129]
 
@@ -25,7 +26,6 @@ BATCH_SIZE = 16 # Can probably be 32
 DDIM_STEPS = 40
 POWER_P = 2.0
 FINE_CUTOFF = 9
-STEP_SIZE = 1
 
 PREPROCESS = "linear" # linear or tanh
 
@@ -136,7 +136,8 @@ def predict_volume(
     vae, unet, controlnet, dr_module,
     dataloader: DataLoader,
     save_dir: str,
-    guidance_scale: float
+    guidance_scale: float,
+    STEP_SIZE
 ):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     torch.backends.cudnn.benchmark = True
@@ -210,7 +211,7 @@ def predict_volume(
 # ------------------------
 # Entry Points
 # ------------------------
-def predict_test_data(quality):
+def predict_test_data(steps, i):
     transform = transforms.Compose([
         transforms.Pad((0, 64, 0, 64), fill=-1),
         transforms.Resize((256, 256)),
@@ -220,18 +221,21 @@ def predict_test_data(quality):
     controlnet = load_controlnet(CONTROLNET_SAVE_PATH)
     dr_module  = load_degradation_removal(DEGRADATION_REMOVAL_SAVE_PATH)
 
-    CBCT_DIR = f"../qualities/{quality}/test"
-    OUT_DIR = f"../thesis-ready/{quality}/best-model/50-steps-linear"
+
+    OUT_DIR = f"../thesis-ready/490/best-model/ddim/linear/{steps}-steps/{i}"
+
+    STEP_SIZE = 1000 // steps
 
     print("using model from:", MODELS_PATH)
     print("saving in:", OUT_DIR) 
+    print("step size:", STEP_SIZE, "steps:", steps)
 
     for vol in VOLUME_INDICES:
         cbct_folder = os.path.join(CBCT_DIR, f"volume-{vol}")
         save_folder = os.path.join(OUT_DIR, f"volume-{vol}")
         ds     = CBCTDatasetNPY(cbct_folder, transform, preprocess=PREPROCESS)
         loader = DataLoader(ds, batch_size=BATCH_SIZE, num_workers=4, pin_memory=True)
-        predict_volume(vae, unet, controlnet, dr_module, loader, save_folder, GUIDANCE_SCALE)
+        predict_volume(vae, unet, controlnet, dr_module, loader, save_folder, GUIDANCE_SCALE, STEP_SIZE)
     print("All volumes processed.")
 
 def predict_clinic():
@@ -252,5 +256,6 @@ if __name__ == '__main__':
     if PREDICT_CLINIC:
         predict_clinic()
     else:
-        for quality in [128, 64, 32]:
-            predict_test_data(quality)
+        for steps in [5, 10, 25, 50, 100]:
+            for i in range(10):
+                predict_test_data(steps, i)

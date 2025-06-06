@@ -25,7 +25,7 @@ BATCH_SIZE = 16 # Can probably be 32
 DDIM_STEPS = 40
 POWER_P = 2.0
 FINE_CUTOFF = 9
-STEP_SIZE = 20
+STEP_SIZE = 1
 
 PREPROCESS = "linear" # linear or tanh
 
@@ -225,7 +225,6 @@ def predict_test_data(quality):
 
     print("using model from:", MODELS_PATH)
     print("saving in:", OUT_DIR) 
-    print("step size:", STEP_SIZE)
 
     for vol in VOLUME_INDICES:
         cbct_folder = os.path.join(CBCT_DIR, f"volume-{vol}")

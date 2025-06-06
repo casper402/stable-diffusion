@@ -220,7 +220,7 @@ def predict_test_data(quality):
     controlnet = load_controlnet(CONTROLNET_SAVE_PATH)
     dr_module  = load_degradation_removal(DEGRADATION_REMOVAL_SAVE_PATH)
 
-    CBCT_DIR = f"../training_data/CBCT/{quality}/test"
+    CBCT_DIR = f"../qualities/{quality}/test"
     OUT_DIR = f"../thesis-ready/{quality}/best-model/50-steps-linear"
 
     print("using model from:", MODELS_PATH)

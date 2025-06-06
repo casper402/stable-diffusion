@@ -112,7 +112,8 @@ def postprocess_tanh(CT, eps: float = 1e-4):
 # ------------------------
 # Schedule Helpers
 # ------------------------
-def make_power_schedule(T=1000, N=DDIM_STEPS, p=POWER_P):
+def make_power_schedule(T=1000, N=50, p=POWER_P):
+    print("making power schedule with:", N, "steps")
     # 1) Generat e N+1 equally spaced indices from 0 to N
     idx = np.arange(N + 1)
     # 2) Apply the power-law formula (1 - (i/N)^p) * T
@@ -222,8 +223,6 @@ def predict_test_data(steps, i):
 
     print("using model from:", MODELS_PATH)
     print("saving in:", OUT_DIR) 
-    print("steps:", steps)
-    print("POWER")
 
     for vol in VOLUME_INDICES:
         cbct_folder = os.path.join(CBCT_DIR, f"volume-{vol}")

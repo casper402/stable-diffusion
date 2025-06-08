@@ -26,8 +26,8 @@ RIGHT_CROP  = int(round((PAD_R / _pad_w) * RES_W))
 # ──────── slice-selection ─────────────────────────────────────────────────────
 SLICE_SELECT = {
     3: None,
-    8: (0, 354),
-    # 8: (150, 150),
+    # 8: (0, 354),
+    8: (150, 150),
     12: (0, 320),
     26: None,
     32: (69, 269),
@@ -244,7 +244,8 @@ def evaluate_runs_for_volume_8(
 
 # ──────── main entrypoint ─────────────────────────────────────────────────────
 def main():
-    for _steps in [5, 10, 25, 50]:
+    # for _steps in [5, 10, 25, 50]:
+    for _steps in [1]:
         print(f"*** Evaluation for {_steps} steps ***")
 
         # Base folder that contains subfolders "0", "1", ..., "9"

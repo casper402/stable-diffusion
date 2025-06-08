@@ -16,7 +16,8 @@ from quick_loop.unetControlPACA import load_unet_control_paca
 # ------------------------
 PREDICT_CLINIC = False
 
-CBCT_DIR = '../training_data/CBCT/490/test'
+# CBCT_DIR = '../training_data/CBCT/256/test'
+CBCT_DIR = '../training_data/scaled-490/'
 CBCT_CLINIC_DIR = '../training_data/clinic/'
 VOLUME_INDICES = [3, 8, 12, 26, 32, 33, 35, 54, 59, 61, 106, 116, 129]
 OUT_DIR = '../thesis-ready/456/best-model/1000-steps-linear'

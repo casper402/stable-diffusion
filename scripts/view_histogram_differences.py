@@ -221,6 +221,8 @@ def plot_diff_hist_overlay(
     # Define bin edges from −500 to +500
     bin_edges = np.linspace(-500, 500, bins + 1)
 
+    print("bin edges:", bin_edges)
+
     # ─── Step 3: Draw one overlaid histogram ────────────────────────────────────
     fig = plt.figure(figsize=(10, 6))
     ax = fig.add_axes([0.10, 0.12, 0.88, 0.82])  # leave room at top for legend/title
@@ -272,7 +274,7 @@ def plot_diff_hist_overlay(
         fontsize=16
     )
 
-    ax.set_xlim(-500, 500)
+    ax.set_xlim(-300, 300)
 
     plt.tight_layout()
     if save_path:

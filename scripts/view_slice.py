@@ -280,6 +280,13 @@ if __name__ == "__main__":
             "sCT (ours)",
             False
         ),
+        (
+            os.path.expanduser(
+                "/Users/Niklas/thesis/predictions/predictions_tanh_v5/volume-3"
+            ),
+            "sCT (CycleGan)",
+            False
+        ),
     ]
     
 

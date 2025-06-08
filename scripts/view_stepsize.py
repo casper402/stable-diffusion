@@ -26,6 +26,12 @@ SLICE_RANGES = {
     106: None, 116: None, 129: (5,346),
 }
 
+# interpolation variants and step sizes
+target_quality = 490
+variants = ['linear', 'power']
+steps = [1, 2, 5, 10, 25, 50]
+
+# ───── transformation helpers ─────────────────────────────────────────────────
 def apply_transform(img_np):
     arr = np.array(img_np)
     padded = np.pad(arr,
@@ -54,6 +60,7 @@ def load_volume(dirpath, vidx, needs_transform=False):
     print(f"Loaded {dirpath} → {vol.shape}")
     return vol
 
+
 def extract_axial(vol, idx):
     return np.fliplr(vol[idx])
 
@@ -64,89 +71,80 @@ def resize256(slice2d):
     return np.array(Image.fromarray(slice2d.astype(np.int16))
                     .resize((256,256), Image.BILINEAR))
 
-def plot_custom(volume_idx):
-    quals = [490,256,128,64,32]
-
+# ───── plotting function for variants & steps ─────────────────────────────────
+def plot_variants(volume_idx):
+    # style
     plt.rcParams["font.family"]    = "serif"
     plt.rcParams["font.serif"]     = ["Nimbus Roman No9 L"]
     plt.rcParams["font.size"]      = 16
     plt.rcParams["axes.titlesize"] = 16
 
-    # 1) load a CBCT sample to get Z, H, W & slice‐ranges
-    sample = load_volume(
-        os.path.expanduser("/Users/Niklas/thesis/training_data/CBCT/256/test"),
-        volume_idx, True
-    )
+    # determine slice ranges from a sample
+    sample_dir = os.path.expanduser(f"/Users/Niklas/thesis/training_data/CBCT/{target_quality}/test")
+    sample = load_volume(sample_dir, volume_idx, True)
     Z, H, W = sample.shape
 
-    # 2) choose axial idx (as before)
     if volume_idx in SLICE_RANGES and SLICE_RANGES[volume_idx]:
-        lb,ub = SLICE_RANGES[volume_idx]; ub = min(ub, Z-1)
+        lb, ub = SLICE_RANGES[volume_idx]
+        ub = min(ub, Z-1)
     else:
-        lb,ub = 0, Z-1
-    axial_idx = 150 if lb<=150<=ub else random.randint(lb,ub)
+        lb, ub = 0, Z-1
+    axial_idx = 150 if lb <= 150 <= ub else random.randint(lb, ub)
     print(f"Axial idx = {axial_idx} ({lb}–{ub})")
 
-    # 3) hard‐code coronal idx:
     coronal_idx = 120
     print(f"Coronal idx = {coronal_idx}")
 
-    # 4) load all CBCT & sCT, extract both axial & coronal
-    cbct_ax, cbct_cor = {}, {}
-    sct_ax,  sct_cor  = {}, {}
-    for q in quals:
-        cb_dir = os.path.expanduser(f"/Users/Niklas/thesis/training_data/CBCT/{q}/test")
-        sc_dir = os.path.expanduser(
-            f"/Users/Niklas/thesis/predictions/thesis-ready/{q}/best-model/50-steps-linear/volume-{volume_idx}"
-        )
-        v_cb = load_volume(cb_dir, volume_idx, True)
-        v_sc = load_volume(sc_dir, volume_idx, False)
+    # load all variants & steps
+    sct_ax = {var: {} for var in variants}
+    sct_cor = {var: {} for var in variants}
+    for var in variants:
+        for s in steps:
+            sc_dir = os.path.expanduser(
+                f"/Users/Niklas/thesis/predictions/thesis-ready/{target_quality}/best-model/ddim/{var}/{s}-steps/0/volume-{volume_idx}"
+            )
+            v_sc = load_volume(sc_dir, volume_idx, False)
+            sct_ax[var][s] = resize256(extract_axial(v_sc, axial_idx))
+            sct_cor[var][s] = resize256(extract_coronal(v_sc, coronal_idx))
 
-        cbct_ax[q]  = resize256(extract_axial (v_cb, axial_idx))
-        sct_ax[q]   = resize256(extract_axial (v_sc, axial_idx))
-        cbct_cor[q] = resize256(extract_coronal(v_cb, coronal_idx))
-        sct_cor[q]  = resize256(extract_coronal(v_sc, coronal_idx))
-
-    # 5) plot a (n_rows × 5) grid:  Q-label | CBCT_ax | sCT_ax | CBCT_cor | sCT_cor
-    nrows, ncols = len(quals), 5
+    # plot grid: step label | [variant_ax | variant_cor] per variant
+    nrows = len(steps)
+    ncols = 1 + 2 * len(variants)
     fig, axes = plt.subplots(
         nrows, ncols,
-        figsize=(ncols*2, nrows*2.5),
-        gridspec_kw={'width_ratios': [0.2, 2, 2, 2, 2]},
+        figsize=(ncols * 2, nrows * 2.5),
+        gridspec_kw={'width_ratios': [0.2] + [2] * (ncols - 1)},
         constrained_layout=True
     )
 
-    for i, q in enumerate(quals):
+    for i, s in enumerate(steps):
         # label column
         ax_label = axes[i, 0]
         ax_label.axis("off")
         ax_label.text(
-            0.5, 0.5, f"Q={q}",
+            0.5, 0.5, f"Steps={s}",
             va="center", ha="center",
             rotation="vertical",
             transform=ax_label.transAxes,
             fontsize=16
         )
 
+        imgs = []
+        for var in variants:
+            imgs.append((sct_ax[var][s], f"sCT axial ({var})"))
+            imgs.append((sct_cor[var][s], f"sCT coronal ({var})"))
 
-        # the four image columns
-        row_imgs = [
-            (cbct_ax[q],  "CBCT axial"),
-            (sct_ax[q],   "sCT axial"),
-            (cbct_cor[q], "CBCT coronal"),
-            (sct_cor[q],  "sCT coronal"),
-        ]
-        for j, (img, title) in enumerate(row_imgs, start=1):
+        for j, (img, title) in enumerate(imgs, start=1):
             ax = axes[i, j]
             ax.imshow(img, cmap="gray", vmin=-400, vmax=400)
             ax.axis("off")
             if i == 0:
                 ax.set_title(title, pad=6)
 
-    out = "/Users/Niklas/thesis/figures/quality_ax_cor_label.pdf"
-    fig.savefig(os.path.expanduser(out), bbox_inches="tight")
-    print(f"Saved to {out}")
+    out_path = "/Users/Niklas/thesis/figures/ax_cor_variants.pdf"
+    fig.savefig(os.path.expanduser(out_path), bbox_inches="tight")
+    print(f"Saved to {out_path}")
     plt.show()
 
-if __name__=="__main__":
-    plot_custom(volume_idx=8)
+if __name__ == "__main__":
+    plot_variants(volume_idx=8)

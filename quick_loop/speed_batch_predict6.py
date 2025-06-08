@@ -113,14 +113,20 @@ def postprocess_tanh(CT, eps: float = 1e-4):
 # Schedule Helpers
 # ------------------------
 def make_power_schedule(T=1000, N=50, p=POWER_P):
-    print("making power schedule with:", N, "steps")
-    # 1) Generat e N+1 equally spaced indices from 0 to N
-    idx = np.arange(N + 1)
-    # 2) Apply the power-law formula (1 - (i/N)^p) * T
-    raw = (1 - (idx / N) ** p) * T
-    # 3) Cast to int and reverse so that it goes from T down to 0
-    ts = raw.astype(int)[::-1]
-    return ts
+    # 1) floats from T→0
+    frac    = np.linspace(0.0, 1.0, N)
+    raw     = (1.0 - frac**p) * T
+
+    # 2) discretize but collapse duplicates
+    ts_int  = np.unique(np.round(raw).astype(int))[::-1]
+
+    # 3) ensure you start at T and end at 0
+    if ts_int[0] != T:
+        ts_int = np.concatenate(([T], ts_int))
+    if ts_int[-1] != 0:
+        ts_int = np.concatenate((ts_int, [0]))
+
+    return ts_int
 
 def make_linear_schedule(T: int, step_size: int = 10) -> np.ndarray:
     ts = np.arange(T, -1, -step_size, dtype=int)

@@ -60,11 +60,11 @@ def crop_back(arr: np.ndarray) -> np.ndarray:
 
 # ──────── intensity‐range definitions ──────────────────────────────────────────
 HU_RANGES = [
-    ("full",        -1000,  1000),
-    ("neg1000_-150",-1000,  -150),
-    ("neg400_400",  -400,    400),
-    ("neg150_150",  -150,    150),
-    ("150_1000",     150,   1000),
+    # ("full",        -1000,  1000),
+    # ("neg1000_-150",-1000,  -150),
+    # ("neg150_150",  -150,    150),
+    ("neg100_100",  -100,    100),
+    # ("150_1000",     150,   1000),
 ]
 
 # ──────── metric functions ───────────────────────────────────────────────────
@@ -249,10 +249,9 @@ def print_one_row_per_region(eval_sets: list, all_results: dict):
 def main():
     # Define your evaluation sets here; each is (label, folder, is_cbct)
     eval_sets = [
-        ("CBCT",     os.path.expanduser("~/thesis/training_data/CBCT/scaled-490"),   True),
         ("v7",  os.path.expanduser("~/thesis/predictions/predictions_controlnet_v7-data-augmentation"),                  False),
-        ("nl3",                  os.path.expanduser("~/thesis/predictions/predictions_tanh_v3"), False),
         ("nl5",                  os.path.expanduser("~/thesis/predictions/predictions_tanh_v5"), False),
+        ("nl6",                  os.path.expanduser("~/thesis/predictions/thesis-ready/490/best-model/50-steps-linear-tanh"), False),
     ]
 
     gt_folder = os.path.expanduser("~/thesis/training_data/CT/test")

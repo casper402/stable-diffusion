@@ -70,6 +70,8 @@ def load_processed_volume(volume_dir, volume_idx, needs_transform=False):
     processed_slices = []
     for slc_path in slice_files:
         slc = np.load(slc_path)             # raw 2D slice (typically 238×366)
+        if slc.ndim != 2:
+            slc = np.squeeze(slc)
         if needs_transform:
             slc = apply_transform(slc)      # → (256×256) with padding + resize
         slc = crop_back(slc)                # → (166×256)
@@ -282,10 +284,10 @@ if __name__ == "__main__":
         ),
         (
             os.path.expanduser(
-                "/Users/Niklas/thesis/predictions/predictions_tanh_v5/volume-3"
+                "/Users/Niklas/thesis/predictions/GAN_postprocessed/volume-3"
             ),
             "sCT (CycleGan)",
-            False
+            True
         ),
     ]
     

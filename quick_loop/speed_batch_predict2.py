@@ -20,7 +20,7 @@ PREDICT_CLINIC = False
 CBCT_DIR = '../training_data/scaled-490/'
 CBCT_CLINIC_DIR = '../training_data/clinic/'
 VOLUME_INDICES = [3, 8, 12, 26, 32, 33, 35, 54, 59, 61, 106, 116, 129]
-OUT_DIR = '../thesis-ready/456/best-model/50-steps-linear-tanh'
+OUT_DIR = '../thesis-ready/490/best-model/50-steps-linear-tanh'
 
 GUIDANCE_SCALE = 1.0
 ALPHA_A = 0.2         # Mixing weight for CBCT signal at t0

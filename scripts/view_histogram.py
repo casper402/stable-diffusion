@@ -247,14 +247,14 @@ def plot_hu_distributions(
 if __name__ == "__main__":
     vols = VALID_VOLUMES
 
-    gt_folder   = os.path.expanduser("~/thesis/training_data/CT/test")
-    cbct_folder = os.path.expanduser("~/thesis/training_data/CBCT/test")
+    gt_folder   = os.path.expanduser("~/thesis/training_data/CT/train")
+    cbct_folder = os.path.expanduser("~/thesis/training_data/CBCT/train")
 
     # List of (label, prediction_folder) for multiple methods
     pred_folders = [
-        ("sCT", os.path.expanduser(
-            "~/thesis/predictions/predictions_controlnet_v7-data-augmentation"
-        )),
+        # ("sCT", os.path.expanduser(
+        #     "~/thesis/predictions/predictions_controlnet_v7-data-augmentation"
+        # )),
         # Add additional methods here as needed, e.g.:
         # ("CycleGAN", os.path.expanduser("~/thesis/predictions/predictions_tanh_v5")),
     ]

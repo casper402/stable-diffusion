@@ -358,6 +358,7 @@ def main():
     v7                   = os.path.expanduser("~/thesis/predictions/predictions_controlnet_v7-data-augmentation")
     v7_260_lin                   = os.path.expanduser("~/thesis/predictions/thesis-ready/256/best-model/50-steps-linear")
     v7_260_pow                   = os.path.expanduser("~/thesis/predictions/thesis-ready/256/best-model/50-steps-power")
+    v7_1000                      = os.path.expanduser("~/thesis/predictions/thesis-ready/490/best-model/1000-steps-linear")
 
     trained_after_joint = os.path.expanduser(
         "~/thesis/predictions/predctions_controlnet_from_unet_trained_after_joint_v2"
@@ -366,16 +367,17 @@ def main():
     nl                   = os.path.expanduser("~/thesis/predictions/predictions_tanh_v2")
     nl3                  = os.path.expanduser("~/thesis/predictions/predictions_tanh_v3")
     nl5                  = os.path.expanduser("~/thesis/predictions/predictions_tanh_v5")
+    nl6 =                  os.path.expanduser("~/thesis/predictions/thesis-ready/490/best-model/50-steps-linear-tanh")
 
     gt_folder           = os.path.expanduser("~/thesis/training_data/CT/test")
     liver_mask_folder   = os.path.expanduser("~/thesis/training_data/liver/test")
     tumor_mask_folder   = os.path.expanduser("~/thesis/training_data/tumor/test")
 
+
     eval_sets = [
         # ("CBCT",  cbct490_base, True),
-        ("490",    v7, False),
-        ("256_l",    v7_260_lin, False),
-        ("256_p",    v7_260_pow, False),
+        ("v7_50",    v7, False),
+        ("v7_1000",    v7_1000, False),
     ]
 
     volumes = VALID_VOLUMES

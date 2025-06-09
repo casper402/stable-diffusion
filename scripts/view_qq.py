@@ -308,7 +308,7 @@ def plot_qq_with_inset(
     ax_main.spines["right"].set_visible(False)
     ax_main.set(
         xlabel="CT Quantiles",
-        ylabel="Target Quantiles",
+        ylabel="CBCT/CT Quantiles",
     )
     ax_main.xaxis.set_major_locator(MultipleLocator(500))
     ax_main.yaxis.set_major_locator(MultipleLocator(500))

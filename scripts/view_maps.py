@@ -129,7 +129,7 @@ def plot_professional_maps(
 
     # Create the 4×n_cols image axes (leaving last column for colorbars)
     axes = [[fig.add_subplot(gs[r, c]) for c in range(n_cols)] for r in range(4)]
-    row_labels = ["Axial", "SSIM", "MAE", "ΔHU"]
+    row_labels = ["Axial", "SSIM", "Absolute Error", "ΔHU"]
 
     for col_idx in range(n_cols):
         lab   = labels[col_idx]
@@ -159,7 +159,7 @@ def plot_professional_maps(
 
         # ─── Row 2: MAE map (hot) ──────────────────────────────────────
         ax2 = axes[2][col_idx]
-        im2 = ax2.imshow(mae_m, cmap="hot", vmin=0, vmax=500)
+        im2 = ax2.imshow(mae_m, cmap="hot", vmin=0, vmax=300)
         ax2.axis("off")
         if col_idx == 0:
             ax2.text(-0.08, 0.5, row_labels[2],
@@ -168,7 +168,7 @@ def plot_professional_maps(
 
         # ─── Row 3: ΔHU map (gray) ─────────────────────────────────────
         ax3 = axes[3][col_idx]
-        im3 = ax3.imshow(diff_m, cmap="gray", vmin=-500, vmax=500)
+        im3 = ax3.imshow(diff_m, cmap="gray", vmin=-300, vmax=300)
         ax3.axis("off")
         if col_idx == 0:
             ax3.text(-0.08, 0.5, row_labels[3],
@@ -185,13 +185,14 @@ def plot_professional_maps(
     # Row 2 (MAE)
     cax_mae = fig.add_subplot(gs[2, n_cols])
     cb2 = fig.colorbar(im2, cax=cax_mae, orientation="vertical")
-    cb2.set_ticks([0, 250, 500])
+    cb2.set_ticks([0, 100, 200, 300])
     cax_mae.set_ylabel("")
     cax_mae.yaxis.set_tick_params(labelsize=8)
 
     # Row 3 (ΔHU)
     cax_diff = fig.add_subplot(gs[3, n_cols])
     cb3 = fig.colorbar(im3, cax=cax_diff, orientation="vertical")
+    cb3.set_ticks([-300, -150, 0, 150, 300])
     cax_diff.set_ylabel("")
     cax_diff.yaxis.set_tick_params(labelsize=8)
 
@@ -214,19 +215,19 @@ def plot_professional_maps(
 if __name__ == "__main__":
     # ─── 1) Hard‐code your volume index and slice number:
     volume_idx = 8
-    slice_idx = 107
+    slice_idx = 145
     slice_name = f"volume-{volume_idx}_slice_{slice_idx}.npy"
 
     # ─── 2) Adjust these paths to where your .npy files actually live:
     gt_folder   = os.path.expanduser("~/thesis/training_data/CT/test")
     cbct_folder = os.path.expanduser("~/thesis/training_data/CBCT/490/test")
     pred_folders = {
-        "sCT (ours)":     os.path.expanduser(
+        "sCT":     os.path.expanduser(
             "~/thesis/predictions/predictions_controlnet_v7-data-augmentation"
         ),
-        "sCT (CycleGAN)": os.path.expanduser(
-            "~/thesis/predictions/predictions_tanh_v5"
-        ),
+        # "sCT (CycleGAN)": os.path.expanduser(
+        #     "~/thesis/predictions/predictions_tanh_v5"
+        # ),
     }
 
     # ─── 3) Load & process CT and CBCT (each goes through pad→resize→crop→resize → 256×256)

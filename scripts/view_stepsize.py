@@ -2,7 +2,7 @@ import os
 import glob
 import numpy as np
 import matplotlib.pyplot as plt
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 import random
 
 from evaluation import compute_mae, compute_rmse, compute_psnr, DATA_RANGE, ssim
@@ -28,8 +28,8 @@ SLICE_RANGES = {
 
 # interpolation variants and step sizes
 target_quality = 490
-variants = ['linear', 'power']
-steps = [1, 2, 5, 10, 25, 50]
+variants = ['Linear', 'Power']
+steps = [1, 2, 5, 10, 25, 1000]
 
 # ───── transformation helpers ─────────────────────────────────────────────────
 def apply_transform(img_np):
@@ -56,10 +56,9 @@ def load_volume(dirpath, vidx, needs_transform=False):
             sl = apply_transform(sl)
         sl = crop_back(sl)
         sls.append(sl)
-    vol = np.stack(sls,0)
+    vol = np.stack(sls, 0)
     print(f"Loaded {dirpath} → {vol.shape}")
     return vol
-
 
 def extract_axial(vol, idx):
     return np.fliplr(vol[idx])
@@ -100,12 +99,47 @@ def plot_variants(volume_idx):
     sct_cor = {var: {} for var in variants}
     for var in variants:
         for s in steps:
+            if var == 'Power' and s in (1, 1000):
+                continue
             sc_dir = os.path.expanduser(
                 f"/Users/Niklas/thesis/predictions/thesis-ready/{target_quality}/best-model/ddim/{var}/{s}-steps/0/volume-{volume_idx}"
             )
             v_sc = load_volume(sc_dir, volume_idx, False)
             sct_ax[var][s] = resize256(extract_axial(v_sc, axial_idx))
             sct_cor[var][s] = resize256(extract_coronal(v_sc, coronal_idx))
+
+    # ─── generate a 256×256 placeholder with centered text ───────────────────────
+    ph_size = (256, 256)
+    bg_color = 200        # light gray
+    text_color = 80       # darker gray
+    placeholder_img = Image.new('L', ph_size, color=bg_color)
+    draw = ImageDraw.Draw(placeholder_img)
+    placeholder_text = ""
+    font = ImageFont.load_default()
+
+    # manually measure multiline text
+    lines = placeholder_text.split('\n')
+    spacing = 4
+    widths, heights = [], []
+    for line in lines:
+        bbox = draw.textbbox((0, 0), line, font=font)
+        w_line = bbox[2] - bbox[0]
+        h_line = bbox[3] - bbox[1]
+        widths.append(w_line)
+        heights.append(h_line)
+    text_w = max(widths)
+    text_h = sum(heights) + spacing * (len(lines) - 1)
+
+    x = (ph_size[0] - text_w) / 2
+    y = (ph_size[1] - text_h) / 2
+
+    # draw each line
+    y_offset = y
+    for line, h_line in zip(lines, heights):
+        draw.text((x, y_offset), line, fill=text_color, font=font, align='center')
+        y_offset += h_line + spacing
+
+    placeholder = np.array(placeholder_img)
 
     # plot grid: step label | [variant_ax | variant_cor] per variant
     nrows = len(steps)
@@ -123,22 +157,26 @@ def plot_variants(volume_idx):
         ax_label.axis("off")
         ax_label.text(
             0.5, 0.5, f"Steps={s}",
-            va="center", ha="center",
-            rotation="vertical",
-            transform=ax_label.transAxes,
-            fontsize=16
+            va="center", ha="center", rotation="vertical",
+            transform=ax_label.transAxes, fontsize=16
         )
 
         imgs = []
         for var in variants:
-            imgs.append((sct_ax[var][s], f"sCT axial ({var})"))
-            imgs.append((sct_cor[var][s], f"sCT coronal ({var})"))
+            if var == 'Power' and s in (1, 1000):
+                # insert placeholder for both axial & coronal slots
+                imgs.append((placeholder, f"sCT Axial ({var})"))
+                imgs.append((placeholder, f"sCT Coronal ({var})"))
+            else:
+                imgs.append((sct_ax[var][s], f"sCT Axial ({var})"))
+                imgs.append((sct_cor[var][s], f"sCT Coronal ({var})"))
 
+        # plot row
         for j, (img, title) in enumerate(imgs, start=1):
             ax = axes[i, j]
             ax.imshow(img, cmap="gray", vmin=-400, vmax=400)
             ax.axis("off")
-            if i == 0:
+            if i == 0 and title:
                 ax.set_title(title, pad=6)
 
     out_path = "/Users/Niklas/thesis/figures/ax_cor_variants.pdf"

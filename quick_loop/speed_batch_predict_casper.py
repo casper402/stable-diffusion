@@ -6,6 +6,7 @@ import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
 from models.diffusion import Diffusion
+from quick_loop.unet import load_unet
 from quick_loop.vae import load_vae
 from quick_loop.controlnet import load_controlnet
 from quick_loop.degradationRemoval import load_degradation_removal
@@ -22,7 +23,7 @@ CBCT_DIR = '../training_data/CBCT/490/test'
 LIVER_DIR = '../training_data/liver/test'
 TUMOR_DIR = '../training_data/liver/test'
 VOLUME_INDICES = [3, 8, 12, 26, 32, 33, 35, 54, 59, 61, 106, 116, 129]
-OUT_DIR = '../predictions/conditional_unet'
+OUT_DIR = '../predictions/random_generations'
 
 GUIDANCE_SCALE = 1.0
 ALPHA_A = 0.2         # Mixing weight for CBCT signal at t0
@@ -34,9 +35,9 @@ FINE_CUTOFF = 9       # switch to single-step updates at t<=9 (last 10 steps)
 STEP_SIZE = 20
 
 SEGMENTATION_PATH = 'segmentation_controlnet_new_loss'
-MODELS_PATH = 'unet_concat'
-UNET_SAVE_PATH = os.path.join(MODELS_PATH, 'unet_v2.pth')
+MODELS_PATH = '../best_unet_concat'
 MODELS_PATH = '../best_model_v7'
+UNET_SAVE_PATH = os.path.join(MODELS_PATH, 'unet_joint_unet.pth')
 VAE_SAVE_PATH = os.path.join(MODELS_PATH, 'vae_joint_vae.pth')
 MODELS_PATH = 'unet_concat_control_paca'
 PACA_LAYERS_SAVE_PATH = os.path.join(MODELS_PATH, 'paca_layers.pth')
@@ -411,6 +412,65 @@ def segmentation_predict_volume(
 
     print(f"Vol {os.path.basename(save_dir)} done in {time.time() - volume_start:.2f}s")
 
+def generate_random_images(
+    vae, unet,
+    save_dir: str,
+    num_images: int = 4,
+    image_size: int = 256,
+    guidance_scale: float = 0.0  # Unconditional generation
+):
+    """
+    Generates random images from a VAE and an unconditional U-Net.
+
+    Args:
+        vae: The trained Variational Autoencoder.
+        unet: The trained unconditional U-Net.
+        save_dir (str): Directory to save the generated images.
+        num_images (int, optional): Number of images to generate. Defaults to 4.
+        image_size (int, optional): The size of the images to generate. Defaults to 256.
+        guidance_scale (float, optional): The guidance scale for classifier-free guidance.
+                                           Set to 0.0 for unconditional generation. Defaults to 0.0.
+    """
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+    diffusion = Diffusion(device)
+    alpha_cumprod = diffusion.alpha_cumprod.to(device)
+    T = diffusion.timesteps
+
+    schedule = make_linear_schedule(T=T - 1, step_size=STEP_SIZE)
+
+    vae = vae.to(device).eval()
+    unet = unet.to(device).eval()
+    if torch.cuda.device_count() > 1:
+        unet = nn.DataParallel(unet)
+
+    os.makedirs(save_dir, exist_ok=True)
+    generation_start_time = time.time()
+
+    with torch.inference_mode():
+        # Start with random noise in the latent space
+        z = torch.randn(
+            (num_images, 4, image_size // 8, image_size // 8),
+            device=device
+        )
+
+        # Unconditional diffusion process
+        for i in range(len(schedule) - 1):
+            t, t_prev = int(schedule[i]), int(schedule[i + 1])
+            t_tensor = torch.full((z.size(0),), t, device=device, dtype=torch.long)
+            eps = unet(z, t_tensor)
+            a_t = alpha_cumprod[t]
+            a_prev = alpha_cumprod[t_prev]
+            sqrt_at = a_t.sqrt()
+            sqrt_omt = (1 - a_t).sqrt()
+            # DDIM update rule
+            z = ((z - sqrt_omt * eps) / sqrt_at) * a_prev.sqrt() + (1 - a_prev).sqrt() * eps
+        gen = vae.decode(z)
+    out_np = gen.cpu().float().numpy() * 1000.0
+    for i in range(num_images):
+        np.save(os.path.join(save_dir, f"random_image_{i}.npy"), out_np[i].squeeze(0))
+    print(f"Generated {num_images} random images in {time.time() - generation_start_time:.2f}s")
+
 
 # ------------------------
 # Main
@@ -426,18 +486,21 @@ if __name__ == '__main__':
         transforms.Resize((256, 256), interpolation=InterpolationMode.NEAREST_EXACT),
     ])
     vae = load_vae(VAE_SAVE_PATH)
+    unet = load_unet(save_path=UNET_SAVE_PATH, trainable=False, base_channels=256, dropout_rate=None)
+
     #unet = load_unet_control_paca(UNET_SAVE_PATH, PACA_LAYERS_SAVE_PATH)
-    controlnet = load_controlnet(CONTROLNET_SAVE_PATH)
-    dr_module = load_degradation_removal(DEGRADATION_REMOVAL_SAVE_PATH)
+    #controlnet = load_controlnet(CONTROLNET_SAVE_PATH)
+    #dr_module = load_degradation_removal(DEGRADATION_REMOVAL_SAVE_PATH)
     #controlnet_seg = load_controlnet(CONTROLNET_SEG_SAVE_PATH)
     #dr_module_seg = load_degradation_removal(DEGRADATION_REMOVAL_SEG_SAVE_PATH)
-    unet = load_unet_concat_control_paca(UNET_SAVE_PATH, PACA_LAYERS_SAVE_PATH)
+    #unet = load_unet_concat_control_paca(UNET_SAVE_PATH, PACA_LAYERS_SAVE_PATH)
+    generate_random_images(vae, unet, OUT_DIR, num_images=20)
 
-    for vol in VOLUME_INDICES:
-        cbct_folder = os.path.join(CBCT_DIR, f"volume-{vol}")
-        save_folder = os.path.join(OUT_DIR, f"volume-{vol}")
-        ds = CBCTDatasetNPY(cbct_folder, transform)
-        loader = DataLoader(ds, batch_size=BATCH_SIZE, num_workers=4, pin_memory=True)
-        #segmentation_predict_volume(vae, unet, controlnet, dr_module, controlnet_seg, dr_module_seg, loader, save_folder, GUIDANCE_SCALE)
-        predict_concat_control_paca(vae, unet, controlnet, dr_module, loader, save_folder, GUIDANCE_SCALE)
-    print("All volumes processed.")
+    # for vol in VOLUME_INDICES:
+    #     cbct_folder = os.path.join(CBCT_DIR, f"volume-{vol}")
+    #     save_folder = os.path.join(OUT_DIR, f"volume-{vol}")
+    #     ds = CBCTDatasetNPY(cbct_folder, transform)
+    #     loader = DataLoader(ds, batch_size=BATCH_SIZE, num_workers=4, pin_memory=True)
+    #     #segmentation_predict_volume(vae, unet, controlnet, dr_module, controlnet_seg, dr_module_seg, loader, save_folder, GUIDANCE_SCALE)
+    #     predict_concat_control_paca(vae, unet, controlnet, dr_module, loader, save_folder, GUIDANCE_SCALE)
+    # print("All volumes processed.")

@@ -107,36 +107,24 @@ def plot_custom(volume_idx):
         cbct_cor[q] = resize256(extract_coronal(v_cb, coronal_idx))
         sct_cor[q]  = resize256(extract_coronal(v_sc, coronal_idx))
 
-    # 5) plot a (n_rows × 5) grid:  Q-label | CBCT_ax | sCT_ax | CBCT_cor | sCT_cor
-    nrows, ncols = len(quals), 5
+    # 5) plot a (n_rows × 5) grid:  CBCT_ax | sCT_ax | CBCT_cor | sCT_cor
+    nrows, ncols = len(quals), 4
     fig, axes = plt.subplots(
         nrows, ncols,
-        figsize=(ncols*2, nrows*2.5),
-        gridspec_kw={'width_ratios': [0.2, 2, 2, 2, 2]},
+        figsize=(ncols*2, nrows*2),
+        gridspec_kw={'width_ratios': [2, 2, 2, 2]},
         constrained_layout=True
     )
 
     for i, q in enumerate(quals):
-        # label column
-        ax_label = axes[i, 0]
-        ax_label.axis("off")
-        ax_label.text(
-            0.5, 0.5, f"Q={q}",
-            va="center", ha="center",
-            rotation="vertical",
-            transform=ax_label.transAxes,
-            fontsize=16
-        )
-
-
-        # the four image columns
+        # the four image columns (no label column now)
         row_imgs = [
             (cbct_ax[q],  "CBCT axial"),
             (sct_ax[q],   "sCT axial"),
             (cbct_cor[q], "CBCT coronal"),
             (sct_cor[q],  "sCT coronal"),
         ]
-        for j, (img, title) in enumerate(row_imgs, start=1):
+        for j, (img, title) in enumerate(row_imgs):
             ax = axes[i, j]
             ax.imshow(img, cmap="gray", vmin=-400, vmax=400)
             ax.axis("off")

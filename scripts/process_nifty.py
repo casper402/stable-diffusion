@@ -5,6 +5,7 @@ import nibabel as nib
 
 DEBUG = False
 ROTATE = True
+CLIP = False
 
 def process_nifti_file(folder_path, nifty_file_name, output_dir):
     """
@@ -27,7 +28,10 @@ def process_nifti_file(folder_path, nifty_file_name, output_dir):
     # Load the NIfTI file (assumed 3D)
     img = nib.load(nifty_path)
     data = img.get_fdata()         # original data for stats
-    data_clipped = np.clip(data, -1000, 1000)  # clipped version for saving
+    if CLIP:
+        data_clipped = np.clip(data, -1000, 1000)  # clipped version for saving
+    else:
+        data_clipped = data
     
     # Create output directory if needed.
     if not os.path.exists(output_dir):
@@ -88,12 +92,11 @@ def process_nifti_file(folder_path, nifty_file_name, output_dir):
 
 def process(volume_idx):
     # Change these paths as needed.
-    folder_path = os.path.expanduser("/Users/Niklas/thesis/training_data/Casper-klinik")
+    folder_path   = "/Volumes/Lenovo PS8/Casper/kaggle_dataset/TRAINCTAlignedToCBCT"
     # For CBCT volumes, files are named like "REC-0.nii". The renaming in process_nifti_file
     # will ensure that the output base name is similar to "volume-0".
-    # nifty_file_name = f"REC-{volume_idx}.nii"
-    nifty_file_name = "CT.nii.gz"
-    output_dir = os.path.expanduser("/Users/Niklas/thesis/training_data/clinic_ct")
+    nifty_file_name = f"volume-{volume_idx}.nii"
+    output_dir = os.path.expanduser("/Users/Niklas/thesis/training_data/CT-unclipped")
     
     return process_nifti_file(folder_path, nifty_file_name, output_dir)
 
@@ -111,28 +114,28 @@ def procecss_batch():
         try:
             result = process(i)
             base_name, max_gap, max_gap_idx, global_min, global_min_idx, global_max, global_max_idx = result
-            gap_list.append((max_gap, i, base_name, max_gap_idx))
-            low_list.append((global_min, i, base_name, global_min_idx))
-            high_list.append((global_max, i, base_name, global_max_idx))
+            # gap_list.append((max_gap, i, base_name, max_gap_idx))
+            # low_list.append((global_min, i, base_name, global_min_idx))
+            # high_list.append((global_max, i, base_name, global_max_idx))
         except Exception as e:
             print(f"Error processing volume {i}: {e}")
 
     # Sort and take the top 10.
-    top_gap = sorted(gap_list, key=lambda x: x[0], reverse=True)[:10]
-    top_low = sorted(low_list, key=lambda x: x[0])[:10]
-    top_high = sorted(high_list, key=lambda x: x[0], reverse=True)[:10]
+    # top_gap = sorted(gap_list, key=lambda x: x[0], reverse=True)[:10]
+    # top_low = sorted(low_list, key=lambda x: x[0])[:10]
+    # top_high = sorted(high_list, key=lambda x: x[0], reverse=True)[:10]
 
-    print("\nTop 10 volumes with highest gap:")
-    for gap, vol_idx, base, slice_idx in top_gap:
-        print(f"  Volume {vol_idx} ({base}): gap = {gap} at slice {slice_idx}")
+    # print("\nTop 10 volumes with highest gap:")
+    # for gap, vol_idx, base, slice_idx in top_gap:
+    #     print(f"  Volume {vol_idx} ({base}): gap = {gap} at slice {slice_idx}")
 
-    print("\nTop 10 volumes with lowest value:")
-    for min_val, vol_idx, base, slice_idx in top_low:
-        print(f"  Volume {vol_idx} ({base}): lowest value = {min_val} at slice {slice_idx}")
+    # print("\nTop 10 volumes with lowest value:")
+    # for min_val, vol_idx, base, slice_idx in top_low:
+    #     print(f"  Volume {vol_idx} ({base}): lowest value = {min_val} at slice {slice_idx}")
 
-    print("\nTop 10 volumes with highest value:")
-    for max_val, vol_idx, base, slice_idx in top_high:
-        print(f"  Volume {vol_idx} ({base}): highest value = {max_val} at slice {slice_idx}")
+    # print("\nTop 10 volumes with highest value:")
+    # for max_val, vol_idx, base, slice_idx in top_high:
+    #     print(f"  Volume {vol_idx} ({base}): highest value = {max_val} at slice {slice_idx}")
 
 if __name__ == "__main__":
-    process(130)
+    procecss_batch()

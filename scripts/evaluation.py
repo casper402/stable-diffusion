@@ -376,8 +376,7 @@ def main():
 
     eval_sets = [
         # ("CBCT",  cbct490_base, True),
-        ("v7_50",    v7, False),
-        ("v7_1000",    v7_1000, False),
+        ("nl",    nl, False),
     ]
 
     volumes = VALID_VOLUMES

@@ -207,7 +207,7 @@ def plot_hu_distributions(
     ax.spines["right"].set_visible(False)
 
     # ─── Axes limits, labels, tick formatting ─────────────────────────────────
-    ax.set_xlim(-1000, 1000)
+    ax.set_xlim(-1050, 1050)
     ax.set_ylim(0, 0.10)
     ax.set_xlabel("Hounsfield Units (HU)", fontsize=18)
     ax.set_ylabel("Normalized Frequency",     fontsize=18)
@@ -247,14 +247,14 @@ def plot_hu_distributions(
 if __name__ == "__main__":
     vols = VALID_VOLUMES
 
-    gt_folder   = os.path.expanduser("~/thesis/training_data/CT/train")
-    cbct_folder = os.path.expanduser("~/thesis/training_data/CBCT/train")
+    gt_folder   = os.path.expanduser("~/thesis/training_data/CT/test")
+    cbct_folder = os.path.expanduser("~/thesis/training_data/CBCT/test")
 
     # List of (label, prediction_folder) for multiple methods
     pred_folders = [
-        # ("sCT", os.path.expanduser(
-        #     "~/thesis/predictions/predictions_controlnet_v7-data-augmentation"
-        # )),
+        ("sCT", os.path.expanduser(
+            "~/thesis/predictions/predictions_controlnet_v7-data-augmentation"
+        )),
         # Add additional methods here as needed, e.g.:
         # ("CycleGAN", os.path.expanduser("~/thesis/predictions/predictions_tanh_v5")),
     ]
